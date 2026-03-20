@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Multi-agent working directory
+.multi-agent/
+
+# OS
+.DS_Store

@@ -1,0 +1,17 @@
+{
+  "session_name": "multi-agent-mvp",
+  "max_review_iterations": 3,
+  "architect": {
+    "cli": "claude",
+    "model": "opus",
+    "args": [
+      "--permission-mode", "acceptEdits",
+      "--allowedTools", "Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)"
+    ]
+  },
+  "coder": {
+    "cli": "codex",
+    "model": "gpt-5.3-codex",
+    "args": ["-s", "workspace-write", "-a", "never"]
+  }
+}
