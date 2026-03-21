@@ -31,13 +31,20 @@ def write_state(state_path: Path, state: dict[str, Any]) -> None:
     state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
 
-def update_state(state_path: Path, status: str, updated_by: str, active_role: str | None = None) -> dict[str, Any]:
+def update_phase(
+    state_path: Path,
+    phase: str,
+    updated_by: str,
+    last_event: str | None = None,
+    **extra_fields: Any,
+) -> dict[str, Any]:
     state = load_state(state_path)
-    state["status"] = status
+    state["phase"] = phase
     state["updated_at"] = now_iso()
     state["updated_by"] = updated_by
-    if active_role is not None:
-        state["active_role"] = active_role
+    if last_event is not None:
+        state["last_event"] = last_event
+    state.update(extra_fields)
     write_state(state_path, state)
     return state
 
@@ -55,6 +62,7 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         fix_request=feature_dir / "fix_request.md",
         changes=feature_dir / "changes.md",
         state=feature_dir / STATE_FILE_NAME,
+        runtime_state=feature_dir / "runtime_state.json",
         orchestrator_log=feature_dir / "orchestrator.log",
     )
 
@@ -72,7 +80,7 @@ def create_feature_files(project_dir: Path, feature_dir: Path, prompt: str, sess
             "## Rules",
             "",
             "- Communicate through files in this directory.",
-            "- Use `state.json` for workflow transitions.",
+            "- Use `state.json` as the orchestrator's persisted workflow state.",
             "- Architect owns requirements clarification, planning, and review.",
             "- Coder owns implementation in the repository root.",
             "- Keep changes aligned with `requirements.md` and `plan.md`.",
@@ -102,12 +110,12 @@ def create_feature_files(project_dir: Path, feature_dir: Path, prompt: str, sess
     )
     state = {
         "feature_dir": str(feature_dir),
-        "status": "architect_requested",
+        "phase": "planning",
+        "last_event": "feature_created",
         "subplan_count": 0,
         "review_iteration": 0,
         "updated_at": now_iso(),
         "updated_by": "pipeline",
-        "active_role": "architect",
     }
     write_state(files.state, state)
     return files

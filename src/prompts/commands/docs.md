@@ -12,10 +12,10 @@ Your job:
 1. Read requirements.md, plan.md to confirm what was implemented.
 2. Update {project_dir}/CLAUDE.md and any other relevant documentation files that is referenced there in the repository so docs match the implemented changes.
 3. Keep documentation changes focused and accurate to what is already implemented.
-4. FINAL STEP ONLY — once all documentation updates are complete, update state.json so that `status` becomes `{state_target}`. This must be the very last action you take. Do not do anything after writing the status.
+4. FINAL STEP ONLY — once all documentation updates are complete, create the completion marker file `docs_done` in the session directory and leave it empty. This must be the very last action you take.
 
 Constraints:
 - Communicate only through the files in the shared feature directory.
 - Do not implement additional code changes in this step unless strictly required to keep docs accurate.
-- Do not change the status to anything else.
-- Do not touch the status file until all documentation updates are complete.
+- Do not update `state.json` from the docs step.
+- Do not write anything to the marker file; create it as an empty file.

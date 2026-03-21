@@ -4,18 +4,36 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 import pipeline
-from src.handlers import (
-    guard_plan_ready_design,
-    handle_design_ready,
-    handle_plan_ready_design,
-)
 from src.models import AgentConfig
+from src.phases import PHASES, get_phase, run_phase_cycle
 from src.prompts import build_coder_prompt, build_designer_prompt, build_initial_prompts
 from src.state import create_feature_files, load_runtime_files, load_state, write_state
 from src.transitions import PipelineContext
+
+
+class FakeRuntime:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    def send(self, role: str, prompt_file: Path) -> None:
+        self.calls.append(("send", role, prompt_file.name))
+
+    def send_many(self, role: str, prompt_files: list[Path]) -> None:
+        self.calls.append(("send_many", role, [path.name for path in prompt_files]))
+
+    def deactivate(self, role: str) -> None:
+        self.calls.append(("deactivate", role))
+
+    def deactivate_many(self, roles) -> None:
+        self.calls.append(("deactivate_many", tuple(roles)))
+
+    def finish_many(self, role: str) -> None:
+        self.calls.append(("finish_many", role))
+
+    def shutdown(self, keep_session: bool) -> None:
+        self.calls.append(("shutdown", keep_session))
 
 
 def _base_agents(with_designer: bool = True) -> dict[str, AgentConfig]:
@@ -33,20 +51,15 @@ def _make_ctx(feature_dir: Path, with_designer: bool = True) -> tuple[PipelineCo
     project_dir.mkdir(parents=True, exist_ok=True)
     files = create_feature_files(project_dir, feature_dir, "add designer", "session-x")
 
-    prompts = {
-        "architect": feature_dir / "architect_prompt.md",
-    }
+    prompts = {"architect": feature_dir / "architect_prompt.md"}
     for path in prompts.values():
-        if not path.exists():
-            path.write_text(path.name, encoding="utf-8")
+        path.write_text(path.name, encoding="utf-8")
 
     ctx = PipelineContext(
         files=files,
-        panes={"architect": "%1", "coder": None, "docs": None, "designer": None},
-        coder_panes={},
+        runtime=FakeRuntime(),
         agents=_base_agents(with_designer=with_designer),
         max_review_iterations=3,
-        session_name="session-x",
         prompts=prompts,
     )
     return ctx, files.state
@@ -98,13 +111,13 @@ class DesignerRequirementsTests(unittest.TestCase):
 
             files = create_feature_files(project_dir, feature_dir, "do ui", "session")
 
-            coder_prompt = build_coder_prompt(files, state_target="implementation_done")
-            designer_prompt = build_designer_prompt(files, state_target="design_ready")
+            coder_prompt = build_coder_prompt(files)
+            designer_prompt = build_designer_prompt(files)
             initial_prompts = build_initial_prompts(files)
 
-            self.assertIn("design.md", coder_prompt)
+            self.assertIn("done_1", coder_prompt)
             self.assertIn("frontend-design", designer_prompt)
-            self.assertIn("business logic", designer_prompt)
+            self.assertIn("design.md", designer_prompt)
             self.assertEqual(["architect"], list(initial_prompts.keys()))
             self.assertEqual("architect_prompt.md", initial_prompts["architect"].name)
             self.assertFalse((feature_dir / "coder_prompt.md").exists())
@@ -112,86 +125,61 @@ class DesignerRequirementsTests(unittest.TestCase):
             self.assertFalse((feature_dir / "designer_prompt.md").exists())
             self.assertFalse((feature_dir / "confirmation_prompt.md").exists())
 
-    def test_guard_plan_ready_design_checks_flag_and_agent(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            feature_dir = tmp_path / "feature"
-            ctx, _ = _make_ctx(feature_dir, with_designer=True)
-
-            state = {"status": "plan_ready", "needs_design": True}
-            self.assertTrue(guard_plan_ready_design(state, ctx))
-
-            state = {"status": "plan_ready", "needs_design": False}
-            self.assertFalse(guard_plan_ready_design(state, ctx))
-
-            ctx_no_designer, _ = _make_ctx(tmp_path / "feature-2", with_designer=False)
-            state = {"status": "plan_ready", "needs_design": True}
-            self.assertFalse(guard_plan_ready_design(state, ctx_no_designer))
-
-    def test_handle_plan_ready_design_requests_designer_and_updates_state(self) -> None:
+    def test_plan_written_moves_to_designing_when_plan_meta_requests_design(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
             ctx, state_path = _make_ctx(feature_dir, with_designer=True)
 
-            called: dict[str, object] = {}
-
-            def fake_send_prompt(
-                target_pane: str | None,
-                prompt_file: Path,
-                session_name: str | None = None,
-                **kwargs: object,
-            ) -> None:
-                called["send"] = (target_pane, prompt_file.name, session_name, kwargs.get("role"))
-
             state = load_state(state_path)
-            state["status"] = "plan_ready"
-            state["needs_design"] = True
+            state["phase"] = "planning"
             write_state(state_path, state)
+            (feature_dir / "plan_meta.json").write_text('{"needs_design": true}\n', encoding="utf-8")
 
-            with patch("src.handlers.send_prompt", fake_send_prompt):
-                handle_plan_ready_design(load_state(state_path), ctx)
+            phase = get_phase(load_state(state_path))
+            phase.handle_event(load_state(state_path), "plan_written", ctx)
 
             updated = load_state(state_path)
-            self.assertEqual("designer_requested", updated["status"])
-            self.assertEqual("designer", updated["active_role"])
-            self.assertIsNone(ctx.panes["designer"])
-            self.assertEqual((None, "designer_prompt.md", "session-x", "designer"), called["send"])
+            self.assertEqual("designing", updated["phase"])
+            self.assertEqual("plan_written", updated["last_event"])
 
-    def test_handle_design_ready_handoff_back_to_plan_ready(self) -> None:
+    def test_enter_designing_builds_designer_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
             ctx, state_path = _make_ctx(feature_dir, with_designer=True)
-            ctx.panes["designer"] = "%19"
-            ctx.handled.add("plan_ready")
-
-            parked: list[tuple[str | None, str]] = []
-
-            def fake_park_agent_pane(pane_id: str | None, session_name: str) -> None:
-                parked.append((pane_id, session_name))
 
             state = load_state(state_path)
-            state["status"] = "design_ready"
-            state["needs_design"] = True
+            state["phase"] = "designing"
             write_state(state_path, state)
 
-            with patch("src.handlers.park_agent_pane", fake_park_agent_pane):
-                handle_design_ready(load_state(state_path), ctx)
+            run_phase_cycle(load_state(state_path), ctx)
+
+            self.assertEqual([("send", "designer", "designer_prompt.md")], ctx.runtime.calls)
+
+    def test_design_written_hands_off_to_implementing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            ctx, state_path = _make_ctx(feature_dir, with_designer=True)
+
+            state = load_state(state_path)
+            state["phase"] = "designing"
+            write_state(state_path, state)
+
+            phase = get_phase(load_state(state_path))
+            phase.handle_event(load_state(state_path), "design_written", ctx)
 
             updated = load_state(state_path)
-            self.assertEqual("plan_ready", updated["status"])
-            self.assertNotIn("needs_design", updated)
-            self.assertEqual("%19", ctx.panes["designer"])
-            self.assertIn(("%19", "session-x"), parked)
-            self.assertNotIn("plan_ready", ctx.handled)
+            self.assertEqual("implementing", updated["phase"])
+            self.assertEqual("design_written", updated["last_event"])
+            self.assertEqual([("deactivate", "designer")], ctx.runtime.calls)
 
-    def test_plan_ready_designer_transition_precedes_coder_transition(self) -> None:
-        plan_ready_transitions = [
-            t.description for t in pipeline.TRANSITIONS if t.source == "plan_ready"
-        ]
-        self.assertTrue(plan_ready_transitions)
-        self.assertEqual("plan_ready -> designer_requested", plan_ready_transitions[0])
+    def test_phase_registry_contains_expected_phases(self) -> None:
+        self.assertEqual(
+            {"planning", "designing", "implementing", "reviewing", "fixing", "documenting", "completing", "failed"},
+            set(PHASES),
+        )
 
 
 if __name__ == "__main__":

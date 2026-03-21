@@ -19,14 +19,14 @@ CYAN = "\033[36m"
 DIM = "\033[2m"
 
 PIPELINE_STATES = [
-    "architect_requested",
-    "plan_ready",
-    "coder_requested",
-    "implementation_done",
-    "review_requested",
-    "review_ready",
-    "completion_pending",
-    "completion_approved",
+    "planning",
+    "designing",
+    "implementing",
+    "reviewing",
+    "fixing",
+    "documenting",
+    "completing",
+    "done",
 ]
 
 
@@ -38,12 +38,31 @@ def get_terminal_size() -> tuple[int, int]:
         return 40, 24
 
 
-def get_role_states(session_name: str, panes_path: Path) -> dict[str, str]:
-    """Return mapping of role key → 'working' | 'idle' | 'inactive'."""
+def load_runtime_registry(runtime_state_path: Path) -> dict[str, str | None]:
     try:
-        panes = json.loads(panes_path.read_text(encoding="utf-8"))
+        raw = json.loads(runtime_state_path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+    registry = {
+        str(role): pane_id if pane_id is None else str(pane_id)
+        for role, pane_id in dict(raw.get("primary", {})).items()
+    }
+    for role, workers in dict(raw.get("parallel", {})).items():
+        for worker_key, pane_id in dict(workers).items():
+            registry[f"{role}_{worker_key}"] = None if pane_id is None else str(pane_id)
+    return registry
+
+
+def get_role_states(session_name: str, runtime_state_path: Path) -> dict[str, str]:
+    """Return mapping of role key → 'working' | 'idle' | 'inactive'."""
+    registry = load_runtime_registry(runtime_state_path)
+    if not registry:
+        legacy_path = runtime_state_path.parent / "panes.json"
+        try:
+            registry = json.loads(legacy_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
 
     try:
         result_all = subprocess.run(
@@ -65,7 +84,7 @@ def get_role_states(session_name: str, panes_path: Path) -> dict[str, str]:
         return {}
 
     states: dict[str, str] = {}
-    for role, pane_id in panes.items():
+    for role, pane_id in registry.items():
         if role.startswith("_") or pane_id is None:
             continue
         if pane_id in pipeline_ids:
@@ -88,11 +107,11 @@ def load_state(state_path: Path) -> dict:
 
 
 def status_color(status: str) -> str:
-    if status in ("completion_approved",):
+    if status in ("done",):
         return GREEN
     if status in ("failed",):
         return RED
-    if status in ("completion_pending", "review_ready"):
+    if status in ("completing", "reviewing"):
         return YELLOW
     return CYAN
 
@@ -127,16 +146,17 @@ def _read_feature_request(state_path: Path) -> str:
 def render(
     session_name: str,
     state_path: Path,
-    panes_path: Path,
+    runtime_state_path: Path,
     agents: dict[str, dict[str, str]],
     width: int,
     height: int,
     start_time: float,
 ) -> str:
     state = load_state(state_path)
-    role_states = get_role_states(session_name, panes_path)
+    role_states = get_role_states(session_name, runtime_state_path)
 
-    status = state.get("status", "waiting...")
+    status = state.get("phase", "waiting...")
+    last_event = str(state.get("last_event", "")).strip()
     review_iter = state.get("review_iteration", 0)
     subplan_count = state.get("subplan_count", 0)
 
@@ -171,6 +191,12 @@ def render(
         unknown_display = status[:max_pipeline_len]
         lines.append(f"  {color}\u25ba {unknown_display}{RESET}")
 
+    if last_event:
+        max_event_len = max(1, width - 8)
+        event_display = last_event
+        if len(event_display) > max_event_len:
+            event_display = event_display[: max_event_len - 1] + "…"
+        lines.append(f"  {DIM}event {event_display}{RESET}")
     if review_iter:
         lines.append(f"  {DIM}review iter {review_iter}{RESET}")
     if subplan_count > 1:
@@ -254,7 +280,7 @@ def main() -> None:
 
     feature_dir = Path(args.feature_dir)
     state_path = feature_dir / "state.json"
-    panes_path = feature_dir / "panes.json"
+    runtime_state_path = feature_dir / "runtime_state.json"
     config_path = Path(args.config)
 
     raw = json.loads(config_path.read_text(encoding="utf-8"))
@@ -273,11 +299,11 @@ def main() -> None:
     try:
         while True:
             width, height = get_terminal_size()
-            output = render(args.session_name, state_path, panes_path, agents, width, height, start_time)
+            output = render(args.session_name, state_path, runtime_state_path, agents, width, height, start_time)
             sys.stdout.write("\033[H\033[2J" + output)
             sys.stdout.flush()
             state = load_state(state_path)
-            prev_status = append_status_change(status_log_path, prev_status, state.get("status", ""))
+            prev_status = append_status_change(status_log_path, prev_status, state.get("phase", ""))
             time.sleep(1.0)
     except KeyboardInterrupt:
         pass

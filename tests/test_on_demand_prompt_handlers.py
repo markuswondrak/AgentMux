@@ -3,16 +3,34 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
-from src.handlers import (
-    handle_docs_done,
-    handle_plan_ready_single,
-    handle_start_review,
-)
 from src.models import AgentConfig
+from src.phases import run_phase_cycle
 from src.state import create_feature_files, load_state, write_state
 from src.transitions import PipelineContext
+
+
+class FakeRuntime:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    def send(self, role: str, prompt_file: Path) -> None:
+        self.calls.append(("send", role, prompt_file.name))
+
+    def send_many(self, role: str, prompt_files: list[Path]) -> None:
+        self.calls.append(("send_many", role, [path.name for path in prompt_files]))
+
+    def deactivate(self, role: str) -> None:
+        self.calls.append(("deactivate", role))
+
+    def deactivate_many(self, roles) -> None:
+        self.calls.append(("deactivate_many", tuple(roles)))
+
+    def finish_many(self, role: str) -> None:
+        self.calls.append(("finish_many", role))
+
+    def shutdown(self, keep_session: bool) -> None:
+        self.calls.append(("shutdown", keep_session))
 
 
 def _make_ctx(feature_dir: Path, with_docs: bool = True) -> tuple[PipelineContext, Path]:
@@ -25,98 +43,58 @@ def _make_ctx(feature_dir: Path, with_docs: bool = True) -> tuple[PipelineContex
         "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
         "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[]),
     }
-    panes = {"architect": "%1", "coder": "%2", "docs": "%3", "designer": None}
     if with_docs:
         agents["docs"] = AgentConfig(role="docs", cli="codex", model="gpt-5.3-codex", args=[])
     ctx = PipelineContext(
         files=files,
-        panes=panes,
-        coder_panes={},
+        runtime=FakeRuntime(),
         agents=agents,
         max_review_iterations=3,
-        session_name="session-x",
         prompts={"architect": architect_prompt},
     )
     return ctx, files.state
 
 
 class OnDemandPromptHandlerTests(unittest.TestCase):
-    def test_handle_plan_ready_single_builds_coder_prompt_inline(self) -> None:
+    def test_enter_implementing_builds_coder_prompt_inline(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = _make_ctx(tmp_path / "feature")
+            ctx.files.plan.write_text("# Plan\n\n1. Implement\n", encoding="utf-8")
             state = load_state(state_path)
-            state["status"] = "plan_ready"
+            state["phase"] = "implementing"
             write_state(state_path, state)
 
-            sent: dict[str, str] = {}
+            run_phase_cycle(load_state(state_path), ctx)
 
-            def fake_send_prompt(
-                target_pane: str | None,
-                prompt_file: Path,
-                session_name: str | None = None,
-                **kwargs: object,
-            ) -> None:
-                _ = target_pane, session_name, kwargs
-                sent["name"] = prompt_file.name
-
-            with patch("src.handlers.send_prompt", fake_send_prompt):
-                handle_plan_ready_single(load_state(state_path), ctx)
-
-            self.assertEqual("coder_prompt.md", sent["name"])
             self.assertTrue((ctx.files.feature_dir / "coder_prompt.md").exists())
+            self.assertEqual([("send", "coder", "coder_prompt.md")], ctx.runtime.calls)
 
-    def test_handle_start_review_builds_review_prompt_inline(self) -> None:
+    def test_enter_reviewing_builds_review_prompt_inline(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = _make_ctx(tmp_path / "feature")
             state = load_state(state_path)
-            state["status"] = "implementation_done"
+            state["phase"] = "reviewing"
             write_state(state_path, state)
 
-            sent: dict[str, str] = {}
+            run_phase_cycle(load_state(state_path), ctx)
 
-            def fake_send_prompt(
-                target_pane: str | None,
-                prompt_file: Path,
-                session_name: str | None = None,
-                **kwargs: object,
-            ) -> None:
-                _ = target_pane, session_name, kwargs
-                sent["name"] = prompt_file.name
-
-            with patch("src.handlers.send_prompt", fake_send_prompt):
-                handle_start_review(load_state(state_path), ctx)
-
-            self.assertEqual("review_prompt.md", sent["name"])
             self.assertTrue((ctx.files.feature_dir / "review_prompt.md").exists())
+            self.assertEqual([("send", "architect", "review_prompt.md")], ctx.runtime.calls)
 
-    def test_handle_docs_done_builds_confirmation_prompt_inline(self) -> None:
+    def test_enter_completing_builds_confirmation_prompt_inline(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = _make_ctx(tmp_path / "feature", with_docs=True)
             state = load_state(state_path)
-            state["status"] = "docs_updated"
+            state["phase"] = "completing"
             write_state(state_path, state)
 
-            sent: dict[str, str] = {}
+            run_phase_cycle(load_state(state_path), ctx)
 
-            def fake_send_prompt(
-                target_pane: str | None,
-                prompt_file: Path,
-                session_name: str | None = None,
-                **kwargs: object,
-            ) -> None:
-                _ = target_pane, session_name, kwargs
-                sent["name"] = prompt_file.name
-
-            with patch("src.handlers.send_prompt", fake_send_prompt), patch(
-                "src.handlers.park_agent_pane", return_value=None
-            ):
-                handle_docs_done(load_state(state_path), ctx)
-
-            self.assertEqual("confirmation_prompt.md", sent["name"])
             self.assertTrue((ctx.files.feature_dir / "confirmation_prompt.md").exists())
+            self.assertEqual([("send", "architect", "confirmation_prompt.md")], ctx.runtime.calls)
 
 
 if __name__ == "__main__":

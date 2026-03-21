@@ -19,11 +19,11 @@ Your job:
 9. Wait for the user to review. Incorporate any feedback and revise the draft as needed. Repeat until the user explicitly approves.
 10. Only after the user explicitly approves (e.g. says 'approved', 'looks good', 'go ahead'), write the final plan to plan.md.
 11. After writing `plan.md`, also write `tasks.md` as a numbered checklist derived from the plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z"). If you created sub-plans, group tasks under the corresponding `## Sub-plan <N>: <title>` header.
-12. If the plan involves new UI views/components, set `"needs_design": true` in state.json when you set plan_ready.
-13. FINAL STEP ONLY — after writing the plan and tasks files, update state.json so that `status` becomes `{state_target}`. This must be the very last action you take. Do not do anything after writing the status.
+12. After writing `plan.md` and `tasks.md`, write `plan_meta.json` with this exact shape: `{{ "needs_design": true|false }}`. Set it to `true` only when the plan requires a dedicated design handoff before coding.
+13. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
 
 Constraints:
 - Keep the plan actionable and implementation-oriented.
 - Keep the plan focused on what should be built and how it should be validated.
-- Do not write to `plan.md`/`tasks.md` or touch the status file before the user approves.
-- Do not change the status to anything else.
+- Do not write to `plan.md`/`tasks.md`/`plan_meta.json` before the user approves.
+- Do not update `state.json` from the architect planning step.

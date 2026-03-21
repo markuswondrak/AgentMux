@@ -19,51 +19,18 @@ except ImportError:  # pragma: no cover - handled at runtime
     FileSystemEventHandler = object  # type: ignore[assignment]
     Observer = None
 
-from src.handlers import (
-    guard_design_ready,
-    guard_coders_done,
-    guard_plan_ready_design,
-    guard_plan_ready_multi,
-    guard_plan_ready_single,
-    guard_review_fail,
-    guard_review_pass_docs,
-    guard_review_pass_no_docs,
-    handle_changes_requested,
-    handle_coders_done,
-    handle_completion_approved,
-    handle_design_ready,
-    handle_docs_done,
-    handle_failed,
-    handle_plan_ready_design,
-    handle_plan_ready_multi,
-    handle_plan_ready_single,
-    handle_review_fail,
-    handle_review_pass_docs,
-    handle_review_pass_no_docs,
-    handle_start_review,
-)
 from src.models import AgentConfig
+from src.phases import run_phase_cycle
 from src.prompts import build_initial_prompts
+from src.runtime import TmuxAgentRuntime
 from src.state import (
     create_feature_files,
     load_runtime_files,
     load_state,
-    update_state,
+    update_phase,
 )
-from src.tmux import (
-    send_prompt,
-    tmux_kill_session,
-    tmux_new_session,
-    tmux_session_exists,
-)
-from src.transitions import (
-    EXIT_FAILURE,
-    EXIT_SUCCESS,
-    PipelineContext,
-    Transition,
-    dispatch,
-    not_handled,
-)
+from src.tmux import tmux_session_exists
+from src.transitions import EXIT_FAILURE, EXIT_SUCCESS, PipelineContext
 
 ROOT_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT_DIR / "pipeline_config.json"
@@ -167,63 +134,12 @@ class FeatureEventHandler(FileSystemEventHandler):
         self.wake_event.set()
 
 
-TRANSITIONS = [
-    Transition("plan_ready", guard_plan_ready_design, handle_plan_ready_design,
-               "plan_ready -> designer_requested"),
-    Transition("design_ready", guard_design_ready, handle_design_ready,
-               "design_ready -> plan_ready (coder handoff)"),
-    Transition("plan_ready", guard_plan_ready_multi, handle_plan_ready_multi,
-               "plan_ready -> coders_requested (parallel)"),
-    Transition("plan_ready", guard_plan_ready_single, handle_plan_ready_single,
-               "plan_ready -> coder_requested (single)"),
-    Transition("coders_requested", guard_coders_done, handle_coders_done,
-               "coders_requested -> implementation_done"),
-    Transition("implementation_done", not_handled, handle_start_review,
-               "implementation_done -> review_requested"),
-    Transition("review_pass", guard_review_pass_docs, handle_review_pass_docs,
-               "review_pass -> docs_update_requested"),
-    Transition("review_pass", guard_review_pass_no_docs, handle_review_pass_no_docs,
-               "review_pass -> completion_pending"),
-    Transition("review_ready", guard_review_fail, handle_review_fail,
-               "review_ready -> fix_requested"),
-    Transition("review_ready", guard_review_pass_docs, handle_review_pass_docs,
-               "review_ready -> docs_update_requested"),
-    Transition("review_ready", guard_review_pass_no_docs, handle_review_pass_no_docs,
-               "review_ready -> completion_pending"),
-    Transition("docs_updated", not_handled, handle_docs_done,
-               "docs_updated -> completion_pending"),
-    Transition("changes_requested", not_handled, handle_changes_requested,
-               "changes_requested -> architect_requested"),
-    Transition("completion_approved", lambda s, c: True, handle_completion_approved,
-               "completion_approved -> exit"),
-    Transition("failed", lambda s, c: True, handle_failed,
-               "failed -> exit"),
-]
-
-
-def _save_panes(
-    feature_dir: Path,
-    panes: dict[str, str | None],
-    coder_panes: dict[int, str] | None = None,
-) -> None:
-    """Persist current pane mapping for the control pane monitor."""
-    data = dict(panes)
-    if coder_panes:
-        for idx, pane_id in coder_panes.items():
-            data[f"coder_{idx}"] = pane_id
-    target = feature_dir / "panes.json"
-    tmp = target.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data), encoding="utf-8")
-    tmp.rename(target)
-
-
 def orchestrate(
     files,
-    panes: dict[str, str | None],
+    runtime: TmuxAgentRuntime,
     agents: dict[str, AgentConfig],
     max_review_iterations: int,
     keep_session: bool,
-    session_name: str,
 ) -> int:
     wake_event = threading.Event()
     observer = Observer()
@@ -234,25 +150,18 @@ def orchestrate(
 
     ctx = PipelineContext(
         files=files,
-        panes=panes,
-        coder_panes={},
+        runtime=runtime,
         agents=agents,
         max_review_iterations=max_review_iterations,
-        session_name=session_name,
         prompts=build_initial_prompts(files),
     )
-
-    send_prompt(panes["architect"], ctx.prompts["architect"], session_name,
-                role="architect", agents=agents, panes=panes)
 
     try:
         while True:
             wake_event.wait(timeout=1.0)
             wake_event.clear()
             state = load_state(files.state)
-            _save_panes(files.feature_dir, ctx.panes, ctx.coder_panes)
-
-            result = dispatch(state, TRANSITIONS, ctx)
+            result = run_phase_cycle(state, ctx)
             if result == EXIT_SUCCESS:
                 return 0
             if result == EXIT_FAILURE:
@@ -260,8 +169,7 @@ def orchestrate(
     finally:
         observer.stop()
         observer.join()
-        if not keep_session:
-            tmux_kill_session(session_name)
+        runtime.shutdown(keep_session)
 
 
 def start_background_orchestrator(
@@ -302,21 +210,13 @@ def main() -> int:
         project_dir = Path.cwd().resolve()
         feature_dir = Path(args.orchestrate).resolve()
         files = load_runtime_files(project_dir, feature_dir)
-        panes_file = feature_dir / "panes.json"
-        if panes_file.exists():
-            panes = json.loads(panes_file.read_text(encoding="utf-8"))
-            panes.setdefault("coder", None)
-            panes.setdefault("docs", None)
-            panes.setdefault("designer", None)
-        else:
-            panes: dict[str, str | None] = {
-                "architect": f"{session_name}:0.0",
-                "coder": None,
-                "docs": None,
-                "designer": None,
-            }
+        runtime = TmuxAgentRuntime.attach(
+            feature_dir=feature_dir,
+            session_name=session_name,
+            agents=agents,
+        )
         return orchestrate(
-            files, panes, agents, max_review_iterations, args.keep_session, session_name
+            files, runtime, agents, max_review_iterations, args.keep_session
         )
 
     if tmux_session_exists(session_name):
@@ -340,12 +240,14 @@ def main() -> int:
     feature_dir = multi_agent_root(project_dir) / feature_name
     files = create_feature_files(project_dir, feature_dir, prompt_text, session_name)
 
-    panes: dict[str, str | None] | None = None
+    runtime: TmuxAgentRuntime | None = None
     try:
-        panes = tmux_new_session(
-            session_name, agents, feature_dir, config_path
+        runtime = TmuxAgentRuntime.create(
+            feature_dir=feature_dir,
+            session_name=session_name,
+            agents=agents,
+            config_path=config_path,
         )
-        _save_panes(feature_dir, panes)
         start_background_orchestrator(
             config_path, project_dir, feature_dir, args.keep_session
         )
@@ -354,23 +256,17 @@ def main() -> int:
         subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
         return 0
     except KeyboardInterrupt:
-        update_state(
-            files.state, "failed", updated_by="pipeline", active_role="pipeline"
-        )
+        update_phase(files.state, "failed", updated_by="pipeline", last_event="keyboard_interrupt")
         return 130
     except subprocess.CalledProcessError as exc:
-        if panes is not None:
-            update_state(
-                files.state, "failed", updated_by="pipeline", active_role="pipeline"
-            )
+        if runtime is not None:
+            update_phase(files.state, "failed", updated_by="pipeline", last_event="subprocess_error")
         stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
         command = exc.cmd if isinstance(exc.cmd, list) else str(exc.cmd)
         raise SystemExit(f"Command failed: {command}\n{stderr}") from exc
     except Exception:
-        if panes is not None and files.state.exists():
-            update_state(
-                files.state, "failed", updated_by="pipeline", active_role="pipeline"
-            )
+        if runtime is not None and files.state.exists():
+            update_phase(files.state, "failed", updated_by="pipeline", last_event="pipeline_exception")
         raise
 
 

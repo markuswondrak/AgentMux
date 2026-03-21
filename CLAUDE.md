@@ -29,7 +29,7 @@ This is a **tmux-based multi-agent orchestration system**. Instead of calling AI
 1. Creates a feature directory under `.multi-agent/<feature-name>/`
 2. Spawns a tmux session with a **control pane** (left, 20 cols) and agent panes (right)
 3. Watches the feature directory with `watchdog` for file changes
-4. Advances the workflow state machine (`state.json`) based on which files appear/change
+4. Advances the workflow state machine (`state.json`) based on which workflow artifacts appear/change
 5. Injects the next prompt into the appropriate tmux pane
 
 The tmux layout uses a "zone" approach: the **monitor zone** (left, fixed 20 cols) and the **agent zone** (right, remaining space). The control pane width is set once at session creation via `resize-pane -x 20` and never touched programmatically again. Agents are swapped into the right zone via `swap-pane` (exclusive) or stacked with `join-pane -v` (parallel). Idle agents are parked in a hidden `_hidden` window via `break-pane -d`. None of these operations affect the horizontal partition, so the monitor width stays rock-solid.
@@ -39,36 +39,36 @@ The tmux layout uses a "zone" approach: the **monitor zone** (left, fixed 20 col
 The workflow progresses through these states (stored in `.multi-agent/<feature>/state.json`):
 
 ```
-architect_requested → plan_ready → coder_requested → implementation_done
-    → review_requested → review_ready
-      → verdict:pass → completion_pending
-      → verdict:fail → fix_requested → implementation_done (review loop)
-      → loop cap reached → completion_pending
-    → completion_approved (done) OR changes_requested → architect_requested (loop, review_iteration reset)
+planning → designing? → implementing → reviewing
+    → verdict:pass → documenting? → completing
+    → verdict:fail → fixing → reviewing (review loop)
+    → loop cap reached → completing
+    → approval_received (done) OR changes_requested → planning
 ```
+
+`state.json` persists the durable `phase` and optional metadata such as `last_event`, `review_iteration`, and `subplan_count`. Agents no longer write workflow statuses directly.
 
 ### Shared file protocol
 
 Agents communicate via files in `.multi-agent/<feature-name>/`. Files are created on-demand as needed, not all at startup:
 
 **Created at initialization:**
-- `state.json` — current workflow state; orchestrator drives transitions
+- `state.json` — current workflow phase; orchestrator drives transitions
 - `requirements.md` — initial request passed to architect
 - `context.md` — auto-generated rules/session info injected into prompts
 - `panes.json` — tmux pane IDs written by `main()`, read by the background orchestrator
 - `architect_prompt.txt` — initial prompt for architect
 
 **Created on-demand during workflow:**
-- `plan.md` — architect writes this; triggers coder spawn
-- `coder_prompt.txt` — built and injected when coder is requested
-- `designer_prompt.txt` — built and injected when designer is requested
-- `review.md` — architect's code review; triggers confirmation phase
-- `review_prompt.txt` — built and injected when review begins
-- `confirmation_prompt.txt` — built and injected at confirmation gate
-- `fix_request.md` — orchestrator-copied review findings for coder fix iterations
-- `fix_prompt.txt` — built and injected for fix iterations
-- `changes.md` — user feedback that triggers a re-plan cycle
-- `change_prompt.txt` — built and injected when replanning after user changes
+- `plan.md` / `tasks.md` / `plan_meta.json` — architect planning artifacts
+- `coder_prompt*.txt` — built and injected when implementation starts
+- `designer_prompt.md` — built and injected when designing starts
+- `review.md` / `review_prompt.md` — architect review result and prompt
+- `fix_request.md` / `fix_prompt.txt` — fix-loop handoff and prompt
+- `done_*` — coder completion markers for single or parallel implementation/fixing
+- `docs_prompt.txt` / `docs_done` — docs prompt and completion marker
+- `confirmation_prompt.md` / `approval.json` — completion prompt and approval payload
+- `changes.md` / `changes_prompt.txt` — change request feedback and replanning prompt
 
 ### Agent configuration (`pipeline_config.json`)
 

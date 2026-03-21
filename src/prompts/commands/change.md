@@ -25,9 +25,10 @@ Your job:
 2. Present the revised implementation plan in chat for user approval.
 3. Iterate with the user until explicit approval.
 4. After writing `plan.md`, also write `tasks.md` as a numbered checklist derived from the plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z"). If you created sub-plans, group tasks under the corresponding `## Sub-plan <N>: <title>` header.
-5. FINAL STEP ONLY — after writing the plan and tasks files, update state.json so that `status` becomes `{state_target}`. This must be the very last action you take. Do not do anything after writing the status.
+5. After writing `plan.md` and `tasks.md`, write `plan_meta.json` with this exact shape: `{{ "needs_design": true|false }}`.
+6. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
 
 Constraints:
 - Do not implement code.
-- Do not change the status to anything else.
-- Do not write to `plan.md`/`tasks.md` or update status before explicit user approval.
+- Do not update `state.json` from the replanning step.
+- Do not write to `plan.md`/`tasks.md`/`plan_meta.json` before explicit user approval.

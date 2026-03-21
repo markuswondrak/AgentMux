@@ -27,7 +27,7 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertFalse(files.review.exists())
             self.assertFalse(files.fix_request.exists())
 
-    def test_architect_and_coder_prompts_reference_tasks_file(self) -> None:
+    def test_architect_and_coder_prompts_reference_plan_meta_and_done_marker(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
@@ -36,14 +36,14 @@ class TasksRequirementsTests(unittest.TestCase):
 
             files = create_feature_files(project_dir, feature_dir, "add tasks list", "session")
 
-            architect_prompt = build_architect_prompt(files, state_target="plan_ready")
-            coder_prompt = build_coder_prompt(files, state_target="implementation_done")
+            architect_prompt = build_architect_prompt(files)
+            coder_prompt = build_coder_prompt(files)
 
             self.assertIn("write the final plan to plan.md", architect_prompt)
             self.assertIn("also write `tasks.md`", architect_prompt)
-            self.assertIn("numbered checklist", architect_prompt)
-            self.assertIn("tasks.md", coder_prompt)
-            self.assertIn("check off items as completed", coder_prompt)
+            self.assertIn("write `plan_meta.json`", architect_prompt)
+            self.assertIn("done_1", coder_prompt)
+            self.assertIn("Do not update state.json", coder_prompt)
 
     def test_change_prompt_includes_existing_tasks_text(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -57,10 +57,11 @@ class TasksRequirementsTests(unittest.TestCase):
             files.plan.write_text("# Plan\n\n1. Example step\n", encoding="utf-8")
             files.tasks.write_text("# Tasks\n\n1. Example task\n", encoding="utf-8")
 
-            prompt = build_change_prompt(files, state_target="plan_ready")
+            prompt = build_change_prompt(files)
 
             self.assertIn("## Existing Task List", prompt)
             self.assertIn("1. Example task", prompt)
+            self.assertIn("plan_meta.json", prompt)
 
 
 if __name__ == "__main__":
