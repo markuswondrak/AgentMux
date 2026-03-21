@@ -1,8 +1,6 @@
 
 - md files should only be created on demand
 - Way too complicated structure for states / transitions etc
-- Architect soll neben dem plan noch eine task list erstellen, an der sich der coder orientieren kann
-- In monitor unterscheiden ob session aktiv oder wirklich weg (3 Stati: working, active, idle) 
 - modell auswahl durch architekten je nach aufgabe
 - gemini auf 3 flash umstellen und permission auf gitignored verzeichnis geben
 - LLM in pipeline hinzufügen für feature beschreibung

@@ -159,6 +159,7 @@ def build_all_prompts(files: RuntimeFiles) -> dict[str, Path]:
 def build_change_prompt(files: RuntimeFiles, state_target: str) -> str:
     requirements_text = files.requirements.read_text(encoding="utf-8")
     plan_text = files.plan.read_text(encoding="utf-8")
+    tasks_text = files.tasks.read_text(encoding="utf-8")
     changes_text = (
         files.changes.read_text(encoding="utf-8")
         if files.changes.exists()
@@ -172,5 +173,6 @@ def build_change_prompt(files: RuntimeFiles, state_target: str) -> str:
         text
         .replace("<<<REQUIREMENTS_TEXT>>>", requirements_text)
         .replace("<<<PLAN_TEXT>>>", plan_text)
+        .replace("<<<TASKS_TEXT>>>", tasks_text)
         .replace("<<<CHANGES_TEXT>>>", changes_text)
     )

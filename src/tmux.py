@@ -385,16 +385,18 @@ def tmux_pane_exists(target_pane: str | None) -> bool:
 
 
 def send_text(target_pane: str, text: str) -> None:
+    if not tmux_pane_exists(target_pane):
+        _log(f"send_text: pane {target_pane} does not exist, skipping")
+        return
     # select-window first so the attached client visually switches to the right pane
     if ":" in target_pane:
         session_window = target_pane.rsplit(".", 1)[0]
-        run_command(["tmux", "select-window", "-t", session_window])
-    run_command(["tmux", "select-pane", "-t", target_pane])
-    run_command(["tmux", "send-keys", "-t", target_pane, "-l", text])
+        run_command(["tmux", "select-window", "-t", session_window], check=False)
+    run_command(["tmux", "select-pane", "-t", target_pane], check=False)
+    run_command(["tmux", "send-keys", "-t", target_pane, "-l", text], check=False)
     time.sleep(3.0)
-    run_command(["tmux", "send-keys", "-t", target_pane, "Enter"])
-    time.sleep(0.5)
-    run_command(["tmux", "send-keys", "-t", target_pane, "Enter"])
+    # Single Enter to submit — text is already normalized to one line by normalize_prompt
+    run_command(["tmux", "send-keys", "-t", target_pane, "Enter"], check=False)
 
 
 def normalize_prompt(content: str) -> str:

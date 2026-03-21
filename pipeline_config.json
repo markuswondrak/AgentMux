@@ -24,6 +24,6 @@
   "docs": {
     "cli": "claude",
     "model": "haiku",
-    "args": ["--approval-mode", "auto_edit"]
+    "args": ["--permission-mode", "acceptEdits"]
   }
 }

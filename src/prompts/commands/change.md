@@ -12,6 +12,10 @@ Use this context to revise the plan:
 
 <<<PLAN_TEXT>>>
 
+## Existing Task List
+
+<<<TASKS_TEXT>>>
+
 ## User Change Feedback (changes.md)
 
 <<<CHANGES_TEXT>>>
@@ -20,10 +24,10 @@ Your job:
 1. Revise requirements/plan as needed based on the change feedback.
 2. Present the revised implementation plan in chat for user approval.
 3. Iterate with the user until explicit approval.
-4. After approval, write the final plan to plan.md.
-5. FINAL STEP ONLY — after writing the plan file, update state.json so that `status` becomes `{state_target}`. This must be the very last action you take. Do not do anything after writing the status.
+4. After writing `plan.md`, also write `tasks.md` as a numbered checklist derived from the plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z"). If you created sub-plans, group tasks under the corresponding `## Sub-plan <N>: <title>` header.
+5. FINAL STEP ONLY — after writing the plan and tasks files, update state.json so that `status` becomes `{state_target}`. This must be the very last action you take. Do not do anything after writing the status.
 
 Constraints:
 - Do not implement code.
 - Do not change the status to anything else.
-- Do not write plan.md or update status before explicit user approval.
+- Do not write to `plan.md`/`tasks.md` or update status before explicit user approval.
