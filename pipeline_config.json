@@ -16,6 +16,11 @@
     "model": "gpt-5.3-codex",
     "args": ["-s", "workspace-write", "-a", "never"]
   },
+  "designer": {
+    "cli": "claude",
+    "model": "sonnet",
+    "args": ["--permission-mode", "acceptEdits"]
+  },
   "docs": {
     "cli": "gemini",
     "model": "gemini-3.0-pro-preview",

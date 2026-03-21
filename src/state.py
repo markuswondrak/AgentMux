@@ -49,6 +49,7 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         context=feature_dir / "context.md",
         requirements=feature_dir / "requirements.md",
         plan=feature_dir / "plan.md",
+        design=feature_dir / "design.md",
         review=feature_dir / "review.md",
         fix_request=feature_dir / "fix_request.md",
         changes=feature_dir / "changes.md",
@@ -100,6 +101,10 @@ def create_feature_files(project_dir: Path, feature_dir: Path, prompt: str, sess
     )
     files.plan.write_text(
         "# Plan\n\n_Architect writes the implementation plan here._\n",
+        encoding="utf-8",
+    )
+    files.design.write_text(
+        "# Design\n\n_Designer writes the UI design handoff here when requested._\n",
         encoding="utf-8",
     )
     files.review.write_text(

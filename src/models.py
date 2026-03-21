@@ -19,6 +19,7 @@ class RuntimeFiles:
     context: Path
     requirements: Path
     plan: Path
+    design: Path
     review: Path
     fix_request: Path
     changes: Path

@@ -53,6 +53,24 @@ def build_coder_prompt(files: RuntimeFiles, state_target: str) -> str:
     })
 
 
+def build_designer_prompt(files: RuntimeFiles, state_target: str) -> str:
+    completion_instruction = (
+        "FINAL STEP ONLY — after writing design.md and any optional design artifacts, "
+        f"update state.json so that `status` becomes `{state_target}`. "
+        "This must be the very last action you take. Do not do anything after writing the status."
+    )
+    completion_constraints = "\n".join([
+        "- Do not change the status to anything else.",
+        "- Do not touch the status file until design work is fully complete.",
+    ])
+    return _load_template("agents", "designer").format_map({
+        "feature_dir": files.feature_dir,
+        "project_dir": files.project_dir,
+        "completion_instruction": completion_instruction,
+        "completion_constraints": completion_constraints,
+    })
+
+
 def build_coder_subplan_prompt(
     files: RuntimeFiles,
     subplan_path: Path,
@@ -104,7 +122,7 @@ def build_confirmation_prompt(files: RuntimeFiles, approved_target: str, changes
 
 
 def build_all_prompts(files: RuntimeFiles) -> dict[str, Path]:
-    """Pre-build the four static prompts and return their file paths."""
+    """Pre-build static prompts and return their file paths."""
     return {
         "architect": write_prompt_file(
             files.feature_dir,
@@ -120,6 +138,11 @@ def build_all_prompts(files: RuntimeFiles) -> dict[str, Path]:
             files.feature_dir,
             "review_prompt.md",
             build_architect_prompt(files, state_target="review_ready", is_review=True),
+        ),
+        "designer": write_prompt_file(
+            files.feature_dir,
+            "designer_prompt.md",
+            build_designer_prompt(files, state_target="design_ready"),
         ),
         "confirmation": write_prompt_file(
             files.feature_dir,

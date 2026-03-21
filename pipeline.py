@@ -20,7 +20,9 @@ except ImportError:  # pragma: no cover - handled at runtime
     Observer = None
 
 from src.handlers import (
+    guard_design_ready,
     guard_coders_done,
+    guard_plan_ready_design,
     guard_plan_ready_multi,
     guard_plan_ready_single,
     guard_review_fail,
@@ -29,8 +31,10 @@ from src.handlers import (
     handle_changes_requested,
     handle_coders_done,
     handle_completion_approved,
+    handle_design_ready,
     handle_docs_done,
     handle_failed,
+    handle_plan_ready_design,
     handle_plan_ready_multi,
     handle_plan_ready_single,
     handle_review_fail,
@@ -130,6 +134,14 @@ def load_config(path: Path) -> tuple[str, dict[str, AgentConfig], int]:
             model=docs_raw["model"],
             args=docs_raw.get("args", []),
         )
+    designer_raw = raw.get("designer")
+    if designer_raw:
+        agents["designer"] = AgentConfig(
+            role="designer",
+            cli=designer_raw["cli"],
+            model=designer_raw["model"],
+            args=designer_raw.get("args", []),
+        )
     return session_name, agents, max_review_iterations
 
 
@@ -156,6 +168,10 @@ class FeatureEventHandler(FileSystemEventHandler):
 
 
 TRANSITIONS = [
+    Transition("plan_ready", guard_plan_ready_design, handle_plan_ready_design,
+               "plan_ready -> designer_requested"),
+    Transition("design_ready", guard_design_ready, handle_design_ready,
+               "design_ready -> plan_ready (coder handoff)"),
     Transition("plan_ready", guard_plan_ready_multi, handle_plan_ready_multi,
                "plan_ready -> coders_requested (parallel)"),
     Transition("plan_ready", guard_plan_ready_single, handle_plan_ready_single,
@@ -286,11 +302,13 @@ def main() -> int:
             panes = json.loads(panes_file.read_text(encoding="utf-8"))
             panes.setdefault("coder", None)
             panes.setdefault("docs", None)
+            panes.setdefault("designer", None)
         else:
             panes: dict[str, str | None] = {
                 "architect": f"{session_name}:0.0",
                 "coder": None,
                 "docs": None,
+                "designer": None,
             }
         return orchestrate(
             files, panes, agents, max_review_iterations, args.keep_session, session_name
@@ -323,6 +341,7 @@ def main() -> int:
             session_name, agents["architect"], feature_dir, config_path
         )
         panes["docs"] = None
+        panes["designer"] = None
         _save_panes(feature_dir, panes)
         start_background_orchestrator(
             config_path, project_dir, feature_dir, args.keep_session

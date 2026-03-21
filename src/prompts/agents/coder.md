@@ -6,6 +6,7 @@ Read these files first:
 - context.md
 - requirements.md
 - {plan_file}
+- design.md (if present)
 - state.json
 
 Your job:

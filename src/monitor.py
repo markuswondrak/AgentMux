@@ -156,7 +156,7 @@ def main() -> None:
 
     raw = json.loads(config_path.read_text(encoding="utf-8"))
     agents: dict[str, dict[str, str]] = {}
-    for role in ("architect", "coder", "docs"):
+    for role in ("architect", "coder", "designer", "docs"):
         if role in raw:
             agents[role] = {"cli": raw[role]["cli"], "model": raw[role].get("model", "")}
 
