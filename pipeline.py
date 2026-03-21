@@ -25,9 +25,12 @@ from src.prompts import build_initial_prompts
 from src.runtime import TmuxAgentRuntime
 from src.state import (
     create_feature_files,
+    infer_resume_phase,
     load_runtime_files,
     load_state,
+    now_iso,
     update_phase,
+    write_state,
 )
 from src.tmux import tmux_session_exists
 from src.transitions import EXIT_FAILURE, EXIT_SUCCESS, PipelineContext
@@ -63,8 +66,15 @@ def parse_args() -> argparse.Namespace:
         "--orchestrate",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--resume",
+        nargs="?",
+        const=True,
+        default=None,
+        help="Resume an interrupted pipeline session. Use with no value for interactive selection, or pass a feature dir/name.",
+    )
     args = parser.parse_args()
-    if not args.orchestrate and not args.prompt:
+    if not args.orchestrate and not args.prompt and not args.resume:
         parser.error("the following arguments are required: prompt")
     return args
 
@@ -130,6 +140,61 @@ def load_config(path: Path) -> tuple[str, dict[str, AgentConfig], int]:
 
 def multi_agent_root(project_dir: Path) -> Path:
     return project_dir / ".multi-agent"
+
+
+def list_resumable_sessions(project_dir: Path) -> list[tuple[Path, dict]]:
+    root = multi_agent_root(project_dir)
+    if not root.exists():
+        return []
+
+    sessions: list[tuple[Path, dict]] = []
+    for candidate in root.iterdir():
+        if not candidate.is_dir():
+            continue
+        state_path = candidate / "state.json"
+        if not state_path.exists():
+            continue
+        sessions.append((candidate, load_state(state_path)))
+
+    return sorted(
+        sessions,
+        key=lambda item: str(item[1].get("updated_at", "")),
+        reverse=True,
+    )
+
+
+def select_session(sessions: list[tuple[Path, dict]]) -> Path:
+    if not sessions:
+        raise SystemExit("No resumable sessions found.")
+
+    if len(sessions) == 1:
+        feature_dir, state = sessions[0]
+        print(
+            "Auto-selected resumable session: "
+            f"{feature_dir.name} (phase: {state.get('phase', 'unknown')})"
+        )
+        return feature_dir
+
+    print("Resumable sessions:")
+    for index, (feature_dir, state) in enumerate(sessions, start=1):
+        phase = state.get("phase", "unknown")
+        last_event = state.get("last_event", "n/a")
+        updated_at = str(state.get("updated_at", "n/a"))
+        updated_label = updated_at[:16].replace("T", " ") if updated_at != "n/a" else "n/a"
+        print(
+            f"  {index}) {feature_dir.name:<36} "
+            f"phase: {phase:<12} last_event: {last_event} (updated: {updated_label})"
+        )
+
+    while True:
+        choice = input(f"Select session [1-{len(sessions)}]: ").strip()
+        if not choice.isdigit():
+            print("Invalid selection. Enter a number.")
+            continue
+        session_index = int(choice)
+        if 1 <= session_index <= len(sessions):
+            return sessions[session_index - 1][0]
+        print("Invalid selection. Try again.")
 
 
 def ensure_dependencies() -> None:
@@ -241,22 +306,51 @@ def main() -> int:
         )
 
     project_dir = Path.cwd().resolve()
-    prompt_arg = args.prompt
-    prompt_path = Path(prompt_arg)
-    prompt_is_md_file = prompt_arg.endswith(".md") and prompt_path.is_file()
-    if prompt_is_md_file:
-        prompt_text = prompt_path.read_text(encoding="utf-8")
-        slug_source = prompt_path.stem
-    else:
-        prompt_text = prompt_arg
-        slug_source = prompt_arg
-
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    feature_name = args.name or f"{timestamp}-{slugify(slug_source)}"
-    feature_dir = multi_agent_root(project_dir) / feature_name
-    files = create_feature_files(project_dir, feature_dir, prompt_text, session_name)
-
     runtime: TmuxAgentRuntime | None = None
+    files = None
+
+    if args.resume:
+        if args.resume is True:
+            feature_dir = select_session(list_resumable_sessions(project_dir))
+        else:
+            resume_target = Path(str(args.resume))
+            if resume_target.is_absolute():
+                feature_dir = resume_target.resolve()
+            else:
+                in_multi_agent = multi_agent_root(project_dir) / resume_target
+                if in_multi_agent.exists():
+                    feature_dir = in_multi_agent.resolve()
+                else:
+                    feature_dir = (project_dir / resume_target).resolve()
+        if not feature_dir.exists():
+            raise SystemExit(f"Feature directory not found: {feature_dir}")
+        state_path = feature_dir / "state.json"
+        if not state_path.exists():
+            raise SystemExit(f"No state.json found in {feature_dir}")
+
+        files = load_runtime_files(project_dir, feature_dir)
+        state = load_state(state_path)
+        state["phase"] = infer_resume_phase(feature_dir, state)
+        state["last_event"] = "resumed"
+        state["updated_at"] = now_iso()
+        state["updated_by"] = "pipeline"
+        write_state(state_path, state)
+    else:
+        prompt_arg = args.prompt
+        prompt_path = Path(prompt_arg)
+        prompt_is_md_file = prompt_arg.endswith(".md") and prompt_path.is_file()
+        if prompt_is_md_file:
+            prompt_text = prompt_path.read_text(encoding="utf-8")
+            slug_source = prompt_path.stem
+        else:
+            prompt_text = prompt_arg
+            slug_source = prompt_arg
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        feature_name = args.name or f"{timestamp}-{slugify(slug_source)}"
+        feature_dir = multi_agent_root(project_dir) / feature_name
+        files = create_feature_files(project_dir, feature_dir, prompt_text, session_name)
+
     try:
         runtime = TmuxAgentRuntime.create(
             feature_dir=feature_dir,

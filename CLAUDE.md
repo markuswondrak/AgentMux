@@ -15,6 +15,10 @@ python3 pipeline.py "Your feature description"
 python3 pipeline.py "feature" --name <slug>          # Custom feature directory name
 python3 pipeline.py "feature" --config <path>        # Custom config (default: pipeline_config.json)
 python3 pipeline.py "feature" --keep-session         # Keep tmux session after completion
+
+# Resume an interrupted pipeline
+python3 pipeline.py --resume                         # Interactive selection from existing sessions
+python3 pipeline.py --resume <feature-dir-or-name>  # Resume specific session by name or path
 ```
 
 There are no test or lint commands — this is an MVP system without formal test infrastructure.
@@ -33,6 +37,16 @@ This is a **tmux-based multi-agent orchestration system**. Instead of calling AI
 5. Injects the next prompt into the appropriate tmux pane
 
 The tmux layout uses a "zone" approach: the **monitor zone** (left, fixed 20 cols) and the **agent zone** (right, remaining space). The control pane width is set once at session creation via `resize-pane -x 20` and never touched programmatically again. Agents are swapped into the right zone via `swap-pane` (exclusive) or stacked with `join-pane -v` (parallel). Idle agents are parked in a hidden `_hidden` window via `break-pane -d`. None of these operations affect the horizontal partition, so the monitor width stays rock-solid.
+
+### Session resumption
+
+When a pipeline is interrupted (e.g., connection loss, tmux session killed), it can be restarted from where it left off using `--resume`:
+
+- `list_resumable_sessions(project_dir)` scans `.multi-agent/` for all feature directories with `state.json` and returns them sorted by recency
+- `select_session(sessions)` presents an interactive menu (or auto-selects if only one exists)
+- `infer_resume_phase(feature_dir, state)` examines workflow artifacts (`plan.md`, `done_*`, `review.md`, etc.) to determine the correct phase to resume into
+- On resume, the phase is updated in `state.json`, `last_event` is set to `"resumed"`, and any research tasks with `"dispatched"` status are cleaned up (allowing re-request)
+- The orchestrator picks up the updated state and injects the appropriate phase prompt to resume work
 
 ### State machine
 
@@ -119,6 +133,9 @@ src/prompts/commands/          — phase-specific command prompts (what to do at
 - Handler functions in `src/handlers.py` — each builds and writes its prompt file just before sending to agent
 - `tmux_*` helpers in `src/tmux.py` — create/kill sessions, panes, capture output
 - `_fix_control_width()` in `src/tmux.py` — one-shot resize fallback, only used when the right zone was empty
+- `list_resumable_sessions()` in `pipeline.py` — scans `.multi-agent/` for all feature directories with `state.json`, sorted by recency
+- `select_session()` in `pipeline.py` — presents interactive menu for user to select a session, or auto-selects if only one exists
+- `infer_resume_phase()` in `src/state.py` — examines workflow artifacts to determine the correct phase to resume into, cleans up dispatched research tasks
 
 ### Code-researcher task dispatch
 

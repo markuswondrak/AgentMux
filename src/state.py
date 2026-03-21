@@ -138,6 +138,70 @@ def parse_review_verdict(review_text: str) -> str | None:
     return None
 
 
+def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
+    for key in ("research_tasks", "web_research_tasks"):
+        tasks = state.get(key)
+        if isinstance(tasks, dict):
+            state[key] = {
+                str(topic): str(status)
+                for topic, status in tasks.items()
+                if str(status) != "dispatched"
+            }
+
+    phase = str(state.get("phase", "planning"))
+    if phase != "failed":
+        return phase
+
+    plan_path = feature_dir / "plan.md"
+    if not plan_path.exists():
+        return "planning"
+
+    plan_meta_path = feature_dir / "plan_meta.json"
+    if plan_meta_path.exists():
+        try:
+            plan_meta = json.loads(plan_meta_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            plan_meta = {}
+        if bool(plan_meta.get("needs_design")) and not (feature_dir / "design.md").exists():
+            return "designing"
+
+    subplan_count_raw = state.get("subplan_count")
+    try:
+        subplan_count = int(subplan_count_raw)
+    except (TypeError, ValueError):
+        subplan_count = 0
+    if subplan_count < 0:
+        subplan_count = 0
+
+    if subplan_count > 0:
+        done_complete = all((feature_dir / f"done_{index}").exists() for index in range(1, subplan_count + 1))
+    else:
+        done_complete = any(feature_dir.glob("done_*"))
+
+    if (
+        (feature_dir / "fix_request.md").exists()
+        and int(state.get("review_iteration", 0)) > 0
+        and not done_complete
+    ):
+        return "fixing"
+
+    if not done_complete:
+        return "implementing"
+
+    review_path = feature_dir / "review.md"
+    if not review_path.exists():
+        return "reviewing"
+
+    verdict = parse_review_verdict(review_path.read_text(encoding="utf-8"))
+    if verdict is None:
+        return "reviewing"
+
+    if verdict == "pass" and not (feature_dir / "docs_done").exists():
+        return "documenting"
+
+    return "completing"
+
+
 def cleanup_feature_dir(feature_dir: Path) -> None:
     try:
         shutil.rmtree(feature_dir)
