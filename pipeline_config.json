@@ -5,8 +5,10 @@
     "cli": "claude",
     "model": "opus",
     "args": [
-      "--permission-mode", "acceptEdits",
-      "--allowedTools", "Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)"
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)"
     ]
   },
   "coder": {
@@ -16,7 +18,7 @@
   },
   "docs": {
     "cli": "gemini",
-    "model": "gemini-2.5-pro",
+    "model": "gemini-3.1-pro-preview",
     "args": ["--approval-mode", "auto_edit"]
   }
 }

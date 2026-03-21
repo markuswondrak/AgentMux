@@ -20,37 +20,37 @@ except ImportError:  # pragma: no cover - handled at runtime
     Observer = None
 
 from src.models import AgentConfig
-from src.state import (
-    now_iso,
-    load_state,
-    write_state,
-    update_state,
-    create_feature_files,
-    load_runtime_files,
-    cleanup_feature_dir,
-    parse_review_verdict,
-    commit_changes,
-)
-from src.tmux import (
-    tmux_session_exists,
-    tmux_new_session,
-    create_agent_pane,
-    kill_agent_pane,
-    tmux_kill_session,
-    tmux_pane_exists,
-    send_prompt,
-)
+from src.plan_parser import split_plan_into_subplans
 from src.prompts import (
     build_architect_prompt,
+    build_change_prompt,
     build_coder_prompt,
     build_coder_subplan_prompt,
-    build_fix_prompt,
-    build_docs_prompt,
     build_confirmation_prompt,
-    build_change_prompt,
+    build_docs_prompt,
+    build_fix_prompt,
     write_prompt_file,
 )
-from src.plan_parser import split_plan_into_subplans
+from src.state import (
+    cleanup_feature_dir,
+    commit_changes,
+    create_feature_files,
+    load_runtime_files,
+    load_state,
+    now_iso,
+    parse_review_verdict,
+    update_state,
+    write_state,
+)
+from src.tmux import (
+    create_agent_pane,
+    kill_agent_pane,
+    send_prompt,
+    tmux_kill_session,
+    tmux_new_session,
+    tmux_pane_exists,
+    tmux_session_exists,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT_DIR / "pipeline_config.json"
@@ -147,6 +147,22 @@ class FeatureEventHandler(FileSystemEventHandler):
         self.wake_event.set()
 
 
+def _save_panes(
+    feature_dir: Path,
+    panes: dict[str, str | None],
+    coder_panes: dict[int, str] | None = None,
+) -> None:
+    """Persist current pane mapping for the control pane monitor."""
+    data = dict(panes)
+    if coder_panes:
+        for idx, pane_id in coder_panes.items():
+            data[f"coder_{idx}"] = pane_id
+    target = feature_dir / "panes.json"
+    tmp = target.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data), encoding="utf-8")
+    tmp.rename(target)
+
+
 def orchestrate(
     files,
     panes: dict[str, str | None],
@@ -157,27 +173,29 @@ def orchestrate(
 ) -> int:
     wake_event = threading.Event()
     observer = Observer()
-    observer.schedule(FeatureEventHandler(wake_event), str(files.feature_dir), recursive=False)
+    observer.schedule(
+        FeatureEventHandler(wake_event), str(files.feature_dir), recursive=False
+    )
     observer.start()
 
     architect_prompt = write_prompt_file(
         files.feature_dir,
-        "architect_prompt.txt",
+        "architect_prompt.md",
         build_architect_prompt(files, state_target="plan_ready"),
     )
     coder_prompt = write_prompt_file(
         files.feature_dir,
-        "coder_prompt.txt",
+        "coder_prompt.md",
         build_coder_prompt(files, state_target="implementation_done"),
     )
     review_prompt = write_prompt_file(
         files.feature_dir,
-        "review_prompt.txt",
+        "review_prompt.md",
         build_architect_prompt(files, state_target="review_ready", is_review=True),
     )
     confirmation_prompt = write_prompt_file(
         files.feature_dir,
-        "confirmation_prompt.txt",
+        "confirmation_prompt.md",
         build_confirmation_prompt(
             files,
             approved_target="completion_approved",
@@ -201,7 +219,14 @@ def orchestrate(
             state = load_state(files.state)
             status = state.get("status")
 
-            if status == "plan_ready" and not coder_dispatched and not coders_dispatched:
+            # Keep panes.json in sync so the control pane monitor can track active agents
+            _save_panes(files.feature_dir, panes, coder_panes)
+
+            if (
+                status == "plan_ready"
+                and not coder_dispatched
+                and not coders_dispatched
+            ):
                 for done_marker in files.feature_dir.glob("done_*"):
                     if done_marker.is_file():
                         done_marker.unlink()
@@ -210,7 +235,9 @@ def orchestrate(
                 subplan_count = len(subplan_paths)
 
                 if subplan_count > 1:
-                    for subplan_index, subplan_path in enumerate(subplan_paths, start=1):
+                    for subplan_index, subplan_path in enumerate(
+                        subplan_paths, start=1
+                    ):
                         pane_id = create_agent_pane(session_name, "coder", agents)
                         coder_panes[subplan_index] = pane_id
                         subplan_prompt = write_prompt_file(
@@ -234,7 +261,9 @@ def orchestrate(
                     coders_dispatched = True
                 else:
                     if not tmux_pane_exists(panes["coder"]):
-                        panes["coder"] = create_agent_pane(session_name, "coder", agents)
+                        panes["coder"] = create_agent_pane(
+                            session_name, "coder", agents
+                        )
                     state["status"] = "coder_requested"
                     state["subplan_count"] = 1
                     state["updated_at"] = now_iso()
@@ -264,7 +293,12 @@ def orchestrate(
                 continue
 
             if status == "implementation_done" and not review_dispatched:
-                update_state(files.state, "review_requested", updated_by="pipeline", active_role="architect")
+                update_state(
+                    files.state,
+                    "review_requested",
+                    updated_by="pipeline",
+                    active_role="architect",
+                )
                 send_prompt(panes["architect"], review_prompt)
                 review_dispatched = True
                 continue
@@ -287,7 +321,9 @@ def orchestrate(
                     state["active_role"] = "coder"
                     write_state(files.state, state)
                     if not tmux_pane_exists(panes["coder"]):
-                        panes["coder"] = create_agent_pane(session_name, "coder", agents)
+                        panes["coder"] = create_agent_pane(
+                            session_name, "coder", agents
+                        )
                     fix_prompt = write_prompt_file(
                         files.feature_dir,
                         "fix_prompt.txt",
@@ -301,9 +337,16 @@ def orchestrate(
                 kill_agent_pane(panes["coder"])
                 panes["coder"] = None
                 if verdict is None:
-                    print("Warning: parse_review_verdict returned None — treating as pass and requesting docs update")
+                    print(
+                        "Warning: parse_review_verdict returned None — treating as pass and requesting docs update"
+                    )
                 if "docs" in agents:
-                    update_state(files.state, "docs_update_requested", updated_by="pipeline", active_role="docs")
+                    update_state(
+                        files.state,
+                        "docs_update_requested",
+                        updated_by="pipeline",
+                        active_role="docs",
+                    )
                     panes["docs"] = create_agent_pane(session_name, "docs", agents)
                     docs_prompt = write_prompt_file(
                         files.feature_dir,
@@ -326,7 +369,12 @@ def orchestrate(
             if status == "docs_updated" and not confirmation_dispatched:
                 kill_agent_pane(panes["docs"])
                 panes["docs"] = None
-                update_state(files.state, "completion_pending", updated_by="pipeline", active_role="architect")
+                update_state(
+                    files.state,
+                    "completion_pending",
+                    updated_by="pipeline",
+                    active_role="architect",
+                )
                 send_prompt(panes["architect"], confirmation_prompt)
                 confirmation_dispatched = True
                 continue
@@ -366,11 +414,17 @@ def orchestrate(
                     commit_message = str(state.get("commit_message", "")).strip()
                     raw_commit_files = state.get("commit_files", [])
                     commit_files = (
-                        [str(path).strip() for path in raw_commit_files if str(path).strip()]
+                        [
+                            str(path).strip()
+                            for path in raw_commit_files
+                            if str(path).strip()
+                        ]
                         if isinstance(raw_commit_files, list)
                         else []
                     )
-                    commit_hash = commit_changes(files.project_dir, commit_message, commit_files)
+                    commit_hash = commit_changes(
+                        files.project_dir, commit_message, commit_files
+                    )
                     if commit_hash is not None:
                         print("Completion approved and commit created.")
                         print(f"Commit message: {commit_message}")
@@ -379,7 +433,9 @@ def orchestrate(
                         for file_path in commit_files:
                             print(f"- {file_path}")
                     else:
-                        print("Completion approved, but commit step failed or was skipped.")
+                        print(
+                            "Completion approved, but commit step failed or was skipped."
+                        )
                     cleanup_feature_dir(files.feature_dir)
                     return 0
                 return 1
@@ -390,7 +446,9 @@ def orchestrate(
             tmux_kill_session(session_name)
 
 
-def start_background_orchestrator(config_path: Path, project_dir: Path, feature_dir: Path, keep_session: bool) -> None:
+def start_background_orchestrator(
+    config_path: Path, project_dir: Path, feature_dir: Path, keep_session: bool
+) -> None:
     command = [
         sys.executable,
         "-u",
@@ -426,8 +484,20 @@ def main() -> int:
         project_dir = Path.cwd().resolve()
         feature_dir = Path(args.orchestrate).resolve()
         files = load_runtime_files(project_dir, feature_dir)
-        panes: dict[str, str | None] = {"architect": f"{session_name}:0.0", "coder": None, "docs": None}
-        return orchestrate(files, panes, agents, max_review_iterations, args.keep_session, session_name)
+        panes_file = feature_dir / "panes.json"
+        if panes_file.exists():
+            panes = json.loads(panes_file.read_text(encoding="utf-8"))
+            panes.setdefault("coder", None)
+            panes.setdefault("docs", None)
+        else:
+            panes: dict[str, str | None] = {
+                "architect": f"{session_name}:0.0",
+                "coder": None,
+                "docs": None,
+            }
+        return orchestrate(
+            files, panes, agents, max_review_iterations, args.keep_session, session_name
+        )
 
     if tmux_session_exists(session_name):
         raise SystemExit(
@@ -442,25 +512,36 @@ def main() -> int:
 
     panes: dict[str, str | None] | None = None
     try:
-        panes = tmux_new_session(session_name, agents["architect"])
+        panes = tmux_new_session(
+            session_name, agents["architect"], feature_dir, config_path
+        )
         panes["docs"] = None
-        start_background_orchestrator(config_path, project_dir, feature_dir, args.keep_session)
+        _save_panes(feature_dir, panes)
+        start_background_orchestrator(
+            config_path, project_dir, feature_dir, args.keep_session
+        )
         print(f"Feature directory: {feature_dir}")
         print(f"tmux session: {session_name}")
         subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
         return 0
     except KeyboardInterrupt:
-        update_state(files.state, "failed", updated_by="pipeline", active_role="pipeline")
+        update_state(
+            files.state, "failed", updated_by="pipeline", active_role="pipeline"
+        )
         return 130
     except subprocess.CalledProcessError as exc:
         if panes is not None:
-            update_state(files.state, "failed", updated_by="pipeline", active_role="pipeline")
+            update_state(
+                files.state, "failed", updated_by="pipeline", active_role="pipeline"
+            )
         stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
         command = exc.cmd if isinstance(exc.cmd, list) else str(exc.cmd)
         raise SystemExit(f"Command failed: {command}\n{stderr}") from exc
     except Exception:
         if panes is not None and files.state.exists():
-            update_state(files.state, "failed", updated_by="pipeline", active_role="pipeline")
+            update_state(
+                files.state, "failed", updated_by="pipeline", active_role="pipeline"
+            )
         raise
 
 

@@ -27,10 +27,12 @@ This is a **tmux-based multi-agent orchestration system**. Instead of calling AI
 
 `pipeline.py` is both the entry point and the orchestrator (started as a background subprocess with `--orchestrate`). It:
 1. Creates a feature directory under `.multi-agent/<feature-name>/`
-2. Spawns a tmux session with agent panes
+2. Spawns a tmux session with a **control pane** (left, 28 cols) and agent panes (right)
 3. Watches the feature directory with `watchdog` for file changes
 4. Advances the workflow state machine (`state.json`) based on which files appear/change
 5. Injects the next prompt into the appropriate tmux pane
+
+The tmux layout uses `main-vertical`: the control pane (`src/monitor.py`) is fixed on the left showing pipeline status and agent list. Agent panes tile the right area and are only present while that agent is active — idle agents have no visible pane.
 
 ### State machine
 
@@ -55,6 +57,7 @@ Agents communicate via files in `.multi-agent/<feature-name>/`:
 - `fix_request.md` — orchestrator-copied review findings for coder fix iterations
 - `changes.md` — user feedback that triggers a re-plan cycle
 - `context.md` — auto-generated rules/session info injected into prompts
+- `panes.json` — tmux pane IDs written by `main()`, read by the background orchestrator
 - `*_prompt.txt` — rendered prompts that get injected into each agent's pane
 
 ### Agent configuration (`pipeline_config.json`)
@@ -73,6 +76,7 @@ pipeline.py                    — entry point, CLI parsing, config loading, orc
 src/models.py                  — AgentConfig and RuntimeFiles dataclasses
 src/state.py                   — state.json CRUD, feature-directory lifecycle, parse_review_verdict
 src/tmux.py                    — all tmux interaction (sessions, panes, send-keys, trust-prompt)
+src/monitor.py                 — control pane status display (pipeline status, agent list)
 src/prompts.py                 — loads markdown templates and renders them with str.format_map()
 src/prompts/agents/            — role-level prompts (define what each agent is)
   architect.md                 —   planning phase
@@ -90,6 +94,7 @@ src/prompts/commands/          — phase-specific command prompts (what to do at
 - `send_prompt()` in `src/tmux.py` — injects text into a tmux pane via `send-keys`
 - `build_*_prompt()` in `src/prompts.py` — loads and renders the markdown template for each phase
 - `tmux_*` helpers in `src/tmux.py` — create/kill sessions, panes, capture output
+- `_reapply_control_layout()` in `src/tmux.py` — re-applies `main-vertical` layout and fixes control pane width
 
 ### Editing prompts
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from .models import AgentConfig
 
 TRUST_PROMPT_SNIPPET = "Do you trust the contents of this directory?"
+CONTROL_PANE_WIDTH = 28
 
 
 def run_command(args: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -33,15 +34,47 @@ def tmux_session_exists(session_name: str) -> bool:
     return result.returncode == 0
 
 
-def tmux_new_session(session_name: str, architect: AgentConfig) -> dict[str, str | None]:
-    architect_cmd = build_agent_command(architect)
+def tmux_new_session(
+    session_name: str,
+    architect: AgentConfig,
+    feature_dir: Path,
+    config_path: Path,
+) -> dict[str, str | None]:
+    monitor_script = Path(__file__).resolve().parent / "monitor.py"
+    monitor_cmd = (
+        f"python3 {shlex.quote(str(monitor_script))}"
+        f" --feature-dir {shlex.quote(str(feature_dir))}"
+        f" --session-name {shlex.quote(session_name)}"
+        f" --config {shlex.quote(str(config_path))}"
+    )
     result = run_command([
         "tmux", "new-session", "-d", "-s", session_name,
-        "-n", architect.role, "-P", "-F", "#{pane_id}", architect_cmd,
+        "-n", "pipeline", "-P", "-F", "#{pane_id}", monitor_cmd,
+    ])
+    control_pane = result.stdout.strip()
+    run_command(["tmux", "select-pane", "-t", control_pane, "-T", "control"])
+
+    architect_cmd = build_agent_command(architect)
+    result = run_command([
+        "tmux", "split-window", "-h", "-t", control_pane,
+        "-P", "-F", "#{pane_id}", architect_cmd,
     ])
     architect_pane = result.stdout.strip()
     run_command(["tmux", "select-pane", "-t", architect_pane, "-T", architect.role])
-    return {"architect": architect_pane, "coder": None}
+
+    _reapply_control_layout(session_name)
+    return {"architect": architect_pane, "coder": None, "_control": control_pane}
+
+
+def _reapply_control_layout(session_name: str) -> None:
+    """Re-apply main-vertical layout and fix control pane width."""
+    run_command(["tmux", "select-layout", "-t", session_name, "main-vertical"])
+    result = run_command(["tmux", "list-panes", "-t", session_name, "-F", "#{pane_id} #{pane_title}"])
+    for line in result.stdout.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2 and parts[1] == "control":
+            run_command(["tmux", "resize-pane", "-t", parts[0], "-x", str(CONTROL_PANE_WIDTH)])
+            break
 
 
 def create_agent_pane(session_name: str, agent_name: str, agents: dict[str, AgentConfig]) -> str:
@@ -53,10 +86,7 @@ def create_agent_pane(session_name: str, agent_name: str, agents: dict[str, Agen
     ])
     pane_id = result.stdout.strip()
     run_command(["tmux", "select-pane", "-t", pane_id, "-T", agent.role])
-    pane_count_result = run_command(["tmux", "list-panes", "-t", session_name, "-F", "#{pane_id}"])
-    pane_count = len([line for line in pane_count_result.stdout.splitlines() if line.strip()])
-    layout = "tiled" if pane_count >= 3 else "even-horizontal"
-    run_command(["tmux", "select-layout", "-t", session_name, layout])
+    _reapply_control_layout(session_name)
     accept_trust_prompt(pane_id)
     return pane_id
 
