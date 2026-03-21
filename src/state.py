@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,14 @@ def now_iso() -> str:
 
 
 def load_state(state_path: Path) -> dict[str, Any]:
-    return json.loads(state_path.read_text(encoding="utf-8"))
+    import time
+    for attempt in range(5):
+        text = state_path.read_text(encoding="utf-8").strip()
+        if text:
+            return json.loads(text)
+        if attempt < 4:
+            time.sleep(0.1)
+    raise RuntimeError(f"state file is empty after retries: {state_path}")
 
 
 def write_state(state_path: Path, state: dict[str, Any]) -> None:
@@ -141,3 +149,63 @@ def cleanup_feature_dir(feature_dir: Path) -> None:
         print(f"Feature directory already removed: {feature_dir}")
     except OSError as exc:
         print(f"Failed to clean up feature directory {feature_dir}: {exc}")
+
+
+def commit_changes(project_dir: Path, commit_message: str, commit_files: list[str]) -> str | None:
+    if not commit_message.strip():
+        print("Warning: commit_message is empty; skipping commit.")
+        return None
+
+    files = [path.strip() for path in commit_files if path and path.strip()]
+    if not files:
+        print("Warning: commit_files is empty; skipping commit.")
+        return None
+
+    try:
+        add_result = subprocess.run(
+            ["git", "add", *files],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if add_result.stderr.strip():
+            print(f"Warning: git add stderr: {add_result.stderr.strip()}")
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
+        print(f"Warning: failed to stage commit files: {stderr}")
+        return None
+
+    try:
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", commit_message],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if commit_result.stderr.strip():
+            print(f"Warning: git commit stderr: {commit_result.stderr.strip()}")
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
+        print(f"Warning: failed to create commit: {stderr}")
+        return None
+
+    try:
+        rev_parse = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
+        print(f"Warning: commit created but failed to read commit hash: {stderr}")
+        return None
+
+    commit_hash = rev_parse.stdout.strip()
+    if not commit_hash:
+        print("Warning: commit created but rev-parse returned an empty hash.")
+        return None
+    return commit_hash

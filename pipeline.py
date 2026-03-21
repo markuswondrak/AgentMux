@@ -29,6 +29,7 @@ from src.state import (
     load_runtime_files,
     cleanup_feature_dir,
     parse_review_verdict,
+    commit_changes,
 )
 from src.tmux import (
     tmux_session_exists,
@@ -362,6 +363,23 @@ def orchestrate(
 
             if status in FINAL_STATES:
                 if status == "completion_approved":
+                    commit_message = str(state.get("commit_message", "")).strip()
+                    raw_commit_files = state.get("commit_files", [])
+                    commit_files = (
+                        [str(path).strip() for path in raw_commit_files if str(path).strip()]
+                        if isinstance(raw_commit_files, list)
+                        else []
+                    )
+                    commit_hash = commit_changes(files.project_dir, commit_message, commit_files)
+                    if commit_hash is not None:
+                        print("Completion approved and commit created.")
+                        print(f"Commit message: {commit_message}")
+                        print(f"Commit hash: {commit_hash}")
+                        print("Committed files:")
+                        for file_path in commit_files:
+                            print(f"- {file_path}")
+                    else:
+                        print("Completion approved, but commit step failed or was skipped.")
                     cleanup_feature_dir(files.feature_dir)
                     return 0
                 return 1
@@ -375,6 +393,7 @@ def orchestrate(
 def start_background_orchestrator(config_path: Path, project_dir: Path, feature_dir: Path, keep_session: bool) -> None:
     command = [
         sys.executable,
+        "-u",
         str(Path(__file__).resolve()),
         "--config",
         str(config_path),
