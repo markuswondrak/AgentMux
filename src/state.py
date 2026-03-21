@@ -100,27 +100,6 @@ def create_feature_files(project_dir: Path, feature_dir: Path, prompt: str, sess
         ]) + "\n",
         encoding="utf-8",
     )
-    files.plan.write_text(
-        "# Plan\n\n_Architect writes the implementation plan here._\n",
-        encoding="utf-8",
-    )
-    files.tasks.write_text(
-        "# Tasks\n\n_Architect writes the implementation task list here._\n",
-        encoding="utf-8",
-    )
-    files.design.write_text(
-        "# Design\n\n_Designer writes the UI design handoff here when requested._\n",
-        encoding="utf-8",
-    )
-    files.review.write_text(
-        "# Review\n\n_Architect writes review findings or an explicit no-findings verdict here._\n",
-        encoding="utf-8",
-    )
-    files.fix_request.write_text(
-        "# Fix Request\n\n_Orchestrator copies review findings here when fixes are required._\n",
-        encoding="utf-8",
-    )
-
     state = {
         "feature_dir": str(feature_dir),
         "status": "architect_requested",

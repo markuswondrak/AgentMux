@@ -49,16 +49,26 @@ architect_requested → plan_ready → coder_requested → implementation_done
 
 ### Shared file protocol
 
-Agents communicate via files in `.multi-agent/<feature-name>/`:
+Agents communicate via files in `.multi-agent/<feature-name>/`. Files are created on-demand as needed, not all at startup:
+
+**Created at initialization:**
 - `state.json` — current workflow state; orchestrator drives transitions
 - `requirements.md` — initial request passed to architect
-- `plan.md` — architect writes this; triggers coder spawn
-- `review.md` — architect's code review; triggers confirmation phase
-- `fix_request.md` — orchestrator-copied review findings for coder fix iterations
-- `changes.md` — user feedback that triggers a re-plan cycle
 - `context.md` — auto-generated rules/session info injected into prompts
 - `panes.json` — tmux pane IDs written by `main()`, read by the background orchestrator
-- `*_prompt.txt` — rendered prompts that get injected into each agent's pane
+- `architect_prompt.txt` — initial prompt for architect
+
+**Created on-demand during workflow:**
+- `plan.md` — architect writes this; triggers coder spawn
+- `coder_prompt.txt` — built and injected when coder is requested
+- `designer_prompt.txt` — built and injected when designer is requested
+- `review.md` — architect's code review; triggers confirmation phase
+- `review_prompt.txt` — built and injected when review begins
+- `confirmation_prompt.txt` — built and injected at confirmation gate
+- `fix_request.md` — orchestrator-copied review findings for coder fix iterations
+- `fix_prompt.txt` — built and injected for fix iterations
+- `changes.md` — user feedback that triggers a re-plan cycle
+- `change_prompt.txt` — built and injected when replanning after user changes
 
 ### Agent configuration (`pipeline_config.json`)
 
@@ -92,7 +102,9 @@ src/prompts/commands/          — phase-specific command prompts (what to do at
 
 - `orchestrate()` in `pipeline.py` — main file-watch loop; dispatches to role-specific handlers
 - `send_prompt()` in `src/tmux.py` — injects text into a tmux pane via `send-keys`
-- `build_*_prompt()` in `src/prompts.py` — loads and renders the markdown template for each phase
+- `build_initial_prompts()` in `src/prompts.py` — builds only the architect prompt at startup
+- `build_*_prompt()` in `src/prompts.py` — loads and renders the markdown template for each phase; called lazily by handlers
+- Handler functions in `src/handlers.py` — each builds and writes its prompt file just before sending to agent
 - `tmux_*` helpers in `src/tmux.py` — create/kill sessions, panes, capture output
 - `_fix_control_width()` in `src/tmux.py` — one-shot resize fallback, only used when the right zone was empty
 
@@ -111,5 +123,7 @@ markers that are substituted after format_map to safely embed arbitrary file con
 
 - Agents never communicate with each other directly; the orchestrator mediates via files
 - The orchestrator polls via watchdog events, not timers — no busy-waiting
+- Files are created on-demand — only essential files (`state.json`, `requirements.md`, `context.md`) exist at startup; all others are created when the corresponding workflow step fires
+- Prompt files are built lazily by handlers just before injection, not pre-generated
 - Human can attach to the tmux session at any time to observe or intervene
 - Trust/confirmation prompts from CLI tools are automatically answered with Enter

@@ -43,7 +43,7 @@ from src.handlers import (
     handle_start_review,
 )
 from src.models import AgentConfig
-from src.prompts import build_all_prompts
+from src.prompts import build_initial_prompts
 from src.state import (
     create_feature_files,
     load_runtime_files,
@@ -239,7 +239,7 @@ def orchestrate(
         agents=agents,
         max_review_iterations=max_review_iterations,
         session_name=session_name,
-        prompts=build_all_prompts(files),
+        prompts=build_initial_prompts(files),
     )
 
     send_prompt(panes["architect"], ctx.prompts["architect"], session_name,

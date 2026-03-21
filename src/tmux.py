@@ -9,7 +9,7 @@ from pathlib import Path
 from .models import AgentConfig
 
 TRUST_PROMPT_SNIPPET = "Do you trust the contents of this directory?"
-CONTROL_PANE_WIDTH = 20
+CONTROL_PANE_WIDTH = 15
 MAIN_WINDOW = "pipeline"
 
 

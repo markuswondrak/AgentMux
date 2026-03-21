@@ -5,8 +5,12 @@ from typing import Any
 
 from .plan_parser import split_plan_into_subplans
 from .prompts import (
+    build_architect_prompt,
     build_change_prompt,
+    build_coder_prompt,
     build_coder_subplan_prompt,
+    build_confirmation_prompt,
+    build_designer_prompt,
     build_docs_prompt,
     build_fix_prompt,
     write_prompt_file,
@@ -139,7 +143,12 @@ def handle_plan_ready_design(state: dict[str, Any], ctx: PipelineContext) -> str
     state["updated_by"] = "pipeline"
     state["active_role"] = "designer"
     write_state(ctx.files.state, state)
-    _send(ctx, "designer", ctx.prompts["designer"])
+    designer_prompt = write_prompt_file(
+        ctx.files.feature_dir,
+        "designer_prompt.md",
+        build_designer_prompt(ctx.files, state_target="design_ready"),
+    )
+    _send(ctx, "designer", designer_prompt)
     _mark(ctx, "plan_ready")
     return None
 
@@ -214,7 +223,12 @@ def handle_plan_ready_single(state: dict[str, Any], ctx: PipelineContext) -> str
     state["updated_by"] = "pipeline"
     state["active_role"] = "coder"
     write_state(ctx.files.state, state)
-    _send(ctx, "coder", ctx.prompts["coder"])
+    coder_prompt = write_prompt_file(
+        ctx.files.feature_dir,
+        "coder_prompt.md",
+        build_coder_prompt(ctx.files, state_target="implementation_done"),
+    )
+    _send(ctx, "coder", coder_prompt)
     _mark(ctx, "plan_ready")
     return None
 
@@ -245,7 +259,12 @@ def handle_start_review(state: dict[str, Any], ctx: PipelineContext) -> str | No
         updated_by="pipeline",
         active_role="architect",
     )
-    _send(ctx, "architect", ctx.prompts["review"])
+    review_prompt = write_prompt_file(
+        ctx.files.feature_dir,
+        "review_prompt.md",
+        build_architect_prompt(ctx.files, state_target="review_ready", is_review=True),
+    )
+    _send(ctx, "architect", review_prompt)
     _mark(ctx, "implementation_done")
     return None
 
@@ -333,7 +352,16 @@ def handle_review_pass_no_docs(
         updated_by="pipeline",
         active_role="architect",
     )
-    _send(ctx, "architect", ctx.prompts["confirmation"])
+    confirmation_prompt = write_prompt_file(
+        ctx.files.feature_dir,
+        "confirmation_prompt.md",
+        build_confirmation_prompt(
+            ctx.files,
+            approved_target="completion_approved",
+            changes_target="changes_requested",
+        ),
+    )
+    _send(ctx, "architect", confirmation_prompt)
     _mark(ctx, status)
     return None
 
@@ -348,7 +376,16 @@ def handle_docs_done(state: dict[str, Any], ctx: PipelineContext) -> str | None:
         updated_by="pipeline",
         active_role="architect",
     )
-    _send(ctx, "architect", ctx.prompts["confirmation"])
+    confirmation_prompt = write_prompt_file(
+        ctx.files.feature_dir,
+        "confirmation_prompt.md",
+        build_confirmation_prompt(
+            ctx.files,
+            approved_target="completion_approved",
+            changes_target="changes_requested",
+        ),
+    )
+    _send(ctx, "architect", confirmation_prompt)
     _mark(ctx, "docs_updated")
     return None
 

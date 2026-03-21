@@ -13,7 +13,7 @@ from src.handlers import (
     handle_plan_ready_design,
 )
 from src.models import AgentConfig
-from src.prompts import build_all_prompts, build_coder_prompt, build_designer_prompt
+from src.prompts import build_coder_prompt, build_designer_prompt, build_initial_prompts
 from src.state import create_feature_files, load_runtime_files, load_state, write_state
 from src.transitions import PipelineContext
 
@@ -33,15 +33,8 @@ def _make_ctx(feature_dir: Path, with_designer: bool = True) -> tuple[PipelineCo
     project_dir.mkdir(parents=True, exist_ok=True)
     files = create_feature_files(project_dir, feature_dir, "add designer", "session-x")
 
-    designer_prompt = feature_dir / "designer_prompt.md"
-    designer_prompt.write_text("designer prompt", encoding="utf-8")
-
     prompts = {
         "architect": feature_dir / "architect_prompt.md",
-        "coder": feature_dir / "coder_prompt.md",
-        "review": feature_dir / "review_prompt.md",
-        "confirmation": feature_dir / "confirmation_prompt.md",
-        "designer": designer_prompt,
     }
     for path in prompts.values():
         if not path.exists():
@@ -82,7 +75,7 @@ class DesignerRequirementsTests(unittest.TestCase):
             self.assertEqual("claude", agents["designer"].cli)
             self.assertEqual("sonnet", agents["designer"].model)
 
-    def test_runtime_files_include_design_and_placeholder_created(self) -> None:
+    def test_runtime_files_include_design_path_but_no_placeholder_created(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
@@ -94,9 +87,9 @@ class DesignerRequirementsTests(unittest.TestCase):
 
             self.assertEqual(feature_dir / "design.md", files.design)
             self.assertEqual(feature_dir / "design.md", loaded.design)
-            self.assertTrue(files.design.exists())
+            self.assertFalse(files.design.exists())
 
-    def test_build_prompts_include_designer_and_coder_reads_design(self) -> None:
+    def test_build_initial_prompts_only_writes_architect_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
@@ -107,13 +100,17 @@ class DesignerRequirementsTests(unittest.TestCase):
 
             coder_prompt = build_coder_prompt(files, state_target="implementation_done")
             designer_prompt = build_designer_prompt(files, state_target="design_ready")
-            all_prompts = build_all_prompts(files)
+            initial_prompts = build_initial_prompts(files)
 
             self.assertIn("design.md", coder_prompt)
             self.assertIn("frontend-design", designer_prompt)
             self.assertIn("business logic", designer_prompt)
-            self.assertIn("designer", all_prompts)
-            self.assertEqual("designer_prompt.md", all_prompts["designer"].name)
+            self.assertEqual(["architect"], list(initial_prompts.keys()))
+            self.assertEqual("architect_prompt.md", initial_prompts["architect"].name)
+            self.assertFalse((feature_dir / "coder_prompt.md").exists())
+            self.assertFalse((feature_dir / "review_prompt.md").exists())
+            self.assertFalse((feature_dir / "designer_prompt.md").exists())
+            self.assertFalse((feature_dir / "confirmation_prompt.md").exists())
 
     def test_guard_plan_ready_design_checks_flag_and_agent(self) -> None:
         with tempfile.TemporaryDirectory() as td:

@@ -19,14 +19,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
         project_dir.mkdir(parents=True, exist_ok=True)
         files = create_feature_files(project_dir, feature_dir, "review pass handling", "session-x")
 
-        prompts = {
-            "architect": feature_dir / "architect_prompt.md",
-            "coder": feature_dir / "coder_prompt.md",
-            "review": feature_dir / "review_prompt.md",
-            "confirmation": feature_dir / "confirmation_prompt.md",
-            "designer": feature_dir / "designer_prompt.md",
-            "docs": feature_dir / "docs_prompt.md",
-        }
+        prompts = {"architect": feature_dir / "architect_prompt.md"}
         for prompt in prompts.values():
             prompt.write_text(prompt.name, encoding="utf-8")
 
@@ -102,6 +95,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             updated = load_state(state_path)
             self.assertEqual("docs_update_requested", updated["status"])
             self.assertEqual("docs", updated["active_role"])
+            self.assertTrue((ctx.files.feature_dir / "docs_prompt.txt").exists())
 
     def test_handle_review_pass_no_docs_skips_review_read_for_review_pass_status(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -123,6 +117,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             updated = load_state(state_path)
             self.assertEqual("completion_pending", updated["status"])
             self.assertEqual("architect", updated["active_role"])
+            self.assertTrue((ctx.files.feature_dir / "confirmation_prompt.md").exists())
 
 
 if __name__ == "__main__":

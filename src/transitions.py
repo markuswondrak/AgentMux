@@ -21,6 +21,7 @@ class PipelineContext:
     agents: dict[str, AgentConfig]
     max_review_iterations: int
     session_name: str
+    # Startup prompt paths (architect is prebuilt; others may be written lazily).
     prompts: dict[str, Path]
     handled: set[str] = field(default_factory=set)
 

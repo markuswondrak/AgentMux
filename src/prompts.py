@@ -121,37 +121,13 @@ def build_confirmation_prompt(files: RuntimeFiles, approved_target: str, changes
     })
 
 
-def build_all_prompts(files: RuntimeFiles) -> dict[str, Path]:
-    """Pre-build static prompts and return their file paths."""
+def build_initial_prompts(files: RuntimeFiles) -> dict[str, Path]:
+    """Build startup prompts and return their file paths."""
     return {
         "architect": write_prompt_file(
             files.feature_dir,
             "architect_prompt.md",
             build_architect_prompt(files, state_target="plan_ready"),
-        ),
-        "coder": write_prompt_file(
-            files.feature_dir,
-            "coder_prompt.md",
-            build_coder_prompt(files, state_target="implementation_done"),
-        ),
-        "review": write_prompt_file(
-            files.feature_dir,
-            "review_prompt.md",
-            build_architect_prompt(files, state_target="review_ready", is_review=True),
-        ),
-        "designer": write_prompt_file(
-            files.feature_dir,
-            "designer_prompt.md",
-            build_designer_prompt(files, state_target="design_ready"),
-        ),
-        "confirmation": write_prompt_file(
-            files.feature_dir,
-            "confirmation_prompt.md",
-            build_confirmation_prompt(
-                files,
-                approved_target="completion_approved",
-                changes_target="changes_requested",
-            ),
         ),
     }
 
