@@ -108,6 +108,27 @@ def _find_control_pane(session_name: str) -> str | None:
     return None
 
 
+def _find_pane_by_title(session_name: str, title: str) -> str | None:
+    """Find any pane in the session (all windows) with the given title."""
+    for window in [MAIN_WINDOW, "_hidden"]:
+        result = run_command(
+            [
+                "tmux",
+                "list-panes",
+                "-t",
+                f"{session_name}:{window}",
+                "-F",
+                "#{pane_id} #{pane_title}",
+            ],
+            check=False,
+        )
+        for line in result.stdout.splitlines():
+            parts = line.strip().split(None, 1)
+            if len(parts) == 2 and parts[1] == title:
+                return parts[0]
+    return None
+
+
 def _list_agent_panes_in_main(session_name: str) -> list[str]:
     """Return pane IDs of all non-control panes in the main window (right zone)."""
     result = run_command(
@@ -165,11 +186,24 @@ def _is_pane_visible(pane_id: str | None, session_name: str) -> bool:
 
 
 def park_agent_pane(pane_id: str | None, session_name: str) -> None:
-    """Move a pane to the hidden window. Process keeps running."""
+    """Move a pane to the hidden window. Process keeps running.
+
+    If this is the last pane in the right zone, swaps with the placeholder pane
+    instead of breaking, so the right zone is never left empty.
+    """
     if not pane_id:
         return
     if not _is_pane_visible(pane_id, session_name):
         return
+    right_zone = _list_agent_panes_in_main(session_name)
+    if right_zone == [pane_id]:
+        placeholder = _find_pane_by_title(session_name, "placeholder")
+        if placeholder and not _is_pane_visible(placeholder, session_name):
+            _log(f"park_agent_pane: swap placeholder {placeholder} ↔ {pane_id}")
+            run_command(
+                ["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False
+            )
+            return
     _log(f"park_agent_pane: Breaking pane {pane_id}")
     run_command(
         ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
@@ -285,6 +319,28 @@ def tmux_new_session(
     )
     architect_pane = result.stdout.strip()
     run_command(["tmux", "select-pane", "-t", architect_pane, "-T", "architect"])
+
+    # Create placeholder pane to keep the right zone permanently occupied.
+    # It lives in _hidden and is swapped in whenever all agents are parked.
+    result = run_command(
+        [
+            "tmux",
+            "split-window",
+            "-v",
+            "-t",
+            architect_pane,
+            "-P",
+            "-F",
+            "#{pane_id}",
+            "sleep infinity",
+        ]
+    )
+    placeholder_pane = result.stdout.strip()
+    run_command(["tmux", "select-pane", "-t", placeholder_pane, "-T", "placeholder"])
+    run_command(
+        ["tmux", "break-pane", "-d", "-s", placeholder_pane, "-n", "_hidden"],
+        check=False,
+    )
 
     # Set control pane width ONCE — never touched again programmatically
     _log(f"tmux_new_session: Setting control width to {CONTROL_PANE_WIDTH}")
