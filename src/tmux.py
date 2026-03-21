@@ -366,8 +366,11 @@ def tmux_kill_session(session_name: str) -> None:
 
 def capture_pane(target_pane: str, history_lines: int = 160) -> str:
     result = run_command(
-        ["tmux", "capture-pane", "-p", "-S", f"-{history_lines}", "-t", target_pane]
+        ["tmux", "capture-pane", "-p", "-S", f"-{history_lines}", "-t", target_pane],
+        check=False,
     )
+    if result.returncode != 0:
+        return ""
     return result.stdout
 
 

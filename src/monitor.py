@@ -95,15 +95,6 @@ def _trim_model(model: str, cli: str) -> str:
     return model[:8]
 
 
-def _format_log_entry(raw_line: str) -> str:
-    parts = raw_line.split()
-    if len(parts) < 3:
-        return raw_line[:20]
-    time_part = parts[1][:5]
-    status_part = parts[2][:14]
-    return f"{time_part} {status_part}"
-
-
 def _read_feature_request(state_path: Path) -> str:
     requirements_path = state_path.parent / "requirements.md"
     try:
@@ -185,35 +176,27 @@ def render(
 
     for role, cfg in agents.items():
         is_active = role in active_roles
-        if is_active:
+        is_current = role == active_role
+
+        if is_active and is_current:
             bullet = f"{GREEN}\u25cf{RESET}"
-            state_label = f"{GREEN}ACTV{RESET}"
+            state_label = f"{GREEN}WORKING{RESET}"
+            name_part = f"{BOLD}{role:<10}{RESET}"
+        elif is_active:
+            bullet = f"{YELLOW}\u25cf{RESET}"
+            state_label = f"{YELLOW}ACTIVE{RESET}"
+            name_part = f"{role:<10}"
         else:
             bullet = f"{DIM}\u25cb{RESET}"
             state_label = f"{DIM}IDLE{RESET}"
-
-        is_current = role == active_role
-        if is_current:
-            name_part = f"{BOLD}{role:<10}{RESET}"
-        else:
             name_part = f"{role:<10}"
+            name_part = f"{DIM}{name_part}{RESET}"
         lines.append(f"  {bullet} {name_part} {state_label}")
 
         cli = cfg.get("cli", "?")
         model = _trim_model(cfg.get("model", ""), cli)
         lines.append(f"    {DIM}{cli}/{model}{RESET}")
         lines.append("")
-
-    status_log_path = state_path.parent / "status_log.txt"
-    status_log_lines: list[str] = []
-    try:
-        status_log_lines = [
-            line.rstrip("\n")
-            for line in status_log_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-    except Exception:
-        status_log_lines = []
 
     elapsed_seconds = max(0, int(time.time() - start_time))
     hours = elapsed_seconds // 3600
@@ -222,13 +205,6 @@ def render(
     elapsed_str = f"{hours}:{minutes:02d}:{seconds:02d}"
 
     footer = ["\u2500" * (width - 1), f"{DIM}↑ {elapsed_str}{RESET}"]
-
-    if status_log_lines:
-        available_log_lines = max(0, height - len(lines) - len(footer) - 1)
-        lines.append("\u2500" * (width - 1))
-        lines.append(f"{BOLD}Log{RESET}")
-        for entry in status_log_lines[-available_log_lines:]:
-            lines.append(f"{DIM}{_format_log_entry(entry)}{RESET}")
 
     lines.extend(footer)
 
