@@ -38,33 +38,43 @@ def get_terminal_size() -> tuple[int, int]:
         return 40, 24
 
 
-def get_active_roles(session_name: str, panes_path: Path) -> set[str]:
-    """Return the set of agent roles that have a live tmux pane."""
+def get_role_states(session_name: str, panes_path: Path) -> dict[str, str]:
+    """Return mapping of role key → 'working' | 'idle' | 'inactive'."""
     try:
         panes = json.loads(panes_path.read_text(encoding="utf-8"))
     except Exception:
-        return set()
+        return {}
 
     try:
-        result = subprocess.run(
+        result_all = subprocess.run(
+            ["tmux", "list-panes", "-t", session_name, "-a", "-F", "#{pane_id}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        all_ids = {t.strip() for t in result_all.stdout.splitlines() if t.strip()}
+
+        result_pipeline = subprocess.run(
             ["tmux", "list-panes", "-t", f"{session_name}:pipeline", "-F", "#{pane_id}"],
             capture_output=True,
             text=True,
             check=False,
         )
-        live_ids = {t.strip() for t in result.stdout.splitlines() if t.strip()}
+        pipeline_ids = {t.strip() for t in result_pipeline.stdout.splitlines() if t.strip()}
     except Exception:
-        return set()
+        return {}
 
-    active: set[str] = set()
+    states: dict[str, str] = {}
     for role, pane_id in panes.items():
         if role.startswith("_") or pane_id is None:
             continue
-        if pane_id in live_ids:
-            # Normalize parallel coder keys (coder_1, coder_2, ...) to "coder"
-            base_role = role.split("_")[0] if role.startswith("coder_") else role
-            active.add(base_role)
-    return active
+        if pane_id in pipeline_ids:
+            states[role] = "working"
+        elif pane_id in all_ids:
+            states[role] = "idle"
+        else:
+            states[role] = "inactive"
+    return states
 
 
 def load_state(state_path: Path) -> dict:
@@ -124,10 +134,9 @@ def render(
     start_time: float,
 ) -> str:
     state = load_state(state_path)
-    active_roles = get_active_roles(session_name, panes_path)
+    role_states = get_role_states(session_name, panes_path)
 
     status = state.get("status", "waiting...")
-    active_role = state.get("active_role", "")
     review_iter = state.get("review_iteration", 0)
     subplan_count = state.get("subplan_count", 0)
 
@@ -174,29 +183,39 @@ def render(
     lines.append(f"{BOLD}Agents{RESET}")
     lines.append("")
 
-    for role, cfg in agents.items():
-        is_active = role in active_roles
-        is_current = role == active_role
-
-        if is_active and is_current:
+    def _render_agent_row(display_name: str, agent_state: str, cfg: dict[str, str]) -> None:
+        if agent_state == "working":
             bullet = f"{GREEN}\u25cf{RESET}"
             state_label = f"{GREEN}WORKING{RESET}"
-            name_part = f"{BOLD}{role:<10}{RESET}"
-        elif is_active:
+            name_part = f"{BOLD}{display_name:<10}{RESET}"
+        elif agent_state == "idle":
             bullet = f"{YELLOW}\u25cf{RESET}"
-            state_label = f"{YELLOW}ACTIVE{RESET}"
-            name_part = f"{role:<10}"
+            state_label = f"{YELLOW}IDLE{RESET}"
+            name_part = f"{display_name:<10}"
         else:
             bullet = f"{DIM}\u25cb{RESET}"
-            state_label = f"{DIM}IDLE{RESET}"
-            name_part = f"{role:<10}"
-            name_part = f"{DIM}{name_part}{RESET}"
+            state_label = f"{DIM}INACTIVE{RESET}"
+            name_part = f"{DIM}{display_name:<10}{RESET}"
         lines.append(f"  {bullet} {name_part} {state_label}")
-
         cli = cfg.get("cli", "?")
         model = _trim_model(cfg.get("model", ""), cli)
         lines.append(f"    {DIM}{cli}/{model}{RESET}")
         lines.append("")
+
+    for role, cfg in agents.items():
+        if role == "coder":
+            parallel_keys = sorted(
+                [k for k in role_states if k.startswith("coder_")],
+                key=lambda k: int(k.split("_")[1]) if k.split("_")[1].isdigit() else 0,
+            )
+            if parallel_keys:
+                for ckey in parallel_keys:
+                    num = ckey.split("_")[1]
+                    _render_agent_row(f"coder {num}", role_states.get(ckey, "inactive"), cfg)
+            else:
+                _render_agent_row("coder", role_states.get("coder", "inactive"), cfg)
+        else:
+            _render_agent_row(role, role_states.get(role, "inactive"), cfg)
 
     elapsed_seconds = max(0, int(time.time() - start_time))
     hours = elapsed_seconds // 3600
