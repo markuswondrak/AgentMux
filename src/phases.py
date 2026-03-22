@@ -467,6 +467,8 @@ class ReviewingPhase(Phase):
 
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
         if event == "review_passed":
+            ctx.runtime.finish_many("coder")
+            ctx.runtime.kill_primary("coder")
             next_phase = "documenting" if "docs" in ctx.agents else "completing"
             write_phase(ctx, state, next_phase, "review_passed")
             return None
