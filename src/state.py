@@ -102,26 +102,9 @@ def create_feature_files(
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
+    _context_template = (Path(__file__).resolve().parent / "prompts" / "context.md").read_text(encoding="utf-8")
     files.context.write_text(
-        "\n".join([
-            "# Context",
-            "",
-            "This directory is the shared handoff space for the local multi-agent pipeline MVP.",
-            "",
-            "## Rules",
-            "",
-            "- Communicate through files in this directory.",
-            "- Use `state.json` as the orchestrator's persisted workflow state.",
-            "- Architect owns requirements clarification, planning, and review.",
-            "- Coder owns implementation in the repository root.",
-            "- Keep changes aligned with `requirements.md` and `plan.md`.",
-            "",
-            "## Session",
-            "",
-            f"- tmux session: `{session_name}`",
-            f"- feature directory: `{feature_dir}`",
-            "",
-        ]) + "\n",
+        _context_template.format_map({"session_name": session_name, "feature_dir": feature_dir}),
         encoding="utf-8",
     )
     files.requirements.write_text(
