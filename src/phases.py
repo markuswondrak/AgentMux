@@ -17,6 +17,7 @@ from .prompts import (
     build_designer_prompt,
     build_docs_prompt,
     build_fix_prompt,
+    build_product_manager_prompt,
     build_reviewer_prompt,
     build_web_researcher_prompt,
     write_prompt_file,
@@ -74,9 +75,7 @@ class Phase(ABC):
         ...
 
 
-class PlanningPhase(Phase):
-    name = "planning"
-
+class _ResearchDispatchMixin:
     @staticmethod
     def _parse_task_event(event: str, expected: str) -> str | None:
         prefix = f"{expected}:"
@@ -85,22 +84,8 @@ class PlanningPhase(Phase):
         topic = event[len(prefix):].strip()
         return topic or None
 
-    def on_enter(self, state: dict, ctx: PipelineContext) -> None:
-        is_replan = state.get("last_event") == "changes_requested" and ctx.files.changes.exists()
-        prompt_file = write_prompt_file(
-            ctx.files.feature_dir,
-            f"planning/{'changes_prompt.txt' if is_replan else 'architect_prompt.md'}",
-            build_change_prompt(ctx.files) if is_replan else build_architect_prompt(ctx.files),
-        )
-        send_to_role(ctx, "architect", prompt_file)
-
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
-        _ = state
-        snapshot: dict[str, str | None] = {
-            "plan": file_signature(ctx.files.plan),
-            "tasks": file_signature(ctx.files.tasks),
-            "plan_meta": file_signature(ctx.files.planning_dir / "plan_meta.json"),
-        }
+    def _research_snapshot(self, ctx: PipelineContext) -> dict[str, str | None]:
+        snapshot: dict[str, str | None] = {}
         for request_path in sorted(ctx.files.research_dir.glob("code-*/request.md")):
             snapshot[f"{request_path.parent.name}/request.md"] = file_signature(request_path)
         for done_path in sorted(ctx.files.research_dir.glob("code-*/done")):
@@ -111,20 +96,7 @@ class PlanningPhase(Phase):
             snapshot[f"{done_path.parent.name}/done"] = file_signature(done_path)
         return snapshot
 
-    def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
-        plan_sig = file_signature(ctx.files.plan)
-        tasks_sig = file_signature(ctx.files.tasks)
-        meta_sig = file_signature(ctx.files.planning_dir / "plan_meta.json")
-        if all(
-            phase_input_changed(ctx, key, value)
-            for key, value in {
-                "plan": plan_sig,
-                "tasks": tasks_sig,
-                "plan_meta": meta_sig,
-            }.items()
-        ):
-            return "plan_written"
-
+    def _detect_research_event(self, state: dict, ctx: PipelineContext) -> str | None:
         tracked_tasks = {
             str(topic): str(status)
             for topic, status in dict(state.get("research_tasks", {})).items()
@@ -158,22 +130,13 @@ class PlanningPhase(Phase):
                 return f"web_task_completed:{topic}"
         return None
 
-    def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
-        if event == "plan_written":
-            meta = load_plan_meta(ctx.files.planning_dir)
-            needs_design = bool(meta.get("needs_design")) and "designer" in ctx.agents
-            if ctx.files.changes.exists():
-                ctx.files.changes.unlink()
-            ctx.runtime.deactivate("architect")
-            ctx.runtime.kill_primary("architect")
-            write_phase(
-                ctx,
-                state,
-                "designing" if needs_design else "implementing",
-                "plan_written",
-            )
-            return None
-
+    def _handle_research_event(
+        self,
+        state: dict,
+        event: str,
+        ctx: PipelineContext,
+        owner_role: str,
+    ) -> bool:
         if event == "code_batch_requested":
             research_tasks = {
                 str(key): str(value)
@@ -200,15 +163,15 @@ class PlanningPhase(Phase):
             state["updated_at"] = now_iso()
             state["updated_by"] = "pipeline"
             write_state(ctx.files.state, state)
-            return None
+            return True
 
         topic = self._parse_task_event(event, "task_completed")
         if topic is not None:
             ctx.runtime.finish_task("code-researcher", topic)
-            architect_pane = getattr(ctx.runtime, "primary_panes", {}).get("architect")
-            if architect_pane:
+            owner_pane = getattr(ctx.runtime, "primary_panes", {}).get(owner_role)
+            if owner_pane:
                 send_text(
-                    architect_pane,
+                    owner_pane,
                     (
                         f"Code-research on '{topic}' is complete. Results are in "
                         f"research/code-{topic}/summary.md and research/code-{topic}/detail.md."
@@ -223,7 +186,7 @@ class PlanningPhase(Phase):
             state["updated_at"] = now_iso()
             state["updated_by"] = "pipeline"
             write_state(ctx.files.state, state)
-            return None
+            return True
 
         if event == "web_batch_requested":
             web_research_tasks = {
@@ -251,15 +214,15 @@ class PlanningPhase(Phase):
             state["updated_at"] = now_iso()
             state["updated_by"] = "pipeline"
             write_state(ctx.files.state, state)
-            return None
+            return True
 
         topic = self._parse_task_event(event, "web_task_completed")
         if topic is not None:
             ctx.runtime.finish_task("web-researcher", topic)
-            architect_pane = getattr(ctx.runtime, "primary_panes", {}).get("architect")
-            if architect_pane:
+            owner_pane = getattr(ctx.runtime, "primary_panes", {}).get(owner_role)
+            if owner_pane:
                 send_text(
-                    architect_pane,
+                    owner_pane,
                     (
                         f"Web research on '{topic}' is complete. Results are in "
                         f"research/web-{topic}/summary.md and research/web-{topic}/detail.md."
@@ -274,6 +237,101 @@ class PlanningPhase(Phase):
             state["updated_at"] = now_iso()
             state["updated_by"] = "pipeline"
             write_state(ctx.files.state, state)
+            return True
+        return False
+
+
+class ProductManagementPhase(_ResearchDispatchMixin, Phase):
+    name = "product_management"
+
+    def on_enter(self, state: dict, ctx: PipelineContext) -> None:
+        _ = state
+        prompt_file = write_prompt_file(
+            ctx.files.feature_dir,
+            "product_management/product_manager_prompt.md",
+            build_product_manager_prompt(ctx.files),
+        )
+        send_to_role(ctx, "product-manager", prompt_file)
+
+    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+        _ = state
+        snapshot = {
+            "pm_done": file_signature(ctx.files.feature_dir / "product_management" / "done"),
+        }
+        snapshot.update(self._research_snapshot(ctx))
+        return snapshot
+
+    def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
+        if phase_input_changed(
+            ctx,
+            "pm_done",
+            file_signature(ctx.files.feature_dir / "product_management" / "done"),
+        ):
+            return "pm_completed"
+        return self._detect_research_event(state, ctx)
+
+    def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
+        if event == "pm_completed":
+            ctx.runtime.deactivate("product-manager")
+            write_phase(ctx, state, "planning", "pm_completed")
+            return None
+        self._handle_research_event(state, event, ctx, owner_role="product-manager")
+        return None
+
+
+class PlanningPhase(_ResearchDispatchMixin, Phase):
+    name = "planning"
+
+    def on_enter(self, state: dict, ctx: PipelineContext) -> None:
+        is_replan = state.get("last_event") == "changes_requested" and ctx.files.changes.exists()
+        prompt_file = write_prompt_file(
+            ctx.files.feature_dir,
+            f"planning/{'changes_prompt.txt' if is_replan else 'architect_prompt.md'}",
+            build_change_prompt(ctx.files) if is_replan else build_architect_prompt(ctx.files),
+        )
+        send_to_role(ctx, "architect", prompt_file)
+
+    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+        _ = state
+        snapshot: dict[str, str | None] = {
+            "plan": file_signature(ctx.files.plan),
+            "tasks": file_signature(ctx.files.tasks),
+            "plan_meta": file_signature(ctx.files.planning_dir / "plan_meta.json"),
+        }
+        snapshot.update(self._research_snapshot(ctx))
+        return snapshot
+
+    def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
+        plan_sig = file_signature(ctx.files.plan)
+        tasks_sig = file_signature(ctx.files.tasks)
+        meta_sig = file_signature(ctx.files.planning_dir / "plan_meta.json")
+        if all(
+            phase_input_changed(ctx, key, value)
+            for key, value in {
+                "plan": plan_sig,
+                "tasks": tasks_sig,
+                "plan_meta": meta_sig,
+            }.items()
+        ):
+            return "plan_written"
+        return self._detect_research_event(state, ctx)
+
+    def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
+        if event == "plan_written":
+            meta = load_plan_meta(ctx.files.planning_dir)
+            needs_design = bool(meta.get("needs_design")) and "designer" in ctx.agents
+            if ctx.files.changes.exists():
+                ctx.files.changes.unlink()
+            ctx.runtime.deactivate("architect")
+            ctx.runtime.kill_primary("architect")
+            write_phase(
+                ctx,
+                state,
+                "designing" if needs_design else "implementing",
+                "plan_written",
+            )
+            return None
+        self._handle_research_event(state, event, ctx, owner_role="architect")
         return None
 
 
@@ -596,6 +654,7 @@ class FailedPhase(Phase):
 PHASES: dict[str, Phase] = {
     phase.name: phase
     for phase in (
+        ProductManagementPhase(),
         PlanningPhase(),
         DesigningPhase(),
         ImplementingPhase(),

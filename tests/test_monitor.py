@@ -111,7 +111,7 @@ class MonitorTests(unittest.TestCase):
             lines = self._strip_ansi(self._render(feature_dir, width=15, height=24)).splitlines()
 
             implementing_index = next(i for i, line in enumerate(lines) if "▶ implemen" in line)
-            self.assertEqual("║             ║", lines[implementing_index - 2])
+            self.assertEqual("║             ║", lines[implementing_index - 3])
             self.assertEqual("║             ║", lines[implementing_index + 4])
             self.assertIn("╠══ DOCUMENTS ╣", lines)
             documents_index = lines.index("╠══ DOCUMENTS ╣")

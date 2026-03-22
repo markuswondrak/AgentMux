@@ -81,10 +81,17 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
     )
 
 
-def create_feature_files(project_dir: Path, feature_dir: Path, prompt: str, session_name: str) -> RuntimeFiles:
+def create_feature_files(
+    project_dir: Path,
+    feature_dir: Path,
+    prompt: str,
+    session_name: str,
+    product_manager: bool = False,
+) -> RuntimeFiles:
     feature_dir.mkdir(parents=True, exist_ok=False)
     files = _make_runtime_files(project_dir, feature_dir)
     for directory in (
+        feature_dir / "product_management",
         files.planning_dir,
         files.research_dir,
         files.design_dir,
@@ -134,7 +141,8 @@ def create_feature_files(project_dir: Path, feature_dir: Path, prompt: str, sess
     )
     state = {
         "feature_dir": str(feature_dir),
-        "phase": "planning",
+        "phase": "product_management" if product_manager else "planning",
+        "product_manager": bool(product_manager),
         "last_event": "feature_created",
         "subplan_count": 0,
         "review_iteration": 0,
@@ -171,6 +179,10 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
                 for topic, status in tasks.items()
                 if str(status) != "dispatched"
             }
+
+    product_management_done = feature_dir / "product_management" / "done"
+    if bool(state.get("product_manager")) and not product_management_done.exists():
+        return "product_management"
 
     phase = str(state.get("phase", "planning"))
     if phase != "failed":

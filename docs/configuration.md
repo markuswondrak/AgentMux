@@ -12,6 +12,7 @@ Configuration specifies providers and tier levels (rather than explicit CLI tool
   "provider": "claude",
   "max_review_iterations": 3,
   "architect": { "tier": "max" },
+  "product-manager": { "tier": "max" },
   "reviewer": { "tier": "standard" },
   "coder": { "provider": "codex", "tier": "standard" },
   "designer": { "tier": "standard" },
@@ -27,6 +28,11 @@ Configuration specifies providers and tier levels (rather than explicit CLI tool
 - `tier` (per role): `"max"` / `"standard"` / `"low"` — resolved to a concrete model by the provider
 - `args` (per role, optional): overrides the provider's default CLI arguments for that role
 - `max_review_iterations` caps automatic reviewer→coder fix loops before forcing user confirmation
+
+## CLI flags
+
+- `--product-manager` enables the `product_management` phase before planning.
+- When enabled, initial pipeline phase is `product_management` and state stores `"product_manager": true`.
 
 ## Tier-to-model mapping
 

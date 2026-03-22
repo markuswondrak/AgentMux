@@ -15,6 +15,7 @@ python3 pipeline.py "Your feature description"
 python3 pipeline.py "feature" --name <slug>          # Custom feature directory name
 python3 pipeline.py "feature" --config <path>        # Custom config (default: pipeline_config.json)
 python3 pipeline.py "feature" --keep-session         # Keep tmux session after completion
+python3 pipeline.py "feature" --product-manager      # Run PM phase before architect planning
 
 # Resume an interrupted pipeline
 python3 pipeline.py --resume                         # Interactive selection from existing sessions
@@ -42,7 +43,7 @@ This is a **tmux-based multi-agent orchestration system**. Instead of calling AI
 The workflow progresses through these states (stored in `.multi-agent/<feature>/state.json`):
 
 ```
-planning → designing? → implementing → reviewing
+product_management? → planning → designing? → implementing → reviewing
     → verdict:pass → documenting? → completing
     → verdict:fail → fixing → reviewing (review loop)
     → loop cap reached → completing
@@ -50,11 +51,12 @@ planning → designing? → implementing → reviewing
 ```
 
 Role routing in these phases:
+- `product-manager`: product management phase only
 - `architect`: planning/replanning only
 - `reviewer`: reviewing and final confirmation/completion prompts
 - `coder`: implementing/fixing
 
-`state.json` persists the durable `phase` and optional metadata such as `last_event`, `review_iteration`, `subplan_count`, `research_tasks` (a dict tracking code-researcher task status by topic), and `web_research_tasks` (a dict tracking web-researcher task status by topic). Agents no longer write workflow statuses directly.
+`state.json` persists the durable `phase` and optional metadata such as `last_event`, `review_iteration`, `subplan_count`, `product_manager`, `research_tasks` (a dict tracking code-researcher task status by topic), and `web_research_tasks` (a dict tracking web-researcher task status by topic). Agents no longer write workflow statuses directly.
 
 ### Module structure
 
@@ -68,6 +70,7 @@ src/monitor.py                 — control pane status display (pipeline status,
 src/runtime.py                 — TmuxAgentRuntime, spawns agents with resolved trust_snippet
 src/prompts.py                 — loads markdown templates and renders them with str.format_map()
 src/prompts/agents/            — role-level prompts (define what each agent is)
+  product-manager.md           —   product management phase
   architect.md                 —   planning phase
   reviewer.md                  —   review + confirmation phases
   coder.md                     —   implementation phase

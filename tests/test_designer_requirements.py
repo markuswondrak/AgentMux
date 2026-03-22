@@ -183,7 +183,17 @@ class DesignerRequirementsTests(unittest.TestCase):
 
     def test_phase_registry_contains_expected_phases(self) -> None:
         self.assertEqual(
-            {"planning", "designing", "implementing", "reviewing", "fixing", "documenting", "completing", "failed"},
+            {
+                "product_management",
+                "planning",
+                "designing",
+                "implementing",
+                "reviewing",
+                "fixing",
+                "documenting",
+                "completing",
+                "failed",
+            },
             set(PHASES),
         )
 

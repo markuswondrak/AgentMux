@@ -75,13 +75,17 @@ class TmuxAgentRuntime:
         session_name: str,
         agents: dict[str, AgentConfig],
         config_path: Path,
+        initial_role: str = "architect",
     ) -> "TmuxAgentRuntime":
+        if initial_role not in agents:
+            raise ValueError(f"Unknown initial role: {initial_role}")
         panes = tmux_new_session(
             session_name,
             agents,
             feature_dir,
             config_path,
-            agents["architect"].trust_snippet,
+            agents[initial_role].trust_snippet,
+            initial_role,
         )
         runtime = cls(
             feature_dir=feature_dir,

@@ -25,6 +25,13 @@ def build_architect_prompt(files: RuntimeFiles) -> str:
     return _load_template("agents", "architect").format_map({"feature_dir": files.feature_dir})
 
 
+def build_product_manager_prompt(files: RuntimeFiles) -> str:
+    return _load_template("agents", "product-manager").format_map({
+        "feature_dir": files.feature_dir,
+        "project_dir": files.project_dir,
+    })
+
+
 def build_reviewer_prompt(files: RuntimeFiles, is_review: bool = False) -> str:
     if is_review:
         return _load_template("commands", "review").format_map({"feature_dir": files.feature_dir})

@@ -64,6 +64,11 @@ def parse_args() -> argparse.Namespace:
         help="Keep the tmux session running after completion.",
     )
     parser.add_argument(
+        "--product-manager",
+        action="store_true",
+        help="Enable product-management phase before planning.",
+    )
+    parser.add_argument(
         "--orchestrate",
         help=argparse.SUPPRESS,
     )
@@ -92,7 +97,16 @@ def load_config(path: Path) -> tuple[str, dict[str, AgentConfig], int]:
     max_review_iterations = int(raw.get("max_review_iterations", 3))
     global_provider = get_provider(str(raw.get("provider", "claude")))
     agents: dict[str, AgentConfig] = {}
-    for role in ("architect", "reviewer", "coder", "designer", "docs", "code-researcher", "web-researcher"):
+    for role in (
+        "architect",
+        "product-manager",
+        "reviewer",
+        "coder",
+        "designer",
+        "docs",
+        "code-researcher",
+        "web-researcher",
+    ):
         role_raw = raw.get(role)
         if role_raw:
             agents[role] = resolve_agent(global_provider, role, role_raw)
@@ -182,7 +196,9 @@ def orchestrate(
     agents: dict[str, AgentConfig],
     max_review_iterations: int,
     keep_session: bool,
+    product_manager: bool = False,
 ) -> int:
+    _ = product_manager
     wake_event = threading.Event()
     observer = Observer()
     observer.schedule(
@@ -215,7 +231,11 @@ def orchestrate(
 
 
 def start_background_orchestrator(
-    config_path: Path, project_dir: Path, feature_dir: Path, keep_session: bool
+    config_path: Path,
+    project_dir: Path,
+    feature_dir: Path,
+    keep_session: bool,
+    product_manager: bool = False,
 ) -> None:
     command = [
         sys.executable,
@@ -228,6 +248,8 @@ def start_background_orchestrator(
     ]
     if keep_session:
         command.append("--keep-session")
+    if product_manager:
+        command.append("--product-manager")
 
     files = load_runtime_files(project_dir, feature_dir)
     log_handle = files.orchestrator_log.open("a", encoding="utf-8")
@@ -258,7 +280,7 @@ def main() -> int:
             agents=agents,
         )
         return orchestrate(
-            files, runtime, agents, max_review_iterations, args.keep_session
+            files, runtime, agents, max_review_iterations, args.keep_session, args.product_manager
         )
 
     if tmux_session_exists(session_name):
@@ -310,7 +332,17 @@ def main() -> int:
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         feature_name = args.name or f"{timestamp}-{slugify(slug_source)}"
         feature_dir = multi_agent_root(project_dir) / feature_name
-        files = create_feature_files(project_dir, feature_dir, prompt_text, session_name)
+        files = create_feature_files(
+            project_dir,
+            feature_dir,
+            prompt_text,
+            session_name,
+            product_manager=bool(args.product_manager),
+        )
+
+    current_state = load_state(files.state)
+    pm_active = bool(current_state.get("product_manager"))
+    initial_role = "product-manager" if pm_active and "product-manager" in agents else "architect"
 
     try:
         runtime = TmuxAgentRuntime.create(
@@ -318,9 +350,14 @@ def main() -> int:
             session_name=session_name,
             agents=agents,
             config_path=config_path,
+            initial_role=initial_role,
         )
         start_background_orchestrator(
-            config_path, project_dir, feature_dir, args.keep_session
+            config_path,
+            project_dir,
+            feature_dir,
+            args.keep_session,
+            product_manager=pm_active,
         )
         print(f"Feature directory: {feature_dir}")
         print(f"tmux session: {session_name}")

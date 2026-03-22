@@ -182,6 +182,7 @@ class ResumeMainFlowTests(unittest.TestCase):
                 name=None,
                 config=str(config_path),
                 keep_session=False,
+                product_manager=False,
                 orchestrate=None,
                 resume=True,
             )
@@ -227,6 +228,7 @@ class ResumeMainFlowTests(unittest.TestCase):
                 name=None,
                 config=str(config_path),
                 keep_session=False,
+                product_manager=False,
                 orchestrate=None,
                 resume="20260101-120000-demo",
             )

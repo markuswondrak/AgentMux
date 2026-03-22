@@ -303,8 +303,9 @@ def tmux_new_session(
     feature_dir: Path,
     config_path: Path,
     trust_snippet: str | None,
+    primary_role: str = "architect",
 ) -> dict[str, str | None]:
-    """Create the tmux session with control pane + architect pane.
+    """Create the tmux session with control pane + primary agent pane.
 
     Other agents are created lazily on first send_prompt via _ensure_agent_pane.
     """
@@ -338,9 +339,9 @@ def tmux_new_session(
     run_command(["tmux", "set-option", "-t", session_name, "pane-border-format", " #{pane_title} "])
     run_command(["tmux", "select-pane", "-t", control_pane, "-T", "control"])
 
-    # Create architect pane (right side)
-    architect = agents["architect"]
-    architect_cmd = build_agent_command(architect)
+    # Create primary pane (right side)
+    primary_agent = agents[primary_role]
+    primary_cmd = build_agent_command(primary_agent)
     result = run_command(
         [
             "tmux",
@@ -351,11 +352,11 @@ def tmux_new_session(
             "-P",
             "-F",
             "#{pane_id}",
-            architect_cmd,
+            primary_cmd,
         ]
     )
-    architect_pane = result.stdout.strip()
-    run_command(["tmux", "select-pane", "-t", architect_pane, "-T", "architect"])
+    primary_pane = result.stdout.strip()
+    run_command(["tmux", "select-pane", "-t", primary_pane, "-T", primary_role])
 
     # Create placeholder pane to keep the right zone permanently occupied.
     # It lives in _hidden and is swapped in whenever all agents are parked.
@@ -365,7 +366,7 @@ def tmux_new_session(
             "split-window",
             "-v",
             "-t",
-            architect_pane,
+            primary_pane,
             "-P",
             "-F",
             "#{pane_id}",
@@ -383,15 +384,15 @@ def tmux_new_session(
     # Set control pane width ONCE — never touched again programmatically
     _log(f"tmux_new_session: Setting control width to {CONTROL_PANE_WIDTH}")
     _fix_control_width(session_name)
-    accept_trust_prompt(architect_pane, snippet=trust_snippet)
+    accept_trust_prompt(primary_pane, snippet=trust_snippet)
 
     panes: dict[str, str | None] = {
         "_control": control_pane,
-        "architect": architect_pane,
+        primary_role: primary_pane,
     }
     # Initialize slots for other agents (created lazily)
     for role in agents:
-        if role != "architect":
+        if role != primary_role:
             panes[role] = None
 
     return panes

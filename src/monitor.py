@@ -34,6 +34,7 @@ _H = "═"
 _ANSI_RE = re.compile(r"\033\[[0-9;]*m")
 
 ALWAYS_VISIBLE_STATES = [
+    "product_management",
     "planning",
     "implementing",
     "reviewing",
@@ -42,6 +43,7 @@ ALWAYS_VISIBLE_STATES = [
 ]
 OPTIONAL_PHASES = {"designing", "fixing", "documenting"}
 PIPELINE_STATES = [
+    "product_management",
     "planning",
     "designing",
     "implementing",
@@ -70,6 +72,7 @@ EVENT_LABELS: dict[str, str] = {
     "changes_requested": "changes asked",
     "plan_approved": "plan approved",
     "confirmation_sent": "awaiting ok",
+    "pm_completed": "pm done",
 }
 DOCUMENT_FILES = [
     "planning/plan.md",
@@ -499,7 +502,16 @@ def main() -> None:
     raw = json.loads(config_path.read_text(encoding="utf-8"))
     global_provider = get_provider(str(raw.get("provider", "claude")))
     agents: dict[str, dict[str, str]] = {}
-    for role in ("architect", "reviewer", "coder", "designer", "docs", "code-researcher", "web-researcher"):
+    for role in (
+        "architect",
+        "product-manager",
+        "reviewer",
+        "coder",
+        "designer",
+        "docs",
+        "code-researcher",
+        "web-researcher",
+    ):
         role_cfg = raw.get(role)
         if not role_cfg:
             continue

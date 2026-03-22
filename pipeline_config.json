@@ -5,6 +5,9 @@
   "architect": {
     "tier": "max"
   },
+  "product-manager": {
+    "tier": "max"
+  },
   "reviewer": {
     "tier": "standard"
   },

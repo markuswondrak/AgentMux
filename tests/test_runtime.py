@@ -139,8 +139,9 @@ class RuntimeTests(unittest.TestCase):
                 feature_dir_arg: Path,
                 config_path: Path,
                 trust_snippet: str | None,
+                primary_role: str,
             ) -> dict[str, str | None]:
-                _ = (session_name, agents, feature_dir_arg, config_path)
+                _ = (session_name, agents, feature_dir_arg, config_path, primary_role)
                 args_seen.append(trust_snippet)
                 return {"_control": "%0", "architect": "%1", "coder": None, "docs": None}
 

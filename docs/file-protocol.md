@@ -11,6 +11,12 @@ Agents communicate via files in `.multi-agent/<feature-name>/`. Files are groupe
 - `context.md` — auto-generated rules/session info injected into prompts
 - `runtime_state.json` / `orchestrator.log` — runtime tracking and orchestrator logs
 
+## Product Management (`product_management/`)
+
+- `product_manager_prompt.md` — prompt for PM analysis phase
+- `analysis.md` — PM write-up (business case, integration assessment, alternatives)
+- `done` — completion marker for PM handoff to planning
+
 ## Planning (`planning/`)
 
 - `architect_prompt.md` / `changes_prompt.txt` — architect prompts

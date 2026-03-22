@@ -4,7 +4,7 @@
 
 ## Template directories
 
-- `src/prompts/agents/` — role-level prompts (define what each agent is): `architect.md`, `reviewer.md`, `coder.md`, `code-researcher.md`, `web-researcher.md`, `designer.md`
+- `src/prompts/agents/` — role-level prompts (define what each agent is): `architect.md`, `product-manager.md`, `reviewer.md`, `coder.md`, `code-researcher.md`, `web-researcher.md`, `designer.md`
 - `src/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `fix.md`, `confirmation.md`, `change.md`, `docs.md`
 
 ## Placeholder syntax
@@ -12,6 +12,7 @@
 Placeholders use `{name}` syntax, rendered via `str.format_map`.
 
 Every template receives `{feature_dir}` as the session directory and references workflow files with phase subpaths (for example `planning/plan.md`, `review/review.md`, `state.json`).
+Templates that need project-level context (for example product manager and coder) also receive `{project_dir}`.
 
 ## Prompt injection
 
@@ -29,5 +30,6 @@ Prompt files are built lazily by handlers just before injection, not pre-generat
 
 Current split:
 - `build_architect_prompt()` renders planning prompts only
+- `build_product_manager_prompt()` renders the PM analysis prompt
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
 - `build_confirmation_prompt()` renders the confirmation command prompt used in completion
