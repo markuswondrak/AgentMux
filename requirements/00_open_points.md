@@ -1,3 +1,6 @@
+- agent startet web researcher und führt es selber durch
+- resume startet den monitor nicht
+- dateien in ordner je phase ablegen
 - confirmation aus der pipeline heraus statt aus dem architekten
 - modell auswahl durch architekten je nach aufgabe
 - LLM in pipeline hinzufügen für feature beschreibung

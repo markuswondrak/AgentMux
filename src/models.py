@@ -10,6 +10,7 @@ class AgentConfig:
     cli: str
     model: str
     args: list[str] = None
+    trust_snippet: str | None = None
 
 
 @dataclass(frozen=True)

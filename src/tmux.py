@@ -8,7 +8,6 @@ from pathlib import Path
 
 from .models import AgentConfig
 
-TRUST_PROMPT_SNIPPET = "Do you trust the contents of this directory?"
 CONTROL_PANE_WIDTH = 15
 MAIN_WINDOW = "pipeline"
 
@@ -304,6 +303,7 @@ def tmux_new_session(
     agents: dict[str, AgentConfig],
     feature_dir: Path,
     config_path: Path,
+    trust_snippet: str | None,
 ) -> dict[str, str | None]:
     """Create the tmux session with control pane + architect pane.
 
@@ -381,7 +381,7 @@ def tmux_new_session(
     # Set control pane width ONCE — never touched again programmatically
     _log(f"tmux_new_session: Setting control width to {CONTROL_PANE_WIDTH}")
     _fix_control_width(session_name)
-    accept_trust_prompt(architect_pane)
+    accept_trust_prompt(architect_pane, snippet=trust_snippet)
 
     panes: dict[str, str | None] = {
         "_control": control_pane,
@@ -396,7 +396,10 @@ def tmux_new_session(
 
 
 def create_agent_pane(
-    session_name: str, agent_name: str, agents: dict[str, AgentConfig]
+    session_name: str,
+    agent_name: str,
+    agents: dict[str, AgentConfig],
+    trust_snippet: str | None,
 ) -> str:
     """Create a new agent pane. Used for lazy creation and parallel coders."""
     agent = agents[agent_name]
@@ -435,7 +438,7 @@ def create_agent_pane(
         # Was horizontal split — fix control width once
         _fix_control_width(session_name)
 
-    accept_trust_prompt(pane_id)
+    accept_trust_prompt(pane_id, snippet=trust_snippet)
     return pane_id
 
 
@@ -532,17 +535,24 @@ def _ensure_agent_pane(
         return panes[role]
     if role not in agents:
         return None
-    pane_id = create_agent_pane(session_name, role, agents)
+    pane_id = create_agent_pane(session_name, role, agents, agents[role].trust_snippet)
     # Immediately park it — show_agent_pane will bring it back
     park_agent_pane(pane_id, session_name)
     panes[role] = pane_id
     return pane_id
 
 
-def accept_trust_prompt(target_pane: str, timeout_seconds: float = 3.0) -> None:
+def accept_trust_prompt(
+    target_pane: str,
+    *,
+    snippet: str | None,
+    timeout_seconds: float = 3.0,
+) -> None:
+    if snippet is None:
+        return
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        if TRUST_PROMPT_SNIPPET in capture_pane(target_pane):
+        if snippet in capture_pane(target_pane):
             run_command(["tmux", "select-pane", "-t", target_pane])
             run_command(["tmux", "send-keys", "-t", target_pane, "Enter"])
             return

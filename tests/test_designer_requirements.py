@@ -71,11 +71,11 @@ class DesignerRequirementsTests(unittest.TestCase):
             tmp_path = Path(td)
             cfg = {
                 "session_name": "s",
-                "architect": {"cli": "claude", "model": "opus"},
-                "coder": {"cli": "codex", "model": "gpt-5.3-codex"},
+                "provider": "claude",
+                "architect": {"tier": "max"},
+                "coder": {"provider": "codex", "tier": "max"},
                 "designer": {
-                    "cli": "claude",
-                    "model": "sonnet",
+                    "tier": "standard",
                     "args": ["--permission-mode", "acceptEdits"],
                 },
             }

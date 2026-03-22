@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - handled at runtime
 
 from src.models import AgentConfig
 from src.phases import run_phase_cycle
+from src.providers import get_provider, resolve_agent
 from src.prompts import build_initial_prompts
 from src.runtime import TmuxAgentRuntime
 from src.state import (
@@ -89,52 +90,12 @@ def load_config(path: Path) -> tuple[str, dict[str, AgentConfig], int]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     session_name = raw["session_name"]
     max_review_iterations = int(raw.get("max_review_iterations", 3))
-    agents = {
-        "architect": AgentConfig(
-            role="architect",
-            cli=raw["architect"]["cli"],
-            model=raw["architect"]["model"],
-            args=raw["architect"].get("args", []),
-        ),
-        "coder": AgentConfig(
-            role="coder",
-            cli=raw["coder"]["cli"],
-            model=raw["coder"]["model"],
-            args=raw["coder"].get("args", []),
-        ),
-    }
-    docs_raw = raw.get("docs")
-    if docs_raw:
-        agents["docs"] = AgentConfig(
-            role="docs",
-            cli=docs_raw["cli"],
-            model=docs_raw["model"],
-            args=docs_raw.get("args", []),
-        )
-    designer_raw = raw.get("designer")
-    if designer_raw:
-        agents["designer"] = AgentConfig(
-            role="designer",
-            cli=designer_raw["cli"],
-            model=designer_raw["model"],
-            args=designer_raw.get("args", []),
-        )
-    researcher_raw = raw.get("code-researcher")
-    if researcher_raw:
-        agents["code-researcher"] = AgentConfig(
-            role="code-researcher",
-            cli=researcher_raw["cli"],
-            model=researcher_raw["model"],
-            args=researcher_raw.get("args", []),
-        )
-    web_researcher_raw = raw.get("web-researcher")
-    if web_researcher_raw:
-        agents["web-researcher"] = AgentConfig(
-            role="web-researcher",
-            cli=web_researcher_raw["cli"],
-            model=web_researcher_raw["model"],
-            args=web_researcher_raw.get("args", []),
-        )
+    global_provider = get_provider(str(raw.get("provider", "claude")))
+    agents: dict[str, AgentConfig] = {}
+    for role in ("architect", "coder", "designer", "docs", "code-researcher", "web-researcher"):
+        role_raw = raw.get(role)
+        if role_raw:
+            agents[role] = resolve_agent(global_provider, role, role_raw)
     return session_name, agents, max_review_iterations
 
 

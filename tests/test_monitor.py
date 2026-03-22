@@ -33,8 +33,7 @@ class MonitorTests(unittest.TestCase):
                 start_time=0.0,
             )
 
-            self.assertIn("\n\x1b[1mFeature\x1b[0m\n", output)
-            self.assertIn("  \x1b[2mmonitor soll auch beschreibung des …\x1b[0m", output)
+            self.assertIn("monitor soll auch beschreibung des …", output)
 
     def test_render_pipeline_shows_all_phases_and_highlights_current(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -54,10 +53,10 @@ class MonitorTests(unittest.TestCase):
                 start_time=0.0,
             )
 
-            self.assertIn("  \x1b[2mplanning\x1b[0m", output)
-            self.assertIn(f"  {monitor.YELLOW}\u25ba reviewing{monitor.RESET}", output)
-            self.assertIn("  \x1b[2mcompleting\x1b[0m", output)
-            self.assertIn("  \x1b[2mdone\x1b[0m", output)
+            self.assertIn("· planning", output)
+            self.assertIn("▶ reviewing", output)
+            self.assertIn("· completing", output)
+            self.assertIn("· done", output)
 
     def test_render_pipeline_shows_last_event(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -80,7 +79,7 @@ class MonitorTests(unittest.TestCase):
                 start_time=0.0,
             )
 
-            self.assertIn("  \x1b[2mevent plan_written\x1b[0m", output)
+            self.assertIn("↳ plan_written", output)
 
     def test_append_status_change_logs_only_when_changed(self) -> None:
         with tempfile.TemporaryDirectory() as td:

@@ -75,11 +75,11 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             tmp_path = Path(td)
             cfg = {
                 "session_name": "s",
-                "architect": {"cli": "claude", "model": "opus"},
-                "coder": {"cli": "codex", "model": "gpt-5.3-codex"},
+                "provider": "claude",
+                "architect": {"tier": "max"},
+                "coder": {"provider": "codex", "tier": "max"},
                 "code-researcher": {
-                    "cli": "claude",
-                    "model": "haiku",
+                    "tier": "low",
                     "args": ["--permission-mode", "acceptEdits"],
                 },
             }

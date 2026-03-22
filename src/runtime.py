@@ -73,7 +73,13 @@ class TmuxAgentRuntime:
         agents: dict[str, AgentConfig],
         config_path: Path,
     ) -> "TmuxAgentRuntime":
-        panes = tmux_new_session(session_name, agents, feature_dir, config_path)
+        panes = tmux_new_session(
+            session_name,
+            agents,
+            feature_dir,
+            config_path,
+            agents["architect"].trust_snippet,
+        )
         runtime = cls(
             feature_dir=feature_dir,
             session_name=session_name,
@@ -202,7 +208,12 @@ class TmuxAgentRuntime:
             return pane_id
         if role not in self.agents:
             return None
-        pane_id = create_agent_pane(self.session_name, role, self.agents)
+        pane_id = create_agent_pane(
+            self.session_name,
+            role,
+            self.agents,
+            self.agents[role].trust_snippet,
+        )
         park_agent_pane(pane_id, self.session_name)
         self.primary_panes[role] = pane_id
         self._persist_snapshot()
@@ -227,7 +238,12 @@ class TmuxAgentRuntime:
                 pane_id = primary
                 show_agent_pane(pane_id, self.session_name, exclusive=True)
             else:
-                pane_id = create_agent_pane(self.session_name, role, self.agents)
+                pane_id = create_agent_pane(
+                    self.session_name,
+                    role,
+                    self.agents,
+                    self.agents[role].trust_snippet,
+                )
                 show_agent_pane(pane_id, self.session_name, exclusive=False)
             workers[idx] = pane_id
             send_prompt(pane_id, prompt_file)
@@ -255,7 +271,12 @@ class TmuxAgentRuntime:
     def spawn_task(self, role: str, task_id: str, prompt_file: Path) -> None:
         if role not in self.agents:
             return
-        pane_id = create_agent_pane(self.session_name, role, self.agents)
+        pane_id = create_agent_pane(
+            self.session_name,
+            role,
+            self.agents,
+            self.agents[role].trust_snippet,
+        )
         show_agent_pane(pane_id, self.session_name, exclusive=False)
         send_prompt(pane_id, prompt_file)
         self.parallel_panes.setdefault(role, {})[task_id] = pane_id

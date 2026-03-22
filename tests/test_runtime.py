@@ -12,9 +12,15 @@ from src.runtime import TmuxAgentRuntime
 
 def _agents() -> dict[str, AgentConfig]:
     return {
-        "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
-        "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[]),
-        "docs": AgentConfig(role="docs", cli="codex", model="gpt-5.3-codex", args=[]),
+        "architect": AgentConfig(
+            role="architect",
+            cli="claude",
+            model="opus",
+            args=[],
+            trust_snippet="Do you trust the contents of this directory?",
+        ),
+        "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[], trust_snippet=None),
+        "docs": AgentConfig(role="docs", cli="codex", model="gpt-5.3-codex", args=[], trust_snippet=None),
     }
 
 
@@ -24,10 +30,15 @@ class RuntimeTests(unittest.TestCase):
             feature_dir = Path(td)
             prompt_file = feature_dir / "coder_prompt.md"
             prompt_file.write_text("ship it", encoding="utf-8")
-            created: list[tuple[str, str, tuple[str, ...]]] = []
+            created: list[tuple[str, str, tuple[str, ...], str | None]] = []
 
-            def fake_create_agent_pane(session_name: str, role: str, agents) -> str:
-                created.append((session_name, role, tuple(sorted(agents))))
+            def fake_create_agent_pane(
+                session_name: str,
+                role: str,
+                agents,
+                trust_snippet: str | None,
+            ) -> str:
+                created.append((session_name, role, tuple(sorted(agents)), trust_snippet))
                 return "%42"
 
             with patch("src.runtime.create_agent_pane", side_effect=fake_create_agent_pane), patch(
@@ -41,7 +52,10 @@ class RuntimeTests(unittest.TestCase):
                 )
                 runtime.send("coder", prompt_file)
 
-            self.assertEqual([("session-x", "coder", ("architect", "coder", "docs"))], created)
+            self.assertEqual(
+                [("session-x", "coder", ("architect", "coder", "docs"), None)],
+                created,
+            )
             snapshot = json.loads((feature_dir / "runtime_state.json").read_text(encoding="utf-8"))
             self.assertEqual("%42", snapshot["primary"]["coder"])
 
@@ -113,6 +127,32 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual({1: "%2"}, runtime.parallel_panes["coder"])
             snapshot = json.loads((feature_dir / "runtime_state.json").read_text(encoding="utf-8"))
             self.assertEqual({"1": "%2"}, snapshot["parallel"]["coder"])
+
+    def test_create_passes_architect_trust_snippet_to_tmux_new_session(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            args_seen: list[str | None] = []
+
+            def fake_tmux_new_session(
+                session_name: str,
+                agents: dict[str, AgentConfig],
+                feature_dir_arg: Path,
+                config_path: Path,
+                trust_snippet: str | None,
+            ) -> dict[str, str | None]:
+                _ = (session_name, agents, feature_dir_arg, config_path)
+                args_seen.append(trust_snippet)
+                return {"_control": "%0", "architect": "%1", "coder": None, "docs": None}
+
+            with patch("src.runtime.tmux_new_session", side_effect=fake_tmux_new_session):
+                TmuxAgentRuntime.create(
+                    feature_dir=feature_dir,
+                    session_name="session-x",
+                    agents=_agents(),
+                    config_path=feature_dir / "pipeline_config.json",
+                )
+
+            self.assertEqual(["Do you trust the contents of this directory?"], args_seen)
 
 
 if __name__ == "__main__":

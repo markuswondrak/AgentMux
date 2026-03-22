@@ -11,6 +11,8 @@ import sys
 import time
 from pathlib import Path
 
+from .providers import get_provider
+
 RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -381,10 +383,17 @@ def main() -> None:
     config_path = Path(args.config)
 
     raw = json.loads(config_path.read_text(encoding="utf-8"))
+    global_provider = get_provider(str(raw.get("provider", "claude")))
     agents: dict[str, dict[str, str]] = {}
-    for role in ("architect", "coder", "designer", "docs"):
-        if role in raw:
-            agents[role] = {"cli": raw[role]["cli"], "model": raw[role].get("model", "")}
+    for role in ("architect", "coder", "designer", "docs", "code-researcher", "web-researcher"):
+        role_cfg = raw.get(role)
+        if not role_cfg:
+            continue
+        provider_name = role_cfg.get("provider")
+        provider = get_provider(provider_name) if provider_name else global_provider
+        tier = str(role_cfg.get("tier", "standard"))
+        model = provider.models[tier]
+        agents[role] = {"cli": provider.cli, "model": model}
 
     start_time = time.time()
     status_log_path = feature_dir / "status_log.txt"

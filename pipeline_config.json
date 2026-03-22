@@ -1,49 +1,24 @@
 {
   "session_name": "multi-agent-mvp",
+  "provider": "claude",
   "max_review_iterations": 3,
   "architect": {
-    "cli": "claude",
-    "model": "opus",
-    "args": [
-      "--permission-mode",
-      "acceptEdits",
-      "--allowedTools",
-      "Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)"
-    ]
+    "tier": "max"
   },
   "coder": {
-    "cli": "codex",
-    "model": "gpt-5.3-codex",
-    "args": ["-s", "workspace-write", "-a", "never"]
+    "provider": "codex",
+    "tier": "standard"
   },
   "designer": {
-    "cli": "claude",
-    "model": "sonnet",
-    "args": ["--permission-mode", "acceptEdits"]
+    "tier": "standard"
   },
   "docs": {
-    "cli": "claude",
-    "model": "haiku",
-    "args": ["--permission-mode", "acceptEdits"]
+    "tier": "low"
   },
   "code-researcher": {
-    "cli": "claude",
-    "model": "haiku",
-    "args": [
-      "--permission-mode",
-      "acceptEdits",
-      "--allowedTools",
-      "Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)"
-    ]
+    "tier": "low"
   },
   "web-researcher": {
-    "cli": "claude",
-    "model": "sonnet",
-    "args": [
-      "--permission-mode",
-      "acceptEdits",
-      "--allowedTools",
-      "WebFetch WebSearch Bash(ls:*) Bash(cat:*) Bash(head:*) Bash(tail:*)"
-    ]
+    "tier": "standard"
   }
 }

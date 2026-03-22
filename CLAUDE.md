@@ -25,7 +25,7 @@ There are no test or lint commands — this is an MVP system without formal test
 
 ## Architecture
 
-This is a **tmux-based multi-agent orchestration system**. Instead of calling AI APIs directly, it drives existing CLI tools (`claude`, `codex`) by injecting keystrokes into tmux panes. This reuses existing OAuth-authenticated subscriptions rather than pay-per-token API calls.
+This is a **tmux-based multi-agent orchestration system**. Instead of calling AI APIs directly, it drives existing CLI tools (`claude`, `codex`, `gemini`, `opencode`) by injecting keystrokes into tmux panes. This reuses existing OAuth-authenticated subscriptions rather than pay-per-token API calls.
 
 ### How it works
 
@@ -94,23 +94,48 @@ Agents communicate via files in `.multi-agent/<feature-name>/`. Files are create
 
 ### Agent configuration (`pipeline_config.json`)
 
-Defines which CLI tools to use and their arguments for each role:
-- **architect**: `claude --model opus` — plans, reviews, confirms
-- **coder**: `codex` — implements the plan in the target project directory
-- **code-researcher**: `claude --model haiku` — analyzes codebase on architect request (optional, spawned in parallel per research topic)
-- **web-researcher**: `claude --model sonnet` — searches the internet on architect request (optional, spawned in parallel per research topic)
+Configuration specifies providers and tier levels (rather than explicit CLI tools and models), allowing roles to use different AI backends and capability levels:
+
+```json
+{
+  "session_name": "multi-agent-mvp",
+  "provider": "claude",
+  "max_review_iterations": 3,
+  "architect": { "tier": "max" },
+  "coder": { "provider": "codex", "tier": "standard" },
+  "designer": { "tier": "standard" },
+  "docs": { "tier": "low" },
+  "code-researcher": { "tier": "low" },
+  "web-researcher": { "tier": "standard" }
+}
+```
+
+**Configuration keys:**
+- `provider` (top-level): default provider for all roles — defaults to `"claude"`; supported providers are `"claude"`, `"codex"`, `"gemini"`, `"opencode"`
+- Per-role `provider` (optional): overrides the global provider for that role
+- `tier` (per role): `"max"` / `"standard"` / `"low"` — resolved to a concrete model by the provider
+- `args` (per role, optional): overrides the provider's default CLI arguments for that role
 - `max_review_iterations` caps automatic reviewer→coder fix loops before forcing user confirmation
 
-The orchestrator never calls the AI APIs directly; it always goes through these CLI tools.
+**Tier-to-model mapping:**
+| Tier | claude | codex | gemini | opencode |
+|------|--------|-------|--------|----------|
+| max | `opus` | `gpt-5.3-codex` | `gemini-2.5-pro` | `anthropic/claude-opus-4-6` |
+| standard | `sonnet` | `codex-mini-latest` | `gemini-2.5-flash` | `anthropic/claude-sonnet-4-20250514` |
+| low | `haiku` | `gpt-5.1-codex-mini` | `gemini-2.5-flash-lite` | `anthropic/claude-haiku-4-5-20251001` |
+
+The orchestrator never calls the AI APIs directly; it always goes through these CLI tools, looking up the appropriate model via provider configuration.
 
 ### Module structure
 
 ```
 pipeline.py                    — entry point, CLI parsing, config loading, orchestrate() loop
-src/models.py                  — AgentConfig and RuntimeFiles dataclasses
+src/models.py                  — AgentConfig (with trust_snippet) and RuntimeFiles dataclasses
+src/providers.py               — Provider dataclass, PROVIDERS registry, resolve_agent() tier resolution
 src/state.py                   — state.json CRUD, feature-directory lifecycle, parse_review_verdict
 src/tmux.py                    — all tmux interaction (sessions, panes, send-keys, trust-prompt)
 src/monitor.py                 — control pane status display (pipeline status, agent list)
+src/runtime.py                 — TmuxAgentRuntime, spawns agents with resolved trust_snippet
 src/prompts.py                 — loads markdown templates and renders them with str.format_map()
 src/prompts/agents/            — role-level prompts (define what each agent is)
   architect.md                 —   planning phase
@@ -189,6 +214,27 @@ When the review passes, the workflow enters the `documenting` phase (if docs upd
 5. **Cleanup only on success** — The feature directory is deleted only if the commit succeeds (commit hash is not `None`). If the commit fails, the feature directory is preserved so the user can investigate and retry.
 
 This flow ensures the architect always knows what's being committed and can selectively exclude unrelated changes without losing the ability to retry after a failed commit.
+
+### Provider abstraction
+
+The `src/providers.py` module defines how different AI CLI tools (providers) are configured:
+
+**Provider dataclass:**
+- `name` — identifier (`"claude"`, `"codex"`, `"gemini"`, `"opencode"`)
+- `cli` — binary name (e.g., `"claude"`, `"codex"`)
+- `models` — dict mapping tier (`"max"`, `"standard"`, `"low"`) to model name
+- `trust_snippet` — text to detect for auto-accept (e.g., `"Do you trust the contents of this directory?"`), or `None` if no trust prompt
+- `default_args` — dict mapping role name to default CLI argument list
+
+**Tier resolution:**
+The `resolve_agent(global_provider, role, role_config)` function:
+1. Determines effective provider: uses `role_config.get("provider")` if specified, otherwise falls back to global `provider`
+2. Looks up the `Provider` from the `PROVIDERS` registry
+3. Resolves the `tier` to a concrete model name via `provider.models[tier]`
+4. Resolves CLI args: uses `role_config.get("args")` if present, otherwise `provider.default_args.get(role, [])`
+5. Returns an `AgentConfig` with the resolved cli, model, args, and trust_snippet
+
+This allows configuration changes (switching providers, adjusting tiers) without modifying agent implementation code.
 
 ### Editing prompts
 
