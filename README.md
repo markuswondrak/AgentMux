@@ -6,8 +6,7 @@ AgentMux orchestrates a structured workflow across multiple AI agents — archit
 
 ---
 
-<!-- Screenshot -->
-![AgentMux in action]()
+<img width="1393" height="1075" alt="image" src="https://github.com/user-attachments/assets/094e01e5-8946-4b53-83bc-910a4c49968b" />
 
 ---
 
@@ -16,7 +15,7 @@ AgentMux orchestrates a structured workflow across multiple AI agents — archit
 The pipeline is static and deterministic. AgentMux defines the workflow; the agents execute it.
 
 ```mermaid
-flowchart LR
+flowchart TD
     %% -- Styling Klassen (Modern & Übersichtlich) --
     classDef optional fill:#f8f9fa,stroke:#adb5bd,stroke-width:2px,stroke-dasharray: 5 5,color:#212529,rx:8,ry:8
     classDef process fill:#e7f5ff,stroke:#339af0,stroke-width:2px,color:#212529,rx:8,ry:8
