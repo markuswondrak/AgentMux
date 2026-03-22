@@ -23,3 +23,5 @@ Constraints:
 - Do not invent facts.
 - Do not update `state.json`.
 - Do not write anything to the marker file; create it as an empty file.
+- Do not ask questions. If the scope is unclear, use your best judgment and document your interpretation.
+- Only write files in the session directory. Do not create or modify any files in the project directory.

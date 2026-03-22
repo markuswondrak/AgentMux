@@ -220,6 +220,49 @@ def _read_feature_request(state_path: Path) -> str:
     return ""
 
 
+def _render_research_section(width: int, state: dict, feature_dir: Path) -> list[str]:
+    """Return box rows for the RESEARCH section, or [] if no tasks exist."""
+    code_tasks = state.get("research_tasks", {})
+    web_tasks = state.get("web_research_tasks", {})
+    if not code_tasks and not web_tasks:
+        return []
+
+    all_tasks: list[tuple[str, str, str]] = [
+        ("c", topic, f"research_done_{topic}") for topic in code_tasks
+    ] + [
+        ("w", topic, f"web_research_done_{topic}") for topic in web_tasks
+    ]
+
+    done_count = sum(1 for _, _, marker in all_tasks if (feature_dir / marker).exists())
+    total = len(all_tasks)
+
+    rows: list[str] = []
+    rows.append(_box_divider(width, f"RESEARCH {done_count}/{total}"))
+    rows.append(_box_row(width))
+
+    pulse_on = int(time.time()) % 2 == 0
+    max_topic = max(1, width - 2 - 6)  # inner minus " X p· "
+
+    for type_prefix, topic, marker in all_tasks:
+        done = (feature_dir / marker).exists()
+        slug = topic if len(topic) <= max_topic else topic[: max_topic - 1] + "…"
+        if done:
+            icon = f"{GREEN}✓{RESET}"
+            label = f"{DIM}{type_prefix}·{RESET}{slug}"
+            rows.append(_box_row(width, f" {icon} {label}"))
+        else:
+            if pulse_on:
+                icon = f"{YELLOW}⟳{RESET}"
+                label = f"{DIM}{type_prefix}·{RESET}{BOLD}{slug}{RESET}"
+            else:
+                icon = f"{DIM}⟳{RESET}"
+                label = f"{DIM}{type_prefix}·{slug}{RESET}"
+            rows.append(_box_row(width, f" {icon} {label}"))
+
+    rows.append(_box_row(width))
+    return rows
+
+
 def render(
     session_name: str,
     state_path: Path,
@@ -320,6 +363,9 @@ def render(
                 _agent_row("coder", role_states.get("coder", "inactive"), cfg)
         else:
             _agent_row(role, role_states.get(role, "inactive"), cfg)
+
+    # ── research tasks ────────────────────────────────────────────────────
+    lines.extend(_render_research_section(width, state, state_path.parent))
 
     # ── event log (fills remaining height, pinned above footer) ──────────
     if log_path is not None:

@@ -20,3 +20,5 @@ Constraints:
 - Communicate only through files in the session directory.
 - Do not update `state.json`.
 - Do not write anything to the marker file; create it as an empty file.
+- Do not ask questions. If information is missing or unclear, make reasonable assumptions and document them in your summary.
+- Only write files in the session directory. Do not create or modify any files in the project directory.

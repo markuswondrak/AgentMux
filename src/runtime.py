@@ -277,7 +277,7 @@ class TmuxAgentRuntime:
             self.agents,
             self.agents[role].trust_snippet,
         )
-        show_agent_pane(pane_id, self.session_name, exclusive=False)
+        park_agent_pane(pane_id, self.session_name)
         send_prompt(pane_id, prompt_file)
         self.parallel_panes.setdefault(role, {})[task_id] = pane_id
         self._persist_snapshot()

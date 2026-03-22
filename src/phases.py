@@ -128,10 +128,12 @@ class PlanningPhase(Phase):
             str(topic): str(status)
             for topic, status in dict(state.get("research_tasks", {})).items()
         }
-        for request_path in sorted(ctx.files.feature_dir.glob("research_request_*.md")):
-            topic = request_path.name.removeprefix("research_request_").removesuffix(".md")
-            if topic and topic not in tracked_tasks:
-                return f"task_requested:{topic}"
+        any_code_dispatched = any(v == "dispatched" for v in tracked_tasks.values())
+        if not any_code_dispatched:
+            for request_path in sorted(ctx.files.feature_dir.glob("research_request_*.md")):
+                topic = request_path.name.removeprefix("research_request_").removesuffix(".md")
+                if topic and topic not in tracked_tasks:
+                    return "code_batch_requested"
 
         for done_path in sorted(ctx.files.feature_dir.glob("research_done_*")):
             topic = done_path.name.removeprefix("research_done_")
@@ -142,10 +144,12 @@ class PlanningPhase(Phase):
             str(topic): str(status)
             for topic, status in dict(state.get("web_research_tasks", {})).items()
         }
-        for request_path in sorted(ctx.files.feature_dir.glob("web_research_request_*.md")):
-            topic = request_path.name.removeprefix("web_research_request_").removesuffix(".md")
-            if topic and topic not in tracked_web_tasks:
-                return f"web_task_requested:{topic}"
+        any_web_dispatched = any(v == "dispatched" for v in tracked_web_tasks.values())
+        if not any_web_dispatched:
+            for request_path in sorted(ctx.files.feature_dir.glob("web_research_request_*.md")):
+                topic = request_path.name.removeprefix("web_research_request_").removesuffix(".md")
+                if topic and topic not in tracked_web_tasks:
+                    return "web_batch_requested"
 
         for done_path in sorted(ctx.files.feature_dir.glob("web_research_done_*")):
             topic = done_path.name.removeprefix("web_research_done_")
@@ -167,22 +171,28 @@ class PlanningPhase(Phase):
             )
             return None
 
-        topic = self._parse_task_event(event, "task_requested")
-        if topic is not None:
-            done_marker = ctx.files.feature_dir / f"research_done_{topic}"
-            if done_marker.exists():
-                done_marker.unlink()
-            prompt_file = write_prompt_file(
-                ctx.files.feature_dir,
-                f"code_researcher_prompt_{topic}.md",
-                build_code_researcher_prompt(topic, ctx.files),
-            )
-            ctx.runtime.spawn_task("code-researcher", topic, prompt_file)
+        if event == "code_batch_requested":
             research_tasks = {
                 str(key): str(value)
                 for key, value in dict(state.get("research_tasks", {})).items()
             }
-            research_tasks[topic] = "dispatched"
+            pending = [
+                request_path.name.removeprefix("research_request_").removesuffix(".md")
+                for request_path in sorted(ctx.files.feature_dir.glob("research_request_*.md"))
+                if (topic := request_path.name.removeprefix("research_request_").removesuffix(".md"))
+                and topic not in research_tasks
+            ]
+            for t in pending:
+                done_marker = ctx.files.feature_dir / f"research_done_{t}"
+                if done_marker.exists():
+                    done_marker.unlink()
+                prompt_file = write_prompt_file(
+                    ctx.files.feature_dir,
+                    f"code_researcher_prompt_{t}.md",
+                    build_code_researcher_prompt(t, ctx.files),
+                )
+                ctx.runtime.spawn_task("code-researcher", t, prompt_file)
+                research_tasks[t] = "dispatched"
             state["research_tasks"] = research_tasks
             state["updated_at"] = now_iso()
             state["updated_by"] = "pipeline"
@@ -212,22 +222,28 @@ class PlanningPhase(Phase):
             write_state(ctx.files.state, state)
             return None
 
-        topic = self._parse_task_event(event, "web_task_requested")
-        if topic is not None:
-            done_marker = ctx.files.feature_dir / f"web_research_done_{topic}"
-            if done_marker.exists():
-                done_marker.unlink()
-            prompt_file = write_prompt_file(
-                ctx.files.feature_dir,
-                f"web_researcher_prompt_{topic}.md",
-                build_web_researcher_prompt(topic, ctx.files),
-            )
-            ctx.runtime.spawn_task("web-researcher", topic, prompt_file)
+        if event == "web_batch_requested":
             web_research_tasks = {
                 str(key): str(value)
                 for key, value in dict(state.get("web_research_tasks", {})).items()
             }
-            web_research_tasks[topic] = "dispatched"
+            pending = [
+                request_path.name.removeprefix("web_research_request_").removesuffix(".md")
+                for request_path in sorted(ctx.files.feature_dir.glob("web_research_request_*.md"))
+                if (topic := request_path.name.removeprefix("web_research_request_").removesuffix(".md"))
+                and topic not in web_research_tasks
+            ]
+            for t in pending:
+                done_marker = ctx.files.feature_dir / f"web_research_done_{t}"
+                if done_marker.exists():
+                    done_marker.unlink()
+                prompt_file = write_prompt_file(
+                    ctx.files.feature_dir,
+                    f"web_researcher_prompt_{t}.md",
+                    build_web_researcher_prompt(t, ctx.files),
+                )
+                ctx.runtime.spawn_task("web-researcher", t, prompt_file)
+                web_research_tasks[t] = "dispatched"
             state["web_research_tasks"] = web_research_tasks
             state["updated_at"] = now_iso()
             state["updated_by"] = "pipeline"
