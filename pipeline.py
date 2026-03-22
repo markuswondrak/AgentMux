@@ -19,7 +19,13 @@ except ImportError:  # pragma: no cover - handled at runtime
     Observer = None
 
 from src.config import LoadedConfig, load_explicit_config, load_layered_config
-from src.models import AgentConfig
+from src.github import (
+    check_gh_authenticated,
+    check_gh_available,
+    extract_issue_number,
+    fetch_issue,
+)
+from src.models import AgentConfig, GitHubConfig
 from src.phases import run_phase_cycle
 from src.prompts import build_initial_prompts
 from src.runtime import TmuxAgentRuntime
@@ -80,8 +86,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Resume an interrupted pipeline session. Use with no value for interactive selection, or pass a feature dir/name.",
     )
+    parser.add_argument(
+        "--issue",
+        help="GitHub issue number or URL to bootstrap requirements and slug.",
+    )
     args = parser.parse_args()
-    if not args.orchestrate and not args.prompt and not args.resume:
+    if not args.orchestrate and not args.prompt and not args.resume and not args.issue:
         parser.error("the following arguments are required: prompt")
     return args
 
@@ -185,6 +195,7 @@ def orchestrate(
     max_review_iterations: int,
     keep_session: bool,
     product_manager: bool = False,
+    github_config: GitHubConfig | None = None,
 ) -> int:
     _ = product_manager
     wake_event = threading.Event()
@@ -200,6 +211,7 @@ def orchestrate(
         agents=agents,
         max_review_iterations=max_review_iterations,
         prompts=build_initial_prompts(files),
+        github_config=github_config or GitHubConfig(),
     )
 
     try:
@@ -271,6 +283,7 @@ def main() -> int:
             loaded.max_review_iterations,
             args.keep_session,
             args.product_manager,
+            github_config=loaded.github,
         )
 
     project_dir = Path.cwd().resolve()
@@ -278,11 +291,39 @@ def main() -> int:
     session_name = loaded.session_name
     agents = loaded.agents
     max_review_iterations = loaded.max_review_iterations
+    issue_arg = getattr(args, "issue", None)
+
+    if args.resume and issue_arg:
+        raise SystemExit("--issue cannot be used with --resume.")
 
     if tmux_session_exists(session_name):
         raise SystemExit(
             f"tmux session `{session_name}` already exists. Stop it or change the resolved session name in your config."
         )
+
+    issue_payload: dict[str, str] | None = None
+    issue_number: str | None = None
+
+    gh_available: bool | None = None
+    if not args.resume:
+        if issue_arg:
+            if not check_gh_available():
+                raise SystemExit("gh CLI is required for --issue. Install: https://cli.github.com")
+            if not check_gh_authenticated():
+                raise SystemExit("gh is not authenticated. Run: gh auth login")
+            try:
+                issue_number = extract_issue_number(str(issue_arg))
+            except ValueError as exc:
+                raise SystemExit(str(exc)) from exc
+            try:
+                issue_payload = fetch_issue(str(issue_arg))
+            except RuntimeError as exc:
+                raise SystemExit(str(exc)) from exc
+            gh_available = True
+        else:
+            gh_available = check_gh_available() and check_gh_authenticated()
+            if not gh_available:
+                print("Warning: gh CLI not available or not authenticated. PR creation will be skipped.")
 
     runtime: TmuxAgentRuntime | None = None
     files = None
@@ -314,15 +355,19 @@ def main() -> int:
         state["updated_by"] = "pipeline"
         write_state(state_path, state)
     else:
-        prompt_arg = args.prompt
-        prompt_path = Path(prompt_arg)
-        prompt_is_md_file = prompt_arg.endswith(".md") and prompt_path.is_file()
-        if prompt_is_md_file:
-            prompt_text = prompt_path.read_text(encoding="utf-8")
-            slug_source = prompt_path.stem
+        if issue_payload is not None:
+            prompt_text = issue_payload["body"].strip() or issue_payload["title"]
+            slug_source = issue_payload["title"]
         else:
-            prompt_text = prompt_arg
-            slug_source = prompt_arg
+            prompt_arg = str(args.prompt)
+            prompt_path = Path(prompt_arg)
+            prompt_is_md_file = prompt_arg.endswith(".md") and prompt_path.is_file()
+            if prompt_is_md_file:
+                prompt_text = prompt_path.read_text(encoding="utf-8")
+                slug_source = prompt_path.stem
+            else:
+                prompt_text = prompt_arg
+                slug_source = prompt_arg
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         feature_name = args.name or f"{timestamp}-{slugify(slug_source)}"
@@ -334,6 +379,13 @@ def main() -> int:
             session_name,
             product_manager=bool(args.product_manager),
         )
+        state = load_state(files.state)
+        state["gh_available"] = bool(gh_available)
+        if issue_number is not None:
+            state["issue_number"] = issue_number
+        state["updated_at"] = now_iso()
+        state["updated_by"] = "pipeline"
+        write_state(files.state, state)
 
     current_state = load_state(files.state)
     pm_active = bool(current_state.get("product_manager"))

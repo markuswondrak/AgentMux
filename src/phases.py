@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -53,6 +54,16 @@ def _parse_changed_paths(status_output: str) -> list[str]:
         if path:
             paths.append(path)
     return paths
+
+
+def _feature_slug_from_dir(feature_dir: Path) -> str:
+    name = feature_dir.name.strip()
+    match = re.match(r"^\d{8}-\d{6}-(.+)$", name)
+    if match:
+        slug = match.group(1).strip()
+        if slug:
+            return slug
+    return name or "feature"
 
 
 class Phase(ABC):
@@ -617,6 +628,22 @@ class CompletingPhase(Phase):
             if commit_hash is not None:
                 print("Completion approved and commit created.")
                 print(f"Commit hash: {commit_hash}")
+                if state.get("gh_available"):
+                    from .github import create_branch_and_pr
+
+                    issue_number_raw = state.get("issue_number")
+                    issue_number = str(issue_number_raw) if issue_number_raw is not None else None
+                    result = create_branch_and_pr(
+                        project_dir=ctx.files.project_dir,
+                        feature_slug=_feature_slug_from_dir(ctx.files.feature_dir),
+                        github_config=ctx.github_config,
+                        issue_number=issue_number,
+                        feature_dir=ctx.files.feature_dir,
+                    )
+                    if result:
+                        print(f"PR created: {result['pr_url']}")
+                    else:
+                        print("PR creation failed (commit preserved).")
                 cleanup_feature_dir(ctx.files.feature_dir)
             else:
                 print("Completion approved, but commit step failed or was skipped. Feature directory retained.")

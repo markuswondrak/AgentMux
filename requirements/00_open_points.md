@@ -1,5 +1,6 @@
 
 - welcome and goodbye screen
+- kill product manager is not active no need anymore
 - docs agent only when configured? that does not make sense - architect should decide if changes need documentation change
 - modell auswahl durch architekten je nach aufgabe
 - LLM in pipeline hinzufügen 

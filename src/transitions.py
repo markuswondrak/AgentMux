@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .models import AgentConfig, RuntimeFiles
+from .models import AgentConfig, GitHubConfig, RuntimeFiles
 from .runtime import AgentRuntime
 
 
@@ -18,6 +18,7 @@ class PipelineContext:
     agents: dict[str, AgentConfig]
     max_review_iterations: int
     prompts: dict[str, Path]
+    github_config: GitHubConfig = field(default_factory=GitHubConfig)
     entered_phase: str | None = None
     phase_baseline: dict[str, str | None] = field(default_factory=dict)
 

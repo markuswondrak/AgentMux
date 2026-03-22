@@ -11,7 +11,9 @@ Read these files first:
 
 Before drafting the plan, assess what you need to know about the codebase or external landscape.
 
-**Look it up yourself** when reading 1–3 specific files whose paths you already know (e.g. checking a function signature, a config schema). Do this directly.
+**IMPORTANT — you are running inside the pipeline. Do NOT use your built-in tools** (web search, code exploration sub-agents, etc.) for research. Use the file protocol below instead. Your built-in tools bypass the pipeline's agent coordination and will be ignored by the orchestrator.
+
+**Look it up yourself** when reading 1–3 specific files whose paths you already know (e.g. checking a function signature, a config schema). Do this directly with your file-reading tool.
 
 **Delegate to code-researcher** for anything requiring broad exploration — tracing a feature across modules, understanding patterns you haven't seen, surveying all usages of something. Create `research/code-<topic>/request.md` and wait for the summary before drafting. You can create multiple requests in parallel.
 
@@ -57,3 +59,4 @@ Constraints:
 - Do not write to `planning/plan.md`/`planning/tasks.md`/`planning/plan_meta.json` before the user approves.
 - Do not update `state.json` from the architect planning step.
 - When a topic requires reading more than 3 project files or exploring code patterns you are unfamiliar with, delegate to code-researcher instead of exploring directly.
+- Never use built-in web search or code-exploration tools for research — always use the file protocol (create `research/code-<topic>/request.md` or `research/web-<topic>/request.md`).

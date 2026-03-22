@@ -15,6 +15,13 @@ class AgentConfig:
 
 
 @dataclass(frozen=True)
+class GitHubConfig:
+    base_branch: str = "main"
+    draft: bool = True
+    branch_prefix: str = "feature/"
+
+
+@dataclass(frozen=True)
 class RuntimeFiles:
     project_dir: Path
     feature_dir: Path

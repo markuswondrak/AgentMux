@@ -28,6 +28,11 @@ defaults:
   profile: standard
   max_review_iterations: 3
 
+github:
+  base_branch: main
+  draft: true
+  branch_prefix: feature/
+
 roles:
   architect:
     profile: max
@@ -46,6 +51,9 @@ roles:
 - `defaults.provider` — default provider/launcher name for roles that do not override it
 - `defaults.profile` — default profile name, usually `max`, `standard`, or `low`
 - `defaults.max_review_iterations` — caps automatic reviewer→coder fix loops
+- `github.base_branch` — default PR base branch (default: `main`)
+- `github.draft` — whether PRs created at completion are draft PRs by default (default: `true`)
+- `github.branch_prefix` — prefix for completion branches created before opening a PR (default: `feature/`)
 - `roles.<role>.provider` — optional provider override per role
 - `roles.<role>.profile` — profile to resolve for that role
 - `roles.<role>.args` — optional full override of the resolved CLI args for that role

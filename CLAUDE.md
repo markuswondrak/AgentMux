@@ -16,6 +16,7 @@ python3 pipeline.py "feature" --name <slug>          # Custom feature directory 
 python3 pipeline.py "feature" --config <path>        # Explicit config override
 python3 pipeline.py "feature" --keep-session         # Keep tmux session after completion
 python3 pipeline.py "feature" --product-manager      # Run PM phase before architect planning
+python3 pipeline.py --issue <number-or-url>          # Bootstrap from GitHub issue title/body
 
 # Resume an interrupted pipeline
 python3 pipeline.py --resume                         # Interactive selection from existing sessions
@@ -62,7 +63,7 @@ Role routing in these phases:
 - `reviewer`: reviewing and final confirmation/completion prompts
 - `coder`: implementing/fixing
 
-`state.json` persists the durable `phase` and optional metadata such as `last_event`, `review_iteration`, `subplan_count`, `product_manager`, `research_tasks` (a dict tracking code-researcher task status by topic), and `web_research_tasks` (a dict tracking web-researcher task status by topic). Agents no longer write workflow statuses directly.
+`state.json` persists the durable `phase` and optional metadata such as `last_event`, `review_iteration`, `subplan_count`, `product_manager`, `research_tasks` (a dict tracking code-researcher task status by topic), `web_research_tasks` (a dict tracking web-researcher task status by topic), and GitHub integration keys like `gh_available` / `issue_number`. Agents no longer write workflow statuses directly.
 
 ### Module structure
 

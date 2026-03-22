@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from .models import AgentConfig
+from .models import AgentConfig, GitHubConfig
 
 ROLES = (
     "architect",
@@ -36,6 +36,7 @@ class LoadedConfig:
     session_name: str
     max_review_iterations: int
     agents: dict[str, AgentConfig]
+    github: GitHubConfig
     raw: dict[str, Any]
     sources: tuple[Path, ...]
 
@@ -122,6 +123,7 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {
         "version": int(raw.get("version", 1)),
         "defaults": {},
+        "github": {},
         "launchers": {},
         "profiles": {},
         "roles": {},
@@ -134,6 +136,7 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     if "tier" in raw and "profile" not in defaults:
         defaults["profile"] = raw["tier"]
     normalized["defaults"] = _normalize_defaults(defaults)
+    normalized["github"] = _normalize_github(raw.get("github", {}))
 
     launchers = dict(raw.get("launchers", {})) if isinstance(raw.get("launchers"), dict) else {}
     normalized["launchers"] = {
@@ -232,6 +235,36 @@ def _normalize_args(label: str, raw: Any) -> list[str]:
     return [str(item) for item in raw]
 
 
+def _coerce_bool(value: Any, label: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    if isinstance(value, int):
+        if value in {0, 1}:
+            return bool(value)
+    raise ValueError(f"{label} must be a boolean.")
+
+
+def _normalize_github(raw: Any) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("github must be a mapping.")
+    data: dict[str, Any] = {}
+    if "base_branch" in raw:
+        data["base_branch"] = str(raw["base_branch"])
+    if "draft" in raw:
+        data["draft"] = _coerce_bool(raw["draft"], "github.draft")
+    if "branch_prefix" in raw:
+        data["branch_prefix"] = str(raw["branch_prefix"])
+    return data
+
+
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in override.items():
@@ -257,6 +290,7 @@ def _validate_project_config(raw: dict[str, Any], path: Path) -> None:
 
 def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> LoadedConfig:
     defaults = raw.get("defaults", {})
+    github_raw = raw.get("github", {})
     launchers = raw.get("launchers", {})
     profiles = raw.get("profiles", {})
     roles = raw.get("roles", {})
@@ -265,6 +299,11 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
     default_provider = str(defaults.get("provider", "claude"))
     default_profile = str(defaults.get("profile", "standard"))
     max_review_iterations = int(defaults.get("max_review_iterations", 3))
+    github = GitHubConfig(
+        base_branch=str(github_raw.get("base_branch", "main")),
+        draft=_coerce_bool(github_raw.get("draft", True), "github.draft"),
+        branch_prefix=str(github_raw.get("branch_prefix", "feature/")),
+    )
 
     agents: dict[str, AgentConfig] = {}
     for role in ROLES:
@@ -314,6 +353,7 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
         session_name=session_name,
         max_review_iterations=max_review_iterations,
         agents=agents,
+        github=github,
         raw=raw,
         sources=sources,
     )

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.models import AgentConfig
+from src.models import AgentConfig, GitHubConfig
 from src.phases import CompletingPhase
 from src.prompts import build_confirmation_prompt
 from src.state import create_feature_files, load_state
@@ -46,6 +46,7 @@ def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, dict]:
         agents=agents,
         max_review_iterations=3,
         prompts={},
+        github_config=GitHubConfig(),
     )
     return ctx, load_state(files.state)
 
@@ -148,6 +149,72 @@ class CompletionCommitFlowTests(unittest.TestCase):
 
             self.assertEqual(EXIT_SUCCESS, result)
             cleanup_mock.assert_not_called()
+
+    def test_approval_with_gh_available_creates_pr_before_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "20260322-203228-my-feature"
+            ctx, state = _make_ctx(feature_dir)
+            state["gh_available"] = True
+            state["issue_number"] = "42"
+            approval = {
+                "action": "approve",
+                "commit_message": "test commit",
+                "exclude_files": [],
+            }
+            (ctx.files.completion_dir / "approval.json").write_text(json.dumps(approval), encoding="utf-8")
+
+            with patch(
+                "src.phases.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["git", "status", "--porcelain"],
+                    returncode=0,
+                    stdout=" M src/phases.py\n",
+                    stderr="",
+                ),
+            ), patch("src.phases.commit_changes", return_value="abc123"), patch(
+                "src.github.create_branch_and_pr",
+                return_value={"branch": "feature/my-feature", "pr_url": "https://example/pr/1"},
+            ) as pr_mock, patch("src.phases.cleanup_feature_dir") as cleanup_mock:
+                result = CompletingPhase().handle_event(state, "approval_received", ctx)
+
+            self.assertEqual(EXIT_SUCCESS, result)
+            pr_mock.assert_called_once_with(
+                project_dir=ctx.files.project_dir,
+                feature_slug="my-feature",
+                github_config=ctx.github_config,
+                issue_number="42",
+                feature_dir=ctx.files.feature_dir,
+            )
+            cleanup_mock.assert_called_once_with(ctx.files.feature_dir)
+
+    def test_approval_with_gh_unavailable_skips_pr_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "20260322-203228-my-feature"
+            ctx, state = _make_ctx(feature_dir)
+            state["gh_available"] = False
+            approval = {
+                "action": "approve",
+                "commit_message": "test commit",
+                "exclude_files": [],
+            }
+            (ctx.files.completion_dir / "approval.json").write_text(json.dumps(approval), encoding="utf-8")
+
+            with patch(
+                "src.phases.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["git", "status", "--porcelain"],
+                    returncode=0,
+                    stdout=" M src/phases.py\n",
+                    stderr="",
+                ),
+            ), patch("src.phases.commit_changes", return_value="abc123"), patch(
+                "src.github.create_branch_and_pr"
+            ) as pr_mock, patch("src.phases.cleanup_feature_dir") as cleanup_mock:
+                result = CompletingPhase().handle_event(state, "approval_received", ctx)
+
+            self.assertEqual(EXIT_SUCCESS, result)
+            pr_mock.assert_not_called()
+            cleanup_mock.assert_called_once_with(ctx.files.feature_dir)
 
     def test_changes_requested_deactivates_reviewer_and_resets_for_replanning(self) -> None:
         with tempfile.TemporaryDirectory() as td:

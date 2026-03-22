@@ -6,6 +6,11 @@ defaults:
   profile: standard
   max_review_iterations: 3
 
+github:
+  base_branch: main
+  draft: true
+  branch_prefix: "feature/"
+
 launchers:
   claude:
     command: claude
