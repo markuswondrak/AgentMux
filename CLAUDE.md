@@ -120,11 +120,32 @@ Configuration specifies providers and tier levels (rather than explicit CLI tool
 **Tier-to-model mapping:**
 | Tier | claude | codex | gemini | opencode |
 |------|--------|-------|--------|----------|
-| max | `opus` | `gpt-5.3-codex` | `gemini-2.5-pro` | `anthropic/claude-opus-4-6` |
-| standard | `sonnet` | `codex-mini-latest` | `gemini-2.5-flash` | `anthropic/claude-sonnet-4-20250514` |
-| low | `haiku` | `gpt-5.1-codex-mini` | `gemini-2.5-flash-lite` | `anthropic/claude-haiku-4-5-20251001` |
+| max | `opus` | `gpt-5.4-codex-medium` | `gemini-2.5-pro` | `anthropic/claude-opus-4-6` |
+| standard | `sonnet` | `gpt-5.3-codex-high` | `gemini-2.5-flash` | `anthropic/claude-sonnet-4-20250514` |
+| low | `haiku` | `gpt-5.2-codex` | `gemini-2.5-flash-lite` | `anthropic/claude-haiku-4-5-20251001` |
 
 The orchestrator never calls the AI APIs directly; it always goes through these CLI tools, looking up the appropriate model via provider configuration.
+
+### Monitor display (src/monitor.py)
+
+The control pane renders a live status box with the following sections:
+
+- **Feature request** — the initial feature description from `requirements.md`
+- **Pipeline stages** — progress through the workflow (planning, implementing, reviewing, completing, done)
+  - Always-visible stages: `planning`, `implementing`, `reviewing`, `completing`
+  - Optional phases (shown only when active): `designing`, `fixing`, `documenting`
+  - Displayed with `▶` for active, `·` for inactive
+- **Pipeline metadata** — human-readable event label (e.g. "plan ready" for `plan_written`), review iteration count, subplan count
+- **Agents** — list of all agents with their status (●WORKING / ●IDLE / ○inactive) and provider/model info
+- **Research tasks** — progress on code and web research (if any)
+- **Documents** — workflow output files present: `plan.md`, `tasks.md`, `design.md`, `review.md`, `changes.md` (shown with ✓ when present)
+- **Event log** — recent phase transitions with timestamps
+
+Key constants in the monitor:
+- `ALWAYS_VISIBLE_STATES` — phases shown in all cases
+- `OPTIONAL_PHASES` — phases hidden until they are the active phase
+- `EVENT_LABELS` — mapping of internal event names (e.g. `plan_written`) to user-friendly labels (e.g. "plan ready")
+- `DOCUMENT_FILES` — list of workflow output files to track
 
 ### Module structure
 
@@ -134,7 +155,7 @@ src/models.py                  — AgentConfig (with trust_snippet) and RuntimeF
 src/providers.py               — Provider dataclass, PROVIDERS registry, resolve_agent() tier resolution
 src/state.py                   — state.json CRUD, feature-directory lifecycle, parse_review_verdict
 src/tmux.py                    — all tmux interaction (sessions, panes, send-keys, trust-prompt)
-src/monitor.py                 — control pane status display (pipeline status, agent list)
+src/monitor.py                 — control pane status display (pipeline status, agent list, documents)
 src/runtime.py                 — TmuxAgentRuntime, spawns agents with resolved trust_snippet
 src/prompts.py                 — loads markdown templates and renders them with str.format_map()
 src/prompts/agents/            — role-level prompts (define what each agent is)

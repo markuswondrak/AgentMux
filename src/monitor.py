@@ -33,16 +33,45 @@ _H = "═"
 
 _ANSI_RE = re.compile(r"\033\[[0-9;]*m")
 
+ALWAYS_VISIBLE_STATES = [
+    "planning",
+    "implementing",
+    "reviewing",
+    "completing",
+    "done",
+]
+OPTIONAL_PHASES = {"designing", "fixing", "documenting"}
 PIPELINE_STATES = [
     "planning",
     "designing",
     "implementing",
     "reviewing",
     "fixing",
-    "documenting",
     "completing",
+    "documenting",
     "done",
 ]
+EVENT_LABELS: dict[str, str] = {
+    "feature_created": "starting up",
+    "resumed": "resumed",
+    "plan_written": "plan ready",
+    "design_written": "design ready",
+    "research_dispatched": "researching…",
+    "research_complete": "research done",
+    "web_research_dispatched": "web research…",
+    "web_research_complete": "web research done",
+    "implementation_started": "coding…",
+    "implementation_completed": "code done",
+    "review_written": "review ready",
+    "fix_requested": "fix needed",
+    "fix_completed": "fix done",
+    "docs_written": "docs ready",
+    "approved": "approved ✓",
+    "changes_requested": "changes asked",
+    "plan_approved": "plan approved",
+    "confirmation_sent": "awaiting ok",
+}
+DOCUMENT_FILES = ["plan.md", "tasks.md", "design.md", "review.md", "changes.md"]
 
 
 def get_terminal_size() -> tuple[int, int]:
@@ -220,6 +249,10 @@ def _read_feature_request(state_path: Path) -> str:
     return ""
 
 
+def _format_event(raw: str) -> str:
+    return EVENT_LABELS.get(raw, raw.replace("_", " "))
+
+
 def _render_research_section(width: int, state: dict, feature_dir: Path) -> list[str]:
     """Return box rows for the RESEARCH section, or [] if no tasks exist."""
     code_tasks = state.get("research_tasks", {})
@@ -263,6 +296,18 @@ def _render_research_section(width: int, state: dict, feature_dir: Path) -> list
     return rows
 
 
+def _render_documents_section(width: int, feature_dir: Path) -> list[str]:
+    present = [filename for filename in DOCUMENT_FILES if (feature_dir / filename).exists()]
+    if not present:
+        return []
+
+    rows = [_box_divider(width, "DOCUMENTS"), _box_row(width)]
+    for filename in present:
+        rows.append(_box_row(width, f" {GREEN}✓{RESET} {DIM}{filename}{RESET}"))
+    rows.append(_box_row(width))
+    return rows
+
+
 def render(
     session_name: str,
     state_path: Path,
@@ -297,25 +342,34 @@ def render(
         lines.append(_box_divider(width))
 
     # ── pipeline stages ───────────────────────────────────────────────────
-    color = status_color(status)
     max_stage = max(1, inner - 5)
-    for stage in PIPELINE_STATES:
+    display_stages = [
+        stage
+        for stage in PIPELINE_STATES
+        if stage not in OPTIONAL_PHASES or stage == status
+    ]
+    lines.append(_box_row(width))
+    for stage in display_stages:
         display = stage[:max_stage]
         if stage == status:
+            color = CYAN if stage in OPTIONAL_PHASES else status_color(stage)
             lines.append(_box_row(width, f"  {BOLD}{color}▶ {display}{RESET}"))
         else:
             lines.append(_box_row(width, f"  {DIM}· {display}{RESET}"))
+    lines.append(_box_row(width))
 
     # unknown status not in list
     if status not in PIPELINE_STATES and status != "waiting…":
+        color = status_color(status)
         display = status[:max_stage]
         lines.append(_box_row(width, f"  {BOLD}{color}▶ {display}{RESET}"))
 
     # extra pipeline metadata
     if last_event:
-        max_ev = max(1, inner - 7)
-        ev = last_event if len(last_event) <= max_ev else last_event[: max_ev - 1] + "…"
-        lines.append(_box_row(width, f"   {DIM}↳ {ev}{RESET}"))
+        label = _format_event(last_event)
+        max_ev = max(1, inner - 5)
+        ev = label if len(label) <= max_ev else label[: max_ev - 1] + "…"
+        lines.append(_box_row(width, f"   {DIM}↳{RESET} {DIM}{ev}{RESET}"))
     if review_iter:
         lines.append(_box_row(width, f"   {DIM}iter {review_iter}{RESET}"))
     if subplan_count > 1:
@@ -366,6 +420,7 @@ def render(
 
     # ── research tasks ────────────────────────────────────────────────────
     lines.extend(_render_research_section(width, state, state_path.parent))
+    lines.extend(_render_documents_section(width, state_path.parent))
 
     # ── event log (fills remaining height, pinned above footer) ──────────
     if log_path is not None:

@@ -48,9 +48,9 @@ PROVIDERS: dict[str, Provider] = {
         name="codex",
         cli="codex",
         models={
-            "max": "gpt-5.3-codex",
-            "standard": "codex-mini-latest",
-            "low": "gpt-5.1-codex-mini",
+            "max": "gpt-5.4-codex-medium",
+            "standard": "gpt-5.3-codex-high",
+            "low": "gpt-5.2-codex",
         },
         trust_snippet=None,
         default_args={
