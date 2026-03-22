@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import shlex
 import subprocess
 import time
@@ -440,6 +439,7 @@ def create_agent_pane(
         _fix_control_width(session_name)
 
     accept_trust_prompt(pane_id, snippet=trust_snippet)
+    time.sleep(0.5)  # let the CLI tool finish starting up before sending keys
     return pane_id
 
 
@@ -491,14 +491,8 @@ def send_text(target_pane: str, text: str) -> None:
     run_command(["tmux", "select-pane", "-t", target_pane], check=False)
     run_command(["tmux", "send-keys", "-t", target_pane, "-l", text], check=False)
     time.sleep(3.0)
-    # Single Enter to submit — text is already normalized to one line by normalize_prompt
+    # Single Enter to submit.
     run_command(["tmux", "send-keys", "-t", target_pane, "Enter"], check=False)
-
-
-def normalize_prompt(content: str) -> str:
-    # Interactive CLIs commonly keep pasted multi-line content as a draft.
-    # Sending a single line makes Enter behave like a real submit.
-    return re.sub(r"\s+", " ", content).strip()
 
 
 def send_prompt(
@@ -521,8 +515,8 @@ def send_prompt(
         return
     if session_name:
         show_agent_pane(target_pane, session_name)
-    prompt = normalize_prompt(prompt_file.read_text(encoding="utf-8"))
-    send_text(target_pane, prompt)
+    prompt_reference = f"Read and follow the instructions in {prompt_file.resolve()}"
+    send_text(target_pane, prompt_reference)
 
 
 def _ensure_agent_pane(

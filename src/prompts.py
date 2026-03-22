@@ -7,10 +7,6 @@ from .models import RuntimeFiles
 
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
-_NO_CHANGES_FALLBACK = (
-    "_No changes.md found. Treat this as missing feedback context"
-    " and ask the user to restate changes if required._"
-)
 _CHANGED_FILES_FALLBACK = "_Unable to read changed files from git status._"
 
 
@@ -154,19 +150,4 @@ def build_initial_prompts(files: RuntimeFiles) -> dict[str, Path]:
 
 
 def build_change_prompt(files: RuntimeFiles) -> str:
-    requirements_text = files.requirements.read_text(encoding="utf-8")
-    plan_text = files.plan.read_text(encoding="utf-8")
-    tasks_text = files.tasks.read_text(encoding="utf-8")
-    changes_text = (
-        files.changes.read_text(encoding="utf-8")
-        if files.changes.exists()
-        else _NO_CHANGES_FALLBACK
-    )
-    text = _load_template("commands", "change").format_map({"feature_dir": files.feature_dir})
-    return (
-        text
-        .replace("<<<REQUIREMENTS_TEXT>>>", requirements_text)
-        .replace("<<<PLAN_TEXT>>>", plan_text)
-        .replace("<<<TASKS_TEXT>>>", tasks_text)
-        .replace("<<<CHANGES_TEXT>>>", changes_text)
-    )
+    return _load_template("commands", "change").format_map({"feature_dir": files.feature_dir})

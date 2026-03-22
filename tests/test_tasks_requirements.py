@@ -45,7 +45,7 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("implementation/done_1", coder_prompt)
             self.assertIn("Do not update state.json", coder_prompt)
 
-    def test_change_prompt_includes_existing_tasks_text(self) -> None:
+    def test_change_prompt_references_files_instead_of_embedding_text(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
@@ -59,9 +59,13 @@ class TasksRequirementsTests(unittest.TestCase):
 
             prompt = build_change_prompt(files)
 
-            self.assertIn("## Existing Task List", prompt)
-            self.assertIn("1. Example task", prompt)
+            self.assertIn("Read these files first:", prompt)
+            self.assertIn("- requirements.md", prompt)
+            self.assertIn("- planning/plan.md", prompt)
+            self.assertIn("- planning/tasks.md", prompt)
+            self.assertIn("- completion/changes.md", prompt)
             self.assertIn("planning/plan_meta.json", prompt)
+            self.assertNotIn("1. Example task", prompt)
 
 
 if __name__ == "__main__":

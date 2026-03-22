@@ -1,4 +1,0 @@
-- optionale phasen ausblenden, bei ausführung kenntlich machne (UI Design wie?)
-- dieses "feature complete" löschen
-- Leerzeilen vor und nach pipeline
-- Die erstellten Dokumente darstellen

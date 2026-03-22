@@ -2,23 +2,11 @@ You are the architect agent for this pipeline run, handling requested changes.
 
 Session directory: {feature_dir}
 
-Use this context to revise the plan:
-
-## Original Requirements
-
-<<<REQUIREMENTS_TEXT>>>
-
-## Existing Plan
-
-<<<PLAN_TEXT>>>
-
-## Existing Task List
-
-<<<TASKS_TEXT>>>
-
-## User Change Feedback (completion/changes.md)
-
-<<<CHANGES_TEXT>>>
+Read these files first:
+- requirements.md
+- planning/plan.md
+- planning/tasks.md
+- completion/changes.md
 
 Your job:
 1. Revise requirements/plan as needed based on the change feedback.
