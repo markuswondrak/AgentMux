@@ -6,7 +6,7 @@
 
 The tmux layout uses a "zone" approach: the **monitor zone** (left, fixed 15 cols) and the **agent zone** (right, remaining space). The control pane width is set once at session creation via `resize-pane -x 15` and never touched programmatically again.
 
-Pane border titles are enabled at session creation (`pane-border-status top` with `pane-border-format " #{pane_title} "`), so each visible agent pane shows its role title in the border.
+Pane border titles are enabled at session creation (`pane-border-status top`). The `pane-border-format` uses a conditional: agent panes (non-empty title) show `bold role · dim feature-slug`; the monitor pane has an empty title and shows nothing in the border. The monitor pane ID is stored in the tmux session environment as `CONTROL_PANE` (analogous to `PLACEHOLDER_PANE`) and looked up via `_find_control_pane()` rather than by title scan.
 
 ## Pane lifecycle
 

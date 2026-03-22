@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 
-from .providers import get_provider
+from .config import infer_project_dir, load_layered_config
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -491,35 +491,22 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--feature-dir", required=True)
     parser.add_argument("--session-name", required=True)
-    parser.add_argument("--config", required=True)
+    parser.add_argument("--config")
     args = parser.parse_args()
 
     feature_dir = Path(args.feature_dir)
     state_path = feature_dir / "state.json"
     runtime_state_path = feature_dir / "runtime_state.json"
-    config_path = Path(args.config)
+    config_path = Path(args.config).resolve() if args.config else None
 
-    raw = json.loads(config_path.read_text(encoding="utf-8"))
-    global_provider = get_provider(str(raw.get("provider", "claude")))
-    agents: dict[str, dict[str, str]] = {}
-    for role in (
-        "architect",
-        "product-manager",
-        "reviewer",
-        "coder",
-        "designer",
-        "docs",
-        "code-researcher",
-        "web-researcher",
-    ):
-        role_cfg = raw.get(role)
-        if not role_cfg:
-            continue
-        provider_name = role_cfg.get("provider")
-        provider = get_provider(provider_name) if provider_name else global_provider
-        tier = str(role_cfg.get("tier", "standard"))
-        model = provider.models[tier]
-        agents[role] = {"cli": provider.cli, "model": model}
+    loaded = load_layered_config(
+        infer_project_dir(feature_dir),
+        explicit_config_path=config_path,
+    )
+    agents = {
+        role: {"cli": agent.cli, "model": agent.model}
+        for role, agent in loaded.agents.items()
+    }
 
     start_time = time.time()
     status_log_path = feature_dir / "status_log.txt"

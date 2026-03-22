@@ -1,64 +1,132 @@
-# Agent Configuration and Provider Abstraction
+# Agent Configuration
 
-> Related source files: `src/providers.py`, `src/models.py`, `pipeline_config.json`
+> Related source files: `src/config.py`, `src/providers.py`, `src/models.py`, `.agentmux/config.yaml`
 
-## pipeline_config.json
+## Overview
 
-Configuration specifies providers and tier levels (rather than explicit CLI tools and models), allowing roles to use different AI backends and capability levels:
+AgentMux now resolves agent configuration from layered config files instead of splitting user-facing settings across `pipeline_config.json` and hard-coded provider data in Python.
+
+Resolution order:
+
+1. Built-in defaults shipped in `src/defaults/config.yaml`
+2. User config in `~/.config/agentmux/config.yaml`
+3. Project config in `.agentmux/config.yaml` (or `.yml` / `.json`)
+4. Optional `--config <path>` override
+
+Legacy `pipeline_config.json` is still supported as a project config and as an explicit `--config` input.
+
+## Primary project config
+
+The preferred project-level file is `.agentmux/config.yaml`:
+
+```yaml
+version: 1
+
+defaults:
+  session_name: multi-agent-mvp
+  provider: claude
+  profile: standard
+  max_review_iterations: 3
+
+roles:
+  architect:
+    profile: max
+  reviewer:
+    profile: standard
+  coder:
+    provider: codex
+    profile: standard
+  docs:
+    profile: low
+```
+
+## Config structure
+
+- `defaults.session_name` — tmux session name
+- `defaults.provider` — default provider/launcher name for roles that do not override it
+- `defaults.profile` — default profile name, usually `max`, `standard`, or `low`
+- `defaults.max_review_iterations` — caps automatic reviewer→coder fix loops
+- `roles.<role>.provider` — optional provider override per role
+- `roles.<role>.profile` — profile to resolve for that role
+- `roles.<role>.args` — optional full override of the resolved CLI args for that role
+
+Built-in and user-level configs may additionally define:
+
+- `launchers.<name>.command` — CLI binary or wrapper command
+- `launchers.<name>.model_flag` — model switch, default `--model`
+- `launchers.<name>.trust_snippet` — auto-accept text for trust prompts
+- `launchers.<name>.role_args.<role>` — default CLI args for a role
+- `profiles.<provider>.<profile>.model` — concrete model name
+- `profiles.<provider>.<profile>.args` — optional extra args appended after launcher role args
+
+## Project vs user scope
+
+Project config is intentionally limited to safe selection-level overrides. Auto-discovered project config may set `defaults` and `roles`, but it may not define `launchers` or `profiles`.
+
+Custom CLIs, wrapper commands, trust snippets, and custom profile catalogs belong in user config or an explicit `--config` file.
+
+Example user config:
+
+```yaml
+launchers:
+  kimi:
+    command: kimi
+    model_flag: --model-name
+    trust_snippet: Trust this folder?
+    role_args:
+      coder: [--sandbox, workspace-write]
+
+profiles:
+  kimi:
+    low:
+      model: kimi-2.5
+```
+
+After that, a project can safely select it:
+
+```yaml
+roles:
+  coder:
+    provider: kimi
+    profile: low
+```
+
+## Legacy compatibility
+
+The old schema is still accepted:
 
 ```json
 {
   "session_name": "multi-agent-mvp",
   "provider": "claude",
-  "max_review_iterations": 3,
   "architect": { "tier": "max" },
-  "product-manager": { "tier": "max" },
-  "reviewer": { "tier": "standard" },
-  "coder": { "provider": "codex", "tier": "standard" },
-  "designer": { "tier": "standard" },
-  "docs": { "tier": "low" },
-  "code-researcher": { "tier": "low" },
-  "web-researcher": { "tier": "standard" }
+  "coder": { "provider": "codex", "tier": "standard" }
 }
 ```
 
-**Configuration keys:**
-- `provider` (top-level): default provider for all roles — defaults to `"claude"`; supported providers are `"claude"`, `"codex"`, `"gemini"`, `"opencode"`
-- Per-role `provider` (optional): overrides the global provider for that role
-- `tier` (per role): `"max"` / `"standard"` / `"low"` — resolved to a concrete model by the provider
-- `args` (per role, optional): overrides the provider's default CLI arguments for that role
-- `max_review_iterations` caps automatic reviewer→coder fix loops before forcing user confirmation
+Compatibility rules:
 
-## CLI flags
+- top-level `provider` maps to `defaults.provider`
+- top-level `session_name` maps to `defaults.session_name`
+- top-level `max_review_iterations` maps to `defaults.max_review_iterations`
+- per-role `tier` is accepted as an alias for `profile`
 
-- `--product-manager` enables the `product_management` phase before planning.
-- When enabled, initial pipeline phase is `product_management` and state stores `"product_manager": true`.
+## Built-in profiles
 
-## Tier-to-model mapping
-
-| Tier | claude | codex | gemini | opencode |
-|------|--------|-------|--------|----------|
+| Profile | claude | codex | gemini | opencode |
+|---------|--------|-------|--------|----------|
 | max | `opus` | `gpt-5.4` | `gemini-2.5-pro` | `anthropic/claude-opus-4-6` |
 | standard | `sonnet` | `gpt-5.3-codex` | `gemini-2.5-flash` | `anthropic/claude-sonnet-4-20250514` |
 | low | `haiku` | `gpt-5.1-mini` | `gemini-2.5-flash-lite` | `anthropic/claude-haiku-4-5-20251001` |
 
-The orchestrator never calls the AI APIs directly; it always goes through these CLI tools, looking up the appropriate model via provider configuration.
+## Resolution
 
-## Provider dataclass
+Each role resolves to an `AgentConfig` with:
 
-- `name` — identifier (`"claude"`, `"codex"`, `"gemini"`, `"opencode"`)
-- `cli` — binary name (e.g., `"claude"`, `"codex"`)
-- `models` — dict mapping tier (`"max"`, `"standard"`, `"low"`) to model name
-- `trust_snippet` — text to detect for auto-accept (e.g., `"Do you trust the contents of this directory?"`), or `None` if no trust prompt
-- `default_args` — dict mapping role name to default CLI argument list
+- `cli`
+- `model_flag`
+- `model`
+- `args`
+- `trust_snippet`
 
-## Tier resolution
-
-The `resolve_agent(global_provider, role, role_config)` function:
-1. Determines effective provider: uses `role_config.get("provider")` if specified, otherwise falls back to global `provider`
-2. Looks up the `Provider` from the `PROVIDERS` registry
-3. Resolves the `tier` to a concrete model name via `provider.models[tier]`
-4. Resolves CLI args: uses `role_config.get("args")` if present, otherwise `provider.default_args.get(role, [])`
-5. Returns an `AgentConfig` with the resolved cli, model, args, and trust_snippet
-
-This allows configuration changes (switching providers, adjusting tiers) without modifying agent implementation code.
+The tmux runtime launches agents from that fully resolved config. The orchestrator still never talks to model APIs directly.

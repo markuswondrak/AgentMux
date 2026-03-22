@@ -7,7 +7,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pipeline
+from src.config import load_layered_config
 from src.providers import PROVIDERS, get_provider, resolve_agent
+from src.models import AgentConfig
+from src.tmux import build_agent_command
 from src.tmux import accept_trust_prompt
 
 
@@ -54,11 +57,98 @@ class ProviderAbstractionTests(unittest.TestCase):
             self.assertEqual("claude", agents["docs"].cli)
             self.assertEqual("haiku", agents["docs"].model)
 
+    def test_load_layered_config_supports_yaml_profiles_and_custom_launcher(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td) / "project"
+            project_dir.mkdir()
+            user_cfg_dir = Path(td) / "user"
+            user_cfg_dir.mkdir()
+            user_cfg_path = user_cfg_dir / "config.yaml"
+            user_cfg_path.write_text(
+                """
+launchers:
+  kimi:
+    command: kimi
+    model_flag: --model-name
+    trust_snippet: Trust custom launcher?
+    role_args:
+      coder: [--sandbox, workspace-write]
+profiles:
+  kimi:
+    low:
+      model: kimi-2.5
+roles:
+  coder:
+    provider: kimi
+    profile: low
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            project_cfg_dir = project_dir / ".agentmux"
+            project_cfg_dir.mkdir()
+            (project_cfg_dir / "config.yaml").write_text(
+                """
+roles:
+  coder:
+    provider: kimi
+    profile: low
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("src.config.USER_CONFIG_PATH", user_cfg_path):
+                loaded = load_layered_config(project_dir)
+
+            coder = loaded.agents["coder"]
+            self.assertEqual("kimi", coder.cli)
+            self.assertEqual("--model-name", coder.model_flag)
+            self.assertEqual("kimi-2.5", coder.model)
+            self.assertEqual(["--sandbox", "workspace-write"], coder.args)
+            self.assertEqual("Trust custom launcher?", coder.trust_snippet)
+
+    def test_project_config_cannot_define_launchers_or_profiles(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td) / "project"
+            project_dir.mkdir()
+            project_cfg_dir = project_dir / ".agentmux"
+            project_cfg_dir.mkdir()
+            (project_cfg_dir / "config.yaml").write_text(
+                """
+launchers:
+  kimi:
+    command: kimi
+profiles:
+  kimi:
+    low:
+      model: kimi-2.5
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("src.config.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+                with self.assertRaises(ValueError):
+                    load_layered_config(project_dir)
+
     def test_accept_trust_prompt_skips_when_no_snippet(self) -> None:
         with patch("src.tmux.capture_pane") as capture_pane, patch("src.tmux.run_command") as run_command:
             accept_trust_prompt("%1", snippet=None)
         capture_pane.assert_not_called()
         run_command.assert_not_called()
+
+    def test_build_agent_command_uses_launcher_specific_model_flag(self) -> None:
+        command = build_agent_command(
+            AgentConfig(
+                role="coder",
+                cli="kimi",
+                model="kimi-2.5",
+                model_flag="--model-name",
+                args=["--sandbox", "workspace-write"],
+            )
+        )
+        self.assertEqual("kimi --model-name kimi-2.5 --sandbox workspace-write", command)
 
     def test_accept_trust_prompt_accepts_when_snippet_is_present(self) -> None:
         commands: list[list[str]] = []

@@ -1,6 +1,6 @@
 
-- docs agent only when configured? that does not make sense - architect should decide if changes need documentation change - must be killed after finished 
-- coder must be killed if review is done / passes
+- welcome and goodbye screen
+- docs agent only when configured? that does not make sense - architect should decide if changes need documentation change
 - modell auswahl durch architekten je nach aufgabe
 - LLM in pipeline hinzufügen 
   - feature beschreibung

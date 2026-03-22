@@ -1,0 +1,142 @@
+version: 1
+
+defaults:
+  session_name: multi-agent-mvp
+  provider: claude
+  profile: standard
+  max_review_iterations: 3
+
+launchers:
+  claude:
+    command: claude
+    model_flag: --model
+    trust_snippet: Do you trust the contents of this directory?
+    role_args:
+      architect:
+        - --permission-mode
+        - acceptEdits
+        - --allowedTools
+        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+      product-manager:
+        - --permission-mode
+        - acceptEdits
+        - --allowedTools
+        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+      reviewer:
+        - --permission-mode
+        - acceptEdits
+        - --allowedTools
+        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+      coder:
+        - --permission-mode
+        - acceptEdits
+      designer:
+        - --permission-mode
+        - acceptEdits
+      docs:
+        - --permission-mode
+        - acceptEdits
+      code-researcher:
+        - --permission-mode
+        - acceptEdits
+        - --allowedTools
+        - Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+      web-researcher:
+        - --permission-mode
+        - acceptEdits
+        - --allowedTools
+        - WebFetch WebSearch Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(head:*) Bash(tail:*)
+
+  codex:
+    command: codex
+    model_flag: --model
+    trust_snippet:
+    role_args:
+      architect: [-s, workspace-write, -a, never]
+      product-manager: [-s, workspace-write, -a, never]
+      reviewer: [-s, workspace-write, -a, never]
+      coder: [-s, workspace-write, -a, never]
+      designer: [-s, workspace-write, -a, never]
+      docs: [-s, workspace-write, -a, never]
+      code-researcher: [-s, workspace-write, -a, never]
+      web-researcher: [-s, workspace-write, -a, never]
+
+  gemini:
+    command: gemini
+    model_flag: --model
+    trust_snippet: Trust this folder?
+    role_args:
+      architect: [--approval-mode, yolo]
+      product-manager: [--approval-mode, yolo]
+      reviewer: [--approval-mode, yolo]
+      coder: [--approval-mode, yolo]
+      designer: [--approval-mode, yolo]
+      docs: [--approval-mode, yolo]
+      code-researcher: [--approval-mode, yolo]
+      web-researcher: [--approval-mode, yolo]
+
+  opencode:
+    command: opencode
+    model_flag: --model
+    trust_snippet:
+    role_args:
+      architect: []
+      product-manager: []
+      reviewer: []
+      coder: []
+      designer: []
+      docs: []
+      code-researcher: []
+      web-researcher: []
+
+profiles:
+  claude:
+    max:
+      model: opus
+    standard:
+      model: sonnet
+    low:
+      model: haiku
+
+  codex:
+    max:
+      model: gpt-5.4
+    standard:
+      model: gpt-5.3-codex
+    low:
+      model: gpt-5.1-mini
+
+  gemini:
+    max:
+      model: gemini-2.5-pro
+    standard:
+      model: gemini-2.5-flash
+    low:
+      model: gemini-2.5-flash-lite
+
+  opencode:
+    max:
+      model: anthropic/claude-opus-4-6
+    standard:
+      model: anthropic/claude-sonnet-4-20250514
+    low:
+      model: anthropic/claude-haiku-4-5-20251001
+
+roles:
+  architect:
+    profile: max
+  product-manager:
+    profile: max
+  reviewer:
+    profile: standard
+  coder:
+    provider: codex
+    profile: standard
+  designer:
+    profile: standard
+  docs:
+    profile: low
+  code-researcher:
+    profile: low
+  web-researcher:
+    profile: standard

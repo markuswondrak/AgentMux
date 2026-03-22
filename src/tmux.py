@@ -25,7 +25,7 @@ def run_command(
 
 def build_agent_command(agent: AgentConfig) -> str:
     extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
-    return f"{shlex.quote(agent.cli)} --model {shlex.quote(agent.model)}" + (
+    return f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}" + (
         f" {extra_args}" if extra_args else ""
     )
 
@@ -87,22 +87,13 @@ def _log_layout(session_name: str) -> None:
 
 
 def _find_control_pane(session_name: str) -> str | None:
-    """Return the pane ID of the control pane (titled 'control'), or None."""
+    """Return the pane ID of the control pane, stored in the session environment."""
     result = run_command(
-        [
-            "tmux",
-            "list-panes",
-            "-t",
-            f"{session_name}:{MAIN_WINDOW}",
-            "-F",
-            "#{pane_id} #{pane_title}",
-        ],
+        ["tmux", "show-environment", "-t", session_name, "CONTROL_PANE"],
         check=False,
     )
-    for line in result.stdout.splitlines():
-        parts = line.strip().split(None, 1)
-        if len(parts) == 2 and parts[1] == "control":
-            return parts[0]
+    if result.returncode == 0 and "=" in result.stdout:
+        return result.stdout.strip().split("=", 1)[1]
     return None
 
 
@@ -162,7 +153,7 @@ def _list_agent_panes_in_main(session_name: str) -> list[str]:
     panes = []
     for line in result.stdout.splitlines():
         parts = line.strip().split(None, 1)
-        if len(parts) == 2 and parts[1] != "control":
+        if len(parts) == 2 and parts[1]:
             panes.append(parts[0])
     return panes
 
@@ -301,7 +292,7 @@ def tmux_new_session(
     session_name: str,
     agents: dict[str, AgentConfig],
     feature_dir: Path,
-    config_path: Path,
+    config_path: Path | None,
     trust_snippet: str | None,
     primary_role: str = "architect",
 ) -> dict[str, str | None]:
@@ -315,8 +306,9 @@ def tmux_new_session(
         f"python3 -m src.monitor"
         f" --feature-dir {shlex.quote(str(feature_dir))}"
         f" --session-name {shlex.quote(session_name)}"
-        f" --config {shlex.quote(str(config_path))}"
     )
+    if config_path is not None:
+        monitor_cmd += f" --config {shlex.quote(str(config_path))}"
 
     # Create session with control pane (left)
     result = run_command(
@@ -335,9 +327,14 @@ def tmux_new_session(
         ]
     )
     control_pane = result.stdout.strip()
+    feature_slug = feature_dir.name
     run_command(["tmux", "set-option", "-t", session_name, "pane-border-status", "top"])
-    run_command(["tmux", "set-option", "-t", session_name, "pane-border-format", " #{pane_title} "])
-    run_command(["tmux", "select-pane", "-t", control_pane, "-T", "control"])
+    run_command(["tmux", "set-option", "-t", session_name, "pane-border-format",
+                 f"#{{?#{{==:#{{pane_title}},}},,"
+                 f" #[bold]#{{pane_title}}#[nobold]"
+                 f" #[dim]· {feature_slug}#[default] }}"])
+    run_command(["tmux", "select-pane", "-t", control_pane, "-T", ""])
+    run_command(["tmux", "set-environment", "-t", session_name, "CONTROL_PANE", control_pane])
 
     # Create primary pane (right side)
     primary_agent = agents[primary_role]

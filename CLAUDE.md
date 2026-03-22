@@ -13,7 +13,7 @@ python3 pipeline.py "Your feature description"
 
 # Optional flags
 python3 pipeline.py "feature" --name <slug>          # Custom feature directory name
-python3 pipeline.py "feature" --config <path>        # Custom config (default: pipeline_config.json)
+python3 pipeline.py "feature" --config <path>        # Explicit config override
 python3 pipeline.py "feature" --keep-session         # Keep tmux session after completion
 python3 pipeline.py "feature" --product-manager      # Run PM phase before architect planning
 
@@ -23,6 +23,12 @@ python3 pipeline.py --resume <feature-dir-or-name>  # Resume specific session by
 ```
 
 There are no test or lint commands — this is an MVP system without formal test infrastructure.
+
+Default config resolution is layered:
+- built-in defaults from `src/defaults/config.yaml`
+- optional user config from `~/.config/agentmux/config.yaml`
+- project config from `.agentmux/config.yaml` (preferred) or legacy `pipeline_config.json`
+- explicit `--config <path>` override
 
 ## Architecture
 
@@ -62,8 +68,9 @@ Role routing in these phases:
 
 ```
 pipeline.py                    — entry point, CLI parsing, config loading, orchestrate() loop
-src/models.py                  — AgentConfig (with trust_snippet) and RuntimeFiles dataclasses
-src/providers.py               — Provider dataclass, PROVIDERS registry, resolve_agent() tier resolution
+src/config.py                  — layered config loading, legacy compatibility, role resolution
+src/models.py                  — AgentConfig (with trust_snippet/model_flag) and RuntimeFiles dataclasses
+src/providers.py               — built-in provider compatibility helpers for profiles/models
 src/state.py                   — state.json CRUD, feature-directory lifecycle, parse_review_verdict
 src/tmux.py                    — all tmux interaction (sessions, panes, send-keys, trust-prompt)
 src/monitor.py                 — control pane status display (pipeline status, agent list, documents)
@@ -113,7 +120,7 @@ Rules:
 Deeper context on specific subsystems:
 
 - `docs/file-protocol.md` — Shared file protocol, workflow artifacts per phase
-- `docs/configuration.md` — pipeline_config.json schema, provider abstraction, tier resolution
+- `docs/configuration.md` — layered config schema, launchers/profiles, legacy compatibility
 - `docs/tmux-layout.md` — Tmux session layout, pane lifecycle, zone approach
 - `docs/research-dispatch.md` — Code-researcher and web-researcher task dispatch
 - `docs/completing-phase.md` — Approval flow, commit selection, cleanup

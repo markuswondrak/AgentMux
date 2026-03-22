@@ -74,7 +74,7 @@ class TmuxAgentRuntime:
         feature_dir: Path,
         session_name: str,
         agents: dict[str, AgentConfig],
-        config_path: Path,
+        config_path: Path | None,
         initial_role: str = "architect",
     ) -> "TmuxAgentRuntime":
         if initial_role not in agents:

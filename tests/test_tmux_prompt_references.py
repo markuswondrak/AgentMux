@@ -62,9 +62,13 @@ class TmuxPromptReferencesTests(unittest.TestCase):
                 tmux_new_session("session-x", agents, feature_dir, config_path, trust_snippet=None)
 
             border_status_cmd = ["tmux", "set-option", "-t", "session-x", "pane-border-status", "top"]
-            border_format_cmd = ["tmux", "set-option", "-t", "session-x", "pane-border-format", " #{pane_title} "]
+            border_format_cmd = next(
+                cmd
+                for cmd in commands
+                if cmd[:5] == ["tmux", "set-option", "-t", "session-x", "pane-border-format"]
+            )
             self.assertIn(border_status_cmd, commands)
-            self.assertIn(border_format_cmd, commands)
+            self.assertIn("#{pane_title}", border_format_cmd[5])
             split_index = commands.index(next(cmd for cmd in commands if cmd[:2] == ["tmux", "split-window"]))
             self.assertLess(commands.index(border_status_cmd), split_index)
             self.assertLess(commands.index(border_format_cmd), split_index)

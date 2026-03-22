@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import subprocess
 import sys
@@ -19,9 +18,9 @@ except ImportError:  # pragma: no cover - handled at runtime
     FileSystemEventHandler = object  # type: ignore[assignment]
     Observer = None
 
+from src.config import LoadedConfig, load_explicit_config, load_layered_config
 from src.models import AgentConfig
 from src.phases import run_phase_cycle
-from src.providers import get_provider, resolve_agent
 from src.prompts import build_initial_prompts
 from src.runtime import TmuxAgentRuntime
 from src.state import (
@@ -36,8 +35,7 @@ from src.state import (
 from src.tmux import tmux_session_exists
 from src.transitions import EXIT_FAILURE, EXIT_SUCCESS, PipelineContext
 
-ROOT_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = ROOT_DIR / "pipeline_config.json"
+DEFAULT_CONFIG_HINT = ".agentmux/config.yaml"
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,8 +53,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--config",
-        default=str(CONFIG_PATH),
-        help=f"Path to the pipeline config JSON file. Default: {CONFIG_PATH.name}",
+        help=(
+            "Optional config override. Without this flag the loader resolves "
+            f"built-in defaults, ~/.config/agentmux/config.yaml, then {DEFAULT_CONFIG_HINT} "
+            "or pipeline_config.json in the project."
+        ),
     )
     parser.add_argument(
         "--keep-session",
@@ -92,25 +93,12 @@ def slugify(text: str, max_words: int = 8, max_length: int = 48) -> str:
 
 
 def load_config(path: Path) -> tuple[str, dict[str, AgentConfig], int]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    session_name = raw["session_name"]
-    max_review_iterations = int(raw.get("max_review_iterations", 3))
-    global_provider = get_provider(str(raw.get("provider", "claude")))
-    agents: dict[str, AgentConfig] = {}
-    for role in (
-        "architect",
-        "product-manager",
-        "reviewer",
-        "coder",
-        "designer",
-        "docs",
-        "code-researcher",
-        "web-researcher",
-    ):
-        role_raw = raw.get(role)
-        if role_raw:
-            agents[role] = resolve_agent(global_provider, role, role_raw)
-    return session_name, agents, max_review_iterations
+    loaded = load_explicit_config(path)
+    return loaded.session_name, loaded.agents, loaded.max_review_iterations
+
+
+def load_runtime_config(project_dir: Path, config_path: Path | None) -> LoadedConfig:
+    return load_layered_config(project_dir, explicit_config_path=config_path)
 
 
 def multi_agent_root(project_dir: Path) -> Path:
@@ -231,7 +219,7 @@ def orchestrate(
 
 
 def start_background_orchestrator(
-    config_path: Path,
+    config_path: Path | None,
     project_dir: Path,
     feature_dir: Path,
     keep_session: bool,
@@ -241,11 +229,11 @@ def start_background_orchestrator(
         sys.executable,
         "-u",
         str(Path(__file__).resolve()),
-        "--config",
-        str(config_path),
         "--orchestrate",
         str(feature_dir),
     ]
+    if config_path is not None:
+        command.extend(["--config", str(config_path)])
     if keep_session:
         command.append("--keep-session")
     if product_manager:
@@ -265,30 +253,37 @@ def start_background_orchestrator(
 def main() -> int:
     args = parse_args()
     ensure_dependencies()
-    config_path = Path(args.config).resolve()
-    if not config_path.exists():
-        raise SystemExit(f"Config not found: {config_path}")
-
-    session_name, agents, max_review_iterations = load_config(config_path)
+    config_path = Path(args.config).resolve() if args.config else None
     if args.orchestrate:
         project_dir = Path.cwd().resolve()
+        loaded = load_runtime_config(project_dir, config_path)
         feature_dir = Path(args.orchestrate).resolve()
         files = load_runtime_files(project_dir, feature_dir)
         runtime = TmuxAgentRuntime.attach(
             feature_dir=feature_dir,
-            session_name=session_name,
-            agents=agents,
+            session_name=loaded.session_name,
+            agents=loaded.agents,
         )
         return orchestrate(
-            files, runtime, agents, max_review_iterations, args.keep_session, args.product_manager
-        )
-
-    if tmux_session_exists(session_name):
-        raise SystemExit(
-            f"tmux session `{session_name}` already exists. Stop it or change `session_name` in {config_path}."
+            files,
+            runtime,
+            loaded.agents,
+            loaded.max_review_iterations,
+            args.keep_session,
+            args.product_manager,
         )
 
     project_dir = Path.cwd().resolve()
+    loaded = load_runtime_config(project_dir, config_path)
+    session_name = loaded.session_name
+    agents = loaded.agents
+    max_review_iterations = loaded.max_review_iterations
+
+    if tmux_session_exists(session_name):
+        raise SystemExit(
+            f"tmux session `{session_name}` already exists. Stop it or change the resolved session name in your config."
+        )
+
     runtime: TmuxAgentRuntime | None = None
     files = None
 

@@ -9,6 +9,7 @@ class AgentConfig:
     role: str
     cli: str
     model: str
+    model_flag: str = "--model"
     args: list[str] = None
     trust_snippet: str | None = None
 

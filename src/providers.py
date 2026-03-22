@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .config import load_builtin_catalog
 from .models import AgentConfig
 
 
@@ -9,114 +10,36 @@ from .models import AgentConfig
 class Provider:
     name: str
     cli: str
+    model_flag: str
     models: dict[str, str]
     trust_snippet: str | None
     default_args: dict[str, list[str]]
 
 
-PROVIDERS: dict[str, Provider] = {
-    "claude": Provider(
-        name="claude",
-        cli="claude",
-        models={"max": "opus", "standard": "sonnet", "low": "haiku"},
-        trust_snippet="Do you trust the contents of this directory?",
-        default_args={
-            "architect": [
-                "--permission-mode",
-                "acceptEdits",
-                "--allowedTools",
-                "Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)",
-            ],
-            "product-manager": [
-                "--permission-mode",
-                "acceptEdits",
-                "--allowedTools",
-                "Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)",
-            ],
-            "reviewer": [
-                "--permission-mode",
-                "acceptEdits",
-                "--allowedTools",
-                "Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)",
-            ],
-            "coder": ["--permission-mode", "acceptEdits"],
-            "designer": ["--permission-mode", "acceptEdits"],
-            "docs": ["--permission-mode", "acceptEdits"],
-            "code-researcher": [
-                "--permission-mode",
-                "acceptEdits",
-                "--allowedTools",
-                "Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)",
-            ],
-            "web-researcher": [
-                "--permission-mode",
-                "acceptEdits",
-                "--allowedTools",
-                "WebFetch WebSearch Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(head:*) Bash(tail:*)",
-            ],
-        },
-    ),
-    "codex": Provider(
-        name="codex",
-        cli="codex",
-        models={
-            "max": "gpt-5.4",
-            "standard": "gpt-5.3-codex",
-            "low": "gpt-5.1-mini",
-        },
-        trust_snippet=None,
-        default_args={
-            "architect": ["-s", "workspace-write", "-a", "never"],
-            "product-manager": ["-s", "workspace-write", "-a", "never"],
-            "reviewer": ["-s", "workspace-write", "-a", "never"],
-            "coder": ["-s", "workspace-write", "-a", "never"],
-            "designer": ["-s", "workspace-write", "-a", "never"],
-            "docs": ["-s", "workspace-write", "-a", "never"],
-            "code-researcher": ["-s", "workspace-write", "-a", "never"],
-            "web-researcher": ["-s", "workspace-write", "-a", "never"],
-        },
-    ),
-    "gemini": Provider(
-        name="gemini",
-        cli="gemini",
-        models={
-            "max": "gemini-2.5-pro",
-            "standard": "gemini-2.5-flash",
-            "low": "gemini-2.5-flash-lite",
-        },
-        trust_snippet="Trust this folder?",
-        default_args={
-            "architect": ["--approval-mode", "yolo"],
-            "product-manager": ["--approval-mode", "yolo"],
-            "reviewer": ["--approval-mode", "yolo"],
-            "coder": ["--approval-mode", "yolo"],
-            "designer": ["--approval-mode", "yolo"],
-            "docs": ["--approval-mode", "yolo"],
-            "code-researcher": ["--approval-mode", "yolo"],
-            "web-researcher": ["--approval-mode", "yolo"],
-        },
-    ),
-    "opencode": Provider(
-        name="opencode",
-        cli="opencode",
-        models={
-            "max": "anthropic/claude-opus-4-6",
-            "standard": "anthropic/claude-sonnet-4-20250514",
-            "low": "anthropic/claude-haiku-4-5-20251001",
-        },
-        trust_snippet=None,
-        default_args={
-            "architect": [],
-            "product-manager": [],
-            "reviewer": [],
-            "coder": [],
-            "designer": [],
-            "docs": [],
-            "code-researcher": [],
-            "web-researcher": [],
-        },
-    ),
-}
+def _build_builtin_providers() -> dict[str, Provider]:
+    raw = load_builtin_catalog()
+    launchers = raw.get("launchers", {})
+    profiles = raw.get("profiles", {})
+    providers: dict[str, Provider] = {}
+    for name, launcher in launchers.items():
+        providers[str(name)] = Provider(
+            name=str(name),
+            cli=str(launcher.get("command", name)),
+            model_flag=str(launcher.get("model_flag", "--model")),
+            models={
+                str(profile_name): str(profile_cfg["model"])
+                for profile_name, profile_cfg in dict(profiles.get(name, {})).items()
+            },
+            trust_snippet=launcher.get("trust_snippet"),
+            default_args={
+                str(role): [str(arg) for arg in args]
+                for role, args in dict(launcher.get("role_args", {})).items()
+            },
+        )
+    return providers
+
+
+PROVIDERS: dict[str, Provider] = _build_builtin_providers()
 
 
 def get_provider(name: str) -> Provider:
@@ -135,13 +58,13 @@ def resolve_agent(
     provider_name = role_config.get("provider")
     provider = get_provider(provider_name) if provider_name else global_provider
 
-    tier = str(role_config.get("tier", "standard"))
+    profile = str(role_config.get("profile", role_config.get("tier", "standard")))
     try:
-        model = provider.models[tier]
+        model = provider.models[profile]
     except KeyError as exc:
-        valid_tiers = ", ".join(sorted(provider.models))
+        valid_profiles = ", ".join(sorted(provider.models))
         raise ValueError(
-            f"Unknown tier '{tier}' for provider '{provider.name}'. Expected one of: {valid_tiers}"
+            f"Unknown profile '{profile}' for provider '{provider.name}'. Expected one of: {valid_profiles}"
         ) from exc
 
     args = role_config.get("args")
@@ -152,6 +75,7 @@ def resolve_agent(
         role=role,
         cli=provider.cli,
         model=model,
+        model_flag=provider.model_flag,
         args=list(args),
         trust_snippet=provider.trust_snippet,
     )

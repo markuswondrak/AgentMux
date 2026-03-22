@@ -75,25 +75,36 @@ AgentMux creates a tmux session you can attach to at any time. A narrow control 
 
 ## Configuration
 
-Edit `pipeline_config.json` to assign providers and tiers to each role:
+Project config now lives in `.agentmux/config.yaml`. AgentMux resolves built-in defaults, optional user config from `~/.config/agentmux/config.yaml`, then project config, with `--config <path>` as the final override.
 
-```json
-{
-  "provider": "claude",
-  "architect": { "tier": "max" },
-  "coder":     { "provider": "codex", "tier": "standard" },
-  "reviewer":  { "tier": "standard" },
-  "docs":      { "tier": "low" }
-}
+```yaml
+version: 1
+
+defaults:
+  provider: claude
+  profile: standard
+
+roles:
+  architect:
+    profile: max
+  coder:
+    provider: codex
+    profile: standard
+  reviewer:
+    profile: standard
+  docs:
+    profile: low
 ```
 
-Tiers (`max`, `standard`, `low`) map to concrete models per provider:
+Profiles (`max`, `standard`, `low`) map to concrete models per provider:
 
-| Tier     | claude  | codex            | gemini              |
+| Profile  | claude  | codex            | gemini              |
 |----------|---------|------------------|---------------------|
 | max      | opus    | gpt-5.4          | gemini-2.5-pro      |
 | standard | sonnet  | gpt-5.3-codex    | gemini-2.5-flash    |
 | low      | haiku   | gpt-5.1-mini     | gemini-2.5-flash-lite |
+
+Legacy `pipeline_config.json` still works, and `tier` is still accepted as an alias for `profile`.
 
 ## Supported providers
 
@@ -121,7 +132,7 @@ Tiers (`max`, `standard`, `low`) map to concrete models per provider:
 
 ## Documentation
 
-- [`docs/configuration.md`](docs/configuration.md) — Provider and tier configuration
+- [`docs/configuration.md`](docs/configuration.md) — Layered launcher/profile configuration
 - [`docs/file-protocol.md`](docs/file-protocol.md) — Shared file protocol between agents and orchestrator
 - [`docs/tmux-layout.md`](docs/tmux-layout.md) — Session layout and pane lifecycle
 - [`docs/research-dispatch.md`](docs/research-dispatch.md) — Code and web researcher dispatch
