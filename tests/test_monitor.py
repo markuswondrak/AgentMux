@@ -37,9 +37,35 @@ class MonitorTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            output = self._render(feature_dir, width=40, height=16)
+            output = self._strip_ansi(self._render(feature_dir, width=40, height=18))
 
-            self.assertIn("monitor soll auch beschreibung des …", output)
+            self.assertIn("╔══ AgentMux", output)
+            self.assertIn("╠══ PIPELINE", output)
+            self.assertIn("╭───────────╮", output)
+            self.assertIn("│ ▄▀█ █▀▄▀█ │", output)
+            self.assertIn("│ █▀█ █ ▀ █ │", output)
+            self.assertIn("╰───────────╯", output)
+            self.assertIn("monitor soll auch", output)
+            self.assertIn("beschreibung des", output)
+
+    def test_render_falls_back_cleanly_when_monitor_is_narrow(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            requirements_path = feature_dir / "requirements.md"
+
+            state_path.write_text('{"phase": "implementing"}', encoding="utf-8")
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            requirements_path.write_text(
+                "# Requirements\n\n## Initial Request\nmonitor soll auch beschreibung des features zeigen\n",
+                encoding="utf-8",
+            )
+
+            output = self._strip_ansi(self._render(feature_dir, width=15, height=18))
+
+            self.assertNotIn("╭───────────╮", output)
+            self.assertIn("monitor…", output)
 
     def test_render_hides_optional_phases_when_inactive(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -118,7 +144,8 @@ class MonitorTests(unittest.TestCase):
             self.assertEqual("║             ║", lines[documents_index + 1])
             self.assertTrue(any("planning/" in line for line in lines))
             self.assertTrue(any("design/" in line for line in lines))
-            self.assertEqual("║             ║", lines[documents_index + 4])
+            self.assertTrue(any(line.startswith("║ ✓ planning/") for line in lines))
+            self.assertTrue(any(line.startswith("║ ✓ design/de") for line in lines))
 
     def test_append_status_change_logs_only_when_changed(self) -> None:
         with tempfile.TemporaryDirectory() as td:

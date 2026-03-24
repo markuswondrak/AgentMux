@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 import time
 from pathlib import Path
 
@@ -20,6 +21,7 @@ GREEN = "\033[92m"   # bright green – phosphor
 YELLOW = "\033[33m"  # amber – idle / warning
 RED = "\033[31m"
 CYAN = "\033[36m"
+MAGENTA = "\033[35m"
 
 # Box-drawing characters (double-line style)
 _TL = "╔"
@@ -96,7 +98,7 @@ def _vlen(s: str) -> int:
     return len(_ANSI_RE.sub("", s))
 
 
-def _box_top(width: int, label: str = "PIPELINE") -> str:
+def _box_top(width: int, label: str = "AgentMux") -> str:
     inner = width - 2
     padded = f" {label} "
     right_fill = max(0, inner - 2 - len(padded))
@@ -258,6 +260,106 @@ def _read_feature_request(state_path: Path) -> str:
     return ""
 
 
+def _load_header_logo() -> list[tuple[str, str]]:
+    logo_path = Path(__file__).resolve().parent.parent / "logo.md"
+    try:
+        raw = logo_path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return [
+            (CYAN, "╭───────────╮"),
+            (CYAN, "│ AGENTMUX │"),
+            (MAGENTA, "╰───────────╯"),
+        ]
+
+    lines: list[str] = []
+    in_block = False
+    for line in raw:
+        if line.strip() == "```":
+            if in_block:
+                break
+            in_block = True
+            continue
+        if in_block:
+            lines.append(line)
+
+    if not lines:
+        return [
+            (CYAN, "╭───────────╮"),
+            (CYAN, "│ AGENTMUX │"),
+            (MAGENTA, "╰───────────╯"),
+        ]
+
+    logo: list[tuple[str, str]] = []
+    for idx, line in enumerate(lines):
+        if idx in (0, 1):
+            color = CYAN
+        else:
+            color = MAGENTA
+        logo.append((color, line))
+    return logo
+
+
+def _wrap_feature_lines(text: str, width: int, *, max_lines: int = 4) -> list[str]:
+    if width <= 0:
+        return [""] * max_lines
+    clean = " ".join(text.split())
+    if not clean:
+        return [""] * max_lines
+
+    wrapped = textwrap.wrap(
+        clean,
+        width=width,
+        break_long_words=True,
+        break_on_hyphens=False,
+    )
+    if len(wrapped) > max_lines:
+        head = wrapped[: max_lines - 1]
+        tail = " ".join(wrapped[max_lines - 1 :])
+        shortened = textwrap.shorten(tail, width=width, placeholder="…")
+        wrapped = head + [shortened]
+    while len(wrapped) < max_lines:
+        wrapped.append("")
+    return wrapped[:max_lines]
+
+
+def _render_feature_header(width: int, state_path: Path) -> list[str]:
+    inner = width - 2
+    feature_request = _read_feature_request(state_path)
+    header_logo = _load_header_logo()
+    if not header_logo:
+        return []
+    logo_width = max(_vlen(row) for _, row in header_logo)
+    gap = 2
+    text_width = inner - 1 - logo_width - gap
+
+    if text_width >= 8:
+        feature_lines = _wrap_feature_lines(feature_request, text_width, max_lines=len(header_logo))
+        rows: list[str] = []
+        for (color, logo_row), feature_line in zip(header_logo, feature_lines):
+            padded_logo = logo_row + (" " * max(0, logo_width - _vlen(logo_row)))
+            text = feature_line if feature_line else ""
+            rows.append(
+                _box_row(
+                    width,
+                    f" {BOLD}{color}{padded_logo}{RESET}{' ' * gap}{text}",
+                )
+            )
+        return rows
+
+    if inner >= logo_width + 1:
+        rows = [
+            _box_row(width, f" {BOLD}{color}{logo_row}{RESET}")
+            for color, logo_row in header_logo
+        ]
+        if feature_request:
+            rows.append(_box_row(width, f" {_wrap_feature_lines(feature_request, max(1, inner - 1), max_lines=1)[0]}"))
+        return rows
+
+    if feature_request:
+        return [_box_row(width, f" {_wrap_feature_lines(feature_request, max(1, inner - 1), max_lines=1)[0]}")]
+    return []
+
+
 def _format_event(raw: str) -> str:
     return EVENT_LABELS.get(raw, raw.replace("_", " "))
 
@@ -342,14 +444,11 @@ def render(
     # ── top border ────────────────────────────────────────────────────────
     lines.append(_box_top(width))
 
-    # ── feature request ───────────────────────────────────────────────────
-    feature_request = _read_feature_request(state_path)
-    if feature_request:
-        max_len = max(1, inner - 2)
-        if len(feature_request) > max_len:
-            feature_request = feature_request[: max_len - 1] + "…"
-        lines.append(_box_row(width, f" {DIM}{feature_request}{RESET}"))
-        lines.append(_box_divider(width))
+    # ── branded feature header ────────────────────────────────────────────
+    header_rows = _render_feature_header(width, state_path)
+    if header_rows:
+        lines.extend(header_rows)
+    lines.append(_box_divider(width, "PIPELINE"))
 
     # ── pipeline stages ───────────────────────────────────────────────────
     max_stage = max(1, inner - 5)

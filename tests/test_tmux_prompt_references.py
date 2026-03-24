@@ -7,6 +7,10 @@ from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from agentmux.models import AgentConfig
+from agentmux.tmux import ContentZone
+from agentmux.tmux import MONITOR_MAX_WIDTH
+from agentmux.tmux import MONITOR_MIN_WIDTH
+from agentmux.tmux import _enforce_monitor_min_width
 from agentmux.tmux import send_prompt
 from agentmux.tmux import tmux_new_session
 
@@ -57,7 +61,7 @@ class TmuxPromptReferencesTests(unittest.TestCase):
                 return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
             with patch("agentmux.tmux.run_command", side_effect=fake_run_command), patch(
-                "agentmux.tmux._fix_control_width", return_value=None
+                "agentmux.tmux._enforce_monitor_min_width", return_value=None
             ), patch("agentmux.tmux.accept_trust_prompt", return_value=None):
                 panes, _zone = tmux_new_session(
                     "session-x",
@@ -76,9 +80,64 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             self.assertEqual("%1", panes["architect"])
             self.assertIn(border_status_cmd, commands)
             self.assertIn("#{@role}", border_format_cmd[5])
+            self.assertNotIn(",,", border_format_cmd[5])
+            self.assertIn("#{?#{@role},", border_format_cmd[5])
             split_index = commands.index(next(cmd for cmd in commands if cmd[:2] == ["tmux", "split-window"]))
             self.assertLess(commands.index(border_status_cmd), split_index)
             self.assertLess(commands.index(border_format_cmd), split_index)
+
+    def test_enforce_monitor_min_width_resizes_when_monitor_is_too_narrow(self) -> None:
+        commands: list[list[str]] = []
+
+        def fake_run_command(args, cwd=None, check=True):
+            _ = (cwd, check)
+            commands.append(list(args))
+            if args[:4] == ["tmux", "display-message", "-p", "-t"] and args[-1] == "#{pane_width}":
+                return CompletedProcess(args=args, returncode=0, stdout="18\n", stderr="")
+            return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+        with patch("agentmux.tmux._find_control_pane", return_value="%0"), patch(
+            "agentmux.tmux.run_command", side_effect=fake_run_command
+        ):
+            _enforce_monitor_min_width("session-x")
+
+        self.assertIn(
+            ["tmux", "resize-pane", "-t", "%0", "-x", str(MONITOR_MIN_WIDTH)],
+            commands,
+        )
+
+    def test_enforce_monitor_min_width_resizes_when_monitor_is_too_wide(self) -> None:
+        commands: list[list[str]] = []
+
+        def fake_run_command(args, cwd=None, check=True):
+            _ = (cwd, check)
+            commands.append(list(args))
+            if args[:4] == ["tmux", "display-message", "-p", "-t"] and args[-1] == "#{pane_width}":
+                return CompletedProcess(args=args, returncode=0, stdout="52\n", stderr="")
+            return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+        with patch("agentmux.tmux._find_control_pane", return_value="%0"), patch(
+            "agentmux.tmux.run_command", side_effect=fake_run_command
+        ):
+            _enforce_monitor_min_width("session-x")
+
+        self.assertIn(
+            ["tmux", "resize-pane", "-t", "%0", "-x", str(MONITOR_MAX_WIDTH)],
+            commands,
+        )
+
+    def test_content_zone_show_reapplies_monitor_min_width(self) -> None:
+        with patch("agentmux.tmux.tmux_pane_exists", return_value=True):
+            zone = ContentZone("session-x", placeholder="%9")
+
+        with patch("agentmux.tmux.tmux_pane_exists", return_value=True), patch(
+            "agentmux.tmux.run_command", return_value=CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        ), patch("agentmux.tmux._enforce_monitor_min_width") as width_mock, patch(
+            "agentmux.tmux._log_layout", return_value=None
+        ):
+            zone.show("%1")
+
+        width_mock.assert_called_once_with("session-x")
 
 
 if __name__ == "__main__":

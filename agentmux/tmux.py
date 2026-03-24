@@ -7,7 +7,8 @@ from pathlib import Path
 
 from .models import AgentConfig
 
-CONTROL_PANE_WIDTH = 15
+MONITOR_MIN_WIDTH = 30
+MONITOR_MAX_WIDTH = 40
 MAIN_WINDOW = "pipeline"
 
 
@@ -162,16 +163,44 @@ def _pane_in_window(pane_id: str | None, window_name: str) -> bool:
     return result.returncode == 0 and result.stdout.strip() == window_name
 
 
-def _fix_control_width(session_name: str) -> None:
-    """One-shot resize of the control pane. Only needed after join-pane -h."""
+def _get_pane_width(pane_id: str | None) -> int | None:
+    if not pane_id:
+        return None
+    result = run_command(
+        ["tmux", "display-message", "-p", "-t", pane_id, "#{pane_width}"],
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return None
+
+
+def _enforce_monitor_min_width(session_name: str) -> None:
+    """Keep the monitor pane within the preferred width window."""
     control = _find_control_pane(session_name)
-    if control:
-        _log(f"_fix_control_width: resizing {control} to {CONTROL_PANE_WIDTH}")
-        run_command(
-            ["tmux", "resize-pane", "-t", control, "-x", str(CONTROL_PANE_WIDTH)],
-            check=False,
-        )
-        _log_layout(session_name)
+    if not control:
+        return
+    width = _get_pane_width(control)
+    if width is None:
+        target_width = MONITOR_MIN_WIDTH
+    elif width < MONITOR_MIN_WIDTH:
+        target_width = MONITOR_MIN_WIDTH
+    elif width > MONITOR_MAX_WIDTH:
+        target_width = MONITOR_MAX_WIDTH
+    else:
+        return
+    _log(
+        f"_enforce_monitor_min_width: resizing {control} to stay within "
+        f"{MONITOR_MIN_WIDTH}-{MONITOR_MAX_WIDTH} (target {target_width})"
+    )
+    run_command(
+        ["tmux", "resize-pane", "-t", control, "-x", str(target_width)],
+        check=False,
+    )
+    _log_layout(session_name)
 
 
 def _find_any_hidden_pane(session_name: str) -> str | None:
@@ -263,6 +292,7 @@ class ContentZone:
 
         self._visible = [pane_id]
         self._enforce_invariant()
+        _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
     def show_parallel(self, pane_ids: list[str]) -> None:
@@ -291,6 +321,7 @@ class ContentZone:
 
         self._visible = visible
         self._enforce_invariant()
+        _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
     def hide(self, pane_id: str) -> None:
@@ -308,6 +339,7 @@ class ContentZone:
             self._visible = [current for current in self._visible if current != pane_id]
 
         self._enforce_invariant()
+        _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
     def hide_all(self) -> None:
@@ -325,6 +357,7 @@ class ContentZone:
             run_command(["tmux", "swap-pane", "-s", placeholder, "-t", keep], check=False)
             self._visible = []
             self._enforce_invariant()
+            _enforce_monitor_min_width(self._session)
             _log_layout(self._session)
 
     def remove(self, pane_id: str) -> None:
@@ -335,6 +368,7 @@ class ContentZone:
         _log(f"ContentZone.remove: kill-pane {pane_id}")
         run_command(["tmux", "kill-pane", "-t", pane_id], check=False)
         self._visible = [current for current in self._visible if current != pane_id]
+        _enforce_monitor_min_width(self._session)
 
     def _visible_from_snapshot(self, known_panes: list[str]) -> list[str]:
         known = {pane_id for pane_id in known_panes if pane_id}
@@ -373,7 +407,7 @@ class ContentZone:
         if control:
             _log(f"ContentZone: join-pane -h -s {placeholder} -t {control}")
             run_command(["tmux", "join-pane", "-h", "-s", placeholder, "-t", control], check=False)
-            _fix_control_width(self._session)
+            _enforce_monitor_min_width(self._session)
 
     def _enforce_invariant(self) -> None:
         if self._visible:
@@ -425,10 +459,18 @@ def tmux_new_session(
     control_pane = result.stdout.strip()
     feature_slug = feature_dir.name
     run_command(["tmux", "set-option", "-t", session_name, "pane-border-status", "top"])
-    run_command(["tmux", "set-option", "-t", session_name, "pane-border-format",
-                 f"#{{?#{{@role}},,"
-                 f" #[bold]#{{@role}}#[nobold]"
-                 f" #[dim]· {feature_slug}#[default] }}"])
+    run_command(
+        [
+            "tmux",
+            "set-option",
+            "-t",
+            session_name,
+            "pane-border-format",
+            f"#{{?#{'{'}@role{'}'},"
+            f" #[bold]#{{@role}}#[nobold]"
+            f" #[dim]· {feature_slug}#[default],}}",
+        ]
+    )
     run_command(["tmux", "set-option", "-t", session_name, "allow-rename", "off"])
     run_command(["tmux", "select-pane", "-t", control_pane, "-T", ""])
     run_command(["tmux", "set-option", "-p", "-t", control_pane, "@role", ""])
@@ -478,9 +520,11 @@ def tmux_new_session(
     )
     _set_placeholder_id(session_name, placeholder_pane)
 
-    # Set control pane width ONCE — never touched again programmatically
-    _log(f"tmux_new_session: Setting control width to {CONTROL_PANE_WIDTH}")
-    _fix_control_width(session_name)
+    _log(
+        f"tmux_new_session: enforcing monitor width window "
+        f"{MONITOR_MIN_WIDTH}-{MONITOR_MAX_WIDTH}"
+    )
+    _enforce_monitor_min_width(session_name)
     accept_trust_prompt(primary_pane, snippet=trust_snippet)
 
     panes: dict[str, str | None] = {
