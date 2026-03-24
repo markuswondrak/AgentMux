@@ -215,6 +215,19 @@ def create_branch_and_pr(
 
         pr_output = pr_result.stdout.strip()
         pr_url = pr_output.splitlines()[-1] if pr_output else ""
+
+        try:
+            subprocess.run(
+                ["git", "checkout", github_config.base_branch],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
+            print(f"Warning: could not switch back to {github_config.base_branch}: {stderr}")
+
         return {
             "branch": branch_name,
             "pr_url": pr_url,

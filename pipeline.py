@@ -322,6 +322,18 @@ def main() -> int:
             except RuntimeError as exc:
                 raise SystemExit(str(exc)) from exc
             gh_available = True
+            try:
+                subprocess.run(
+                    ["git", "pull", "origin", loaded.github.base_branch],
+                    cwd=project_dir,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                print(f"Pulled latest from origin/{loaded.github.base_branch}.")
+            except subprocess.CalledProcessError as exc:
+                stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
+                print(f"Warning: could not pull origin/{loaded.github.base_branch}: {stderr}")
         else:
             gh_available = check_gh_available() and check_gh_authenticated()
             if not gh_available:
