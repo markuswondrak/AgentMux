@@ -1,6 +1,6 @@
 # Agent Configuration
 
-> Related source files: `agentmux/config.py`, `agentmux/providers.py`, `agentmux/models.py`, `.agentmux/config.yaml`
+> Related source files: `agentmux/config.py`, `agentmux/init.py`, `agentmux/providers.py`, `agentmux/models.py`, `.agentmux/config.yaml`
 
 ## Overview
 
@@ -14,6 +14,17 @@ Resolution order:
 4. Optional `--config <path>` override
 
 Legacy `pipeline_config.json` is still supported as a project config and as an explicit `--config` input.
+
+## Project Initialization
+
+Use `python3 -m agentmux init` to scaffold a new project with configuration:
+
+- **Interactive mode** — Guides you through role assignments, GitHub settings, and optional prompt stubs
+- **Non-interactive mode** (`--defaults`) — Creates config with built-in defaults and CLAUDE.md template
+- **CLI detection** — Automatically detects installed providers (claude, codex, gemini, opencode)
+- **Config generation** — Creates `.agentmux/config.yaml` with only necessary overrides (minimal config files)
+- **CLAUDE.md setup** — Creates a template, symlinks an existing file, or skips
+- **Prompt stubs** — Optionally generates role-specific instruction files in `.agentmux/prompts/agents/`
 
 ## Primary project config
 

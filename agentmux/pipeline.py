@@ -46,6 +46,16 @@ from .transitions import EXIT_FAILURE, EXIT_SUCCESS, PipelineContext
 DEFAULT_CONFIG_HINT = ".agentmux/config.yaml"
 
 
+def parse_init_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="agentmux init")
+    parser.add_argument(
+        "--defaults",
+        action="store_true",
+        help="Run non-interactively with built-in defaults.",
+    )
+    return parser.parse_args(argv)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Orchestrates a local tmux-based architect/coder/reviewer pipeline.",
@@ -266,6 +276,12 @@ def start_background_orchestrator(
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "init":
+        from .init import run_init
+
+        init_args = parse_init_args(sys.argv[2:])
+        return run_init(defaults_mode=bool(init_args.defaults))
+
     args = parse_args()
     ensure_dependencies()
     config_path = Path(args.config).resolve() if args.config else None

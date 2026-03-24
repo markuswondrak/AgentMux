@@ -8,6 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies
 python3 -m pip install -r requirements.txt
 
+# Initialize a new project (scaffolds configuration)
+python3 -m agentmux init                             # Interactive setup wizard
+python3 -m agentmux init --defaults                  # Non-interactive with built-in defaults
+
 # Start a feature workflow
 python3 pipeline.py "Your feature description"
 
@@ -22,6 +26,17 @@ python3 pipeline.py --issue <number-or-url>          # Bootstrap from GitHub iss
 python3 pipeline.py --resume                         # Interactive selection from existing sessions
 python3 pipeline.py --resume <feature-dir-or-name>  # Resume specific session by name or path
 ```
+
+### Project Initialization
+
+The `agentmux init` command scaffolds a new project with configuration, setup files, and optional custom prompts:
+
+- **Detects installed CLI tools** — Checks for `claude`, `codex`, `gemini`, `opencode` and displays availability
+- **Interactive role configuration** — Prompts for provider/profile assignments per role (architect, coder, reviewer, etc.)
+- **GitHub settings** — Configures base branch, draft PR preferences, branch prefix
+- **CLAUDE.md setup** — Creates from template, symlinks existing file, or skips
+- **Prompt stubs** — Generates optional project-specific instructions in `.agentmux/prompts/agents/<role>.md`
+- **Config validation** — Verifies the generated `.agentmux/config.yaml` parses correctly
 
 There are no test or lint commands — this is an MVP system without formal test infrastructure.
 
@@ -73,6 +88,7 @@ Role routing in these phases:
 pipeline.py                    — backward-compatible CLI shim (`agentmux.pipeline:main`)
 agentmux/pipeline.py           — CLI parsing, config loading, orchestrate() loop
 agentmux/config.py                  — layered config loading, legacy compatibility, role resolution
+agentmux/init.py                    — project initialization wizard (detect CLIs, role config, setup files)
 agentmux/models.py                  — AgentConfig (with trust_snippet/model_flag) and RuntimeFiles dataclasses
 agentmux/providers.py               — built-in provider compatibility helpers for profiles/models
 agentmux/state.py                   — state.json CRUD, feature-directory lifecycle, parse_review_verdict

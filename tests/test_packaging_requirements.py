@@ -17,6 +17,8 @@ class PackagingRequirementsTests(unittest.TestCase):
         self.assertEqual("agentmux", project["name"])
         self.assertIn("watchdog>=6.0.0", project["dependencies"])
         self.assertIn("PyYAML>=6.0.0", project["dependencies"])
+        self.assertIn("questionary>=2.0.0", project["dependencies"])
+        self.assertIn("rich>=13.0.0", project["dependencies"])
 
         scripts = project["scripts"]
         self.assertEqual("agentmux.pipeline:main", scripts["agentmux"])
