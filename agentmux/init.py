@@ -186,26 +186,26 @@ def render_logo(console: Any | None = None) -> None:
     output.print("[blue]│[/blue]  [bold cyan]██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   [/bold cyan][blue]│[/blue]")
     output.print("[blue]│[/blue]  [bold cyan]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold cyan][blue]│[/blue]")
     output.print("[blue]│[/blue]  [bold cyan]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold cyan][blue]│[/blue]")
-    output.print("[blue]├──────────────────────┬───────────────────────┤[/blue]")
+    output.print("[blue]├──────────────────────────────┬───────────────┤[/blue]")
     output.print(
-        "[blue]│[/blue] [bold magenta]███╗   ███╗██╗   ██╗██╗  ██╗[/bold magenta] [blue]│[/blue]       [dim][ ]────┐[/dim]        [blue]│[/blue]"
+        "[blue]│[/blue] [bold magenta]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold magenta][blue]│[/blue]   [dim][ ]──┐[/dim]      [blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold magenta]████╗ ████║██║   ██║╚██╗██╔╝[/bold magenta] [blue]│[/blue]              [dim]│[/dim]        [blue]│[/blue]"
+        "[blue]│[/blue] [bold magenta]████╗ ████║██║   ██║╚██╗██╔╝ [/bold magenta][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold magenta]██╔████╔██║██║   ██║ ╚███╔╝ [/bold magenta] [blue]│[/blue]    [dim]───[ ]───◆───[ ][/dim]   [blue]│[/blue]"
+        "[blue]│[/blue] [bold magenta]██╔████╔██║██║   ██║ ╚███╔╝  [/bold magenta][blue]│[/blue] [dim]──[ ]──◆──[ ] [/dim][blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold magenta]██║╚██╔╝██║██║   ██║ ██╔██╗ [/bold magenta] [blue]│[/blue]              [dim]│[/dim]        [blue]│[/blue]"
+        "[blue]│[/blue] [bold magenta]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold magenta][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold magenta]██║ ╚═╝ ██║╚██████╔╝██╔╝ ╚██╗[/bold magenta] [blue]│[/blue]       [dim][ ]────┘[/dim]       [blue]│[/blue]"
+        "[blue]│[/blue] [bold magenta]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold magenta][blue]│[/blue]   [dim][ ]──┘[/dim]      [blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold magenta]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝[/bold magenta] [blue]│[/blue]                       [blue]│[/blue]"
+        "[blue]│[/blue] [bold magenta]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold magenta][blue]│[/blue]               [blue]│[/blue]"
     )
-    output.print("[blue]╰──────────────────────┴───────────────────────╯[/blue]")
+    output.print("[blue]╰──────────────────────────────┴───────────────╯[/blue]")
 
 
 def detect_clis() -> dict[str, bool]:
@@ -535,4 +535,3 @@ def run_init(defaults_mode: bool = False) -> int:
 def main(argv: list[str] | None = None) -> int:
     parsed = _parse_init_args(sys.argv[1:] if argv is None else argv)
     return run_init(defaults_mode=bool(parsed.defaults))
-

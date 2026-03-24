@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ from agentmux.init import (
     generate_config,
     prompt_role_config,
     prompt_stubs,
+    render_logo,
     run_init,
     validate_config,
 )
@@ -30,6 +32,43 @@ class _FakePrompt:
 
 
 class InitRequirementsTests(unittest.TestCase):
+    def test_render_logo_matches_reference_geometry(self) -> None:
+        class _CaptureConsole:
+            def __init__(self) -> None:
+                self.lines: list[str] = []
+
+            def print(self, text: str, **_kwargs: object) -> None:
+                self.lines.append(text)
+
+        console = _CaptureConsole()
+        render_logo(console)
+
+        rendered = "\n".join(
+            re.sub(r"\[/?(?:blue|bold cyan|bold magenta|dim)\]", "", line)
+            for line in console.lines
+        )
+        expected = "\n".join(
+            [
+                "╭──────────────────────────────────────────────╮",
+                "│   █████╗  ██████╗ ███████╗███╗   ██╗████████╗│",
+                "│  ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝│",
+                "│  ███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   │",
+                "│  ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   │",
+                "│  ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   │",
+                "│  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   │",
+                "├──────────────────────────────┬───────────────┤",
+                "│ ███╗   ███╗██╗   ██╗██╗  ██╗ │   [ ]──┐      │",
+                "│ ████╗ ████║██║   ██║╚██╗██╔╝ │        │      │",
+                "│ ██╔████╔██║██║   ██║ ╚███╔╝  │ ──[ ]──◆──[ ] │",
+                "│ ██║╚██╔╝██║██║   ██║ ██╔██╗  │        │      │",
+                "│ ██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ │   [ ]──┘      │",
+                "│ ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ │               │",
+                "╰──────────────────────────────┴───────────────╯",
+            ]
+        )
+
+        self.assertEqual(expected, rendered)
+
     def test_pipeline_main_routes_init_subcommand_before_parse_args(self) -> None:
         with patch("sys.argv", ["agentmux", "init", "--defaults"]), patch(
             "agentmux.pipeline.parse_args",
@@ -158,11 +197,28 @@ class InitRequirementsTests(unittest.TestCase):
 
             self.assertTrue(validate_config(project_dir, console=None))
 
-    def test_logo_md_contains_mux_block_with_x_character(self) -> None:
+    def test_logo_md_matches_reference_banner(self) -> None:
         logo_path = Path(__file__).resolve().parents[1] / "logo.md"
         logo = logo_path.read_text(encoding="utf-8")
-        self.assertIn("██╗  ██╗", logo)
-        self.assertIn("╚═╝  ╚═╝", logo)
+        expected = """```
+ ╭──────────────────────────────────────────────╮
+ │   █████╗  ██████╗ ███████╗███╗   ██╗████████╗│
+ │  ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝│
+ │  ███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   │
+ │  ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   │
+ │  ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   │
+ │  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   │
+ ├──────────────────────────────┬───────────────┤
+ │ ███╗   ███╗██╗   ██╗██╗  ██╗ │   [ ]──┐      │
+ │ ████╗ ████║██║   ██║╚██╗██╔╝ │        │      │
+ │ ██╔████╔██║██║   ██║ ╚███╔╝  │ ──[ ]──◆──[ ] │
+ │ ██║╚██╔╝██║██║   ██║ ██╔██╗  │        │      │
+ │ ██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ │   [ ]──┘      │
+ │ ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ │               │
+ ╰──────────────────────────────┴───────────────╯
+```
+"""
+        self.assertEqual(expected, logo)
 
 
 if __name__ == "__main__":
