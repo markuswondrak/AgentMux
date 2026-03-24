@@ -5,12 +5,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import pipeline
-from src.handlers import load_plan_meta
-from src.plan_parser import split_plan_into_subplans
-from src.prompts import write_prompt_file
-from src.state import create_feature_files
-from src.transitions import EXIT_SUCCESS
+import agentmux.pipeline as pipeline
+from agentmux.handlers import load_plan_meta
+from agentmux.plan_parser import split_plan_into_subplans
+from agentmux.prompts import write_prompt_file
+from agentmux.state import create_feature_files
+from agentmux.transitions import EXIT_SUCCESS
 
 
 class _FakeObserver:
@@ -112,11 +112,11 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "phase dirs", "session-x")
 
-            with patch("pipeline.Observer", _FakeObserver), patch(
-                "pipeline.build_initial_prompts",
+            with patch("agentmux.pipeline.Observer", _FakeObserver), patch(
+                "agentmux.pipeline.build_initial_prompts",
                 return_value={},
             ), patch(
-                "pipeline.run_phase_cycle",
+                "agentmux.pipeline.run_phase_cycle",
                 return_value=EXIT_SUCCESS,
             ):
                 result = pipeline.orchestrate(

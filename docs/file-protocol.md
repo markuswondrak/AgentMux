@@ -1,6 +1,6 @@
 # Shared File Protocol
 
-> Related source files: `src/models.py`, `src/state.py`, `src/phases.py`, `src/handlers.py`
+> Related source files: `agentmux/models.py`, `agentmux/state.py`, `agentmux/phases.py`, `agentmux/handlers.py`
 
 Agents communicate via files in `.multi-agent/<feature-name>/`. Files are grouped by phase subdirectories and created on-demand as needed.
 
@@ -53,7 +53,7 @@ Agents communicate via files in `.multi-agent/<feature-name>/`. Files are groupe
 
 ## Key functions
 
-- `orchestrate()` in `pipeline.py` — main file-watch loop; dispatches to role-specific handlers
-- `build_initial_prompts()` in `src/prompts.py` — builds only the architect prompt at startup
-- `build_*_prompt()` in `src/prompts.py` — loads and renders the markdown template for each phase; called lazily by handlers
-- Handler functions in `src/handlers.py` — each builds and writes its prompt file just before sending to agent
+- `orchestrate()` in `agentmux/pipeline.py` — main file-watch loop; dispatches to role-specific handlers
+- `build_initial_prompts()` in `agentmux/prompts.py` — builds only the architect prompt at startup
+- `build_*_prompt()` in `agentmux/prompts.py` — loads and renders the markdown template for each phase; called lazily by handlers
+- Handler functions in `agentmux/handlers.py` — each builds and writes its prompt file just before sending to agent

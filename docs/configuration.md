@@ -1,6 +1,6 @@
 # Agent Configuration
 
-> Related source files: `src/config.py`, `src/providers.py`, `src/models.py`, `.agentmux/config.yaml`
+> Related source files: `agentmux/config.py`, `agentmux/providers.py`, `agentmux/models.py`, `.agentmux/config.yaml`
 
 ## Overview
 
@@ -8,7 +8,7 @@ AgentMux now resolves agent configuration from layered config files instead of s
 
 Resolution order:
 
-1. Built-in defaults shipped in `src/defaults/config.yaml`
+1. Built-in defaults shipped in `agentmux/defaults/config.yaml`
 2. User config in `~/.config/agentmux/config.yaml`
 3. Project config in `.agentmux/config.yaml` (or `.yml` / `.json`)
 4. Optional `--config <path>` override

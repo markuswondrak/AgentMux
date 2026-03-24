@@ -117,7 +117,7 @@ def _set_placeholder_id(session_name: str, pane_id: str) -> None:
 
 
 def _find_pane_by_title(session_name: str, title: str) -> str | None:
-    """Find any pane in the session (all windows) with the given title."""
+    """Find any pane in the session (all windows) with the given @role."""
     for window in [MAIN_WINDOW, "_hidden"]:
         result = run_command(
             [
@@ -126,7 +126,7 @@ def _find_pane_by_title(session_name: str, title: str) -> str | None:
                 "-t",
                 f"{session_name}:{window}",
                 "-F",
-                "#{pane_id} #{pane_title}",
+                "#{pane_id} #{@role}",
             ],
             check=False,
         )
@@ -146,7 +146,7 @@ def _list_agent_panes_in_main(session_name: str) -> list[str]:
             "-t",
             f"{session_name}:{MAIN_WINDOW}",
             "-F",
-            "#{pane_id} #{pane_title}",
+            "#{pane_id} #{@role}",
         ],
         check=False,
     )
@@ -217,6 +217,7 @@ def park_agent_pane(pane_id: str | None, session_name: str) -> None:
             )
             placeholder = result.stdout.strip() if result.returncode == 0 else None
             if placeholder:
+                run_command(["tmux", "set-option", "-p", "-t", placeholder, "@role", ""])
                 run_command(
                     ["tmux", "break-pane", "-d", "-s", placeholder, "-n", "_hidden"],
                     check=False,
@@ -303,7 +304,7 @@ def tmux_new_session(
     project_root = Path(__file__).resolve().parent.parent
     monitor_cmd = (
         f"cd {shlex.quote(str(project_root))} && "
-        f"python3 -m src.monitor"
+        f"python3 -m agentmux.monitor"
         f" --feature-dir {shlex.quote(str(feature_dir))}"
         f" --session-name {shlex.quote(session_name)}"
     )
@@ -330,10 +331,12 @@ def tmux_new_session(
     feature_slug = feature_dir.name
     run_command(["tmux", "set-option", "-t", session_name, "pane-border-status", "top"])
     run_command(["tmux", "set-option", "-t", session_name, "pane-border-format",
-                 f"#{{?#{{==:#{{pane_title}},}},,"
-                 f" #[bold]#{{pane_title}}#[nobold]"
+                 f"#{{?#{{@role}},,"
+                 f" #[bold]#{{@role}}#[nobold]"
                  f" #[dim]· {feature_slug}#[default] }}"])
+    run_command(["tmux", "set-option", "-t", session_name, "allow-rename", "off"])
     run_command(["tmux", "select-pane", "-t", control_pane, "-T", ""])
+    run_command(["tmux", "set-option", "-p", "-t", control_pane, "@role", ""])
     run_command(["tmux", "set-environment", "-t", session_name, "CONTROL_PANE", control_pane])
 
     # Create primary pane (right side)
@@ -354,6 +357,7 @@ def tmux_new_session(
     )
     primary_pane = result.stdout.strip()
     run_command(["tmux", "select-pane", "-t", primary_pane, "-T", primary_role])
+    run_command(["tmux", "set-option", "-p", "-t", primary_pane, "@role", primary_role])
 
     # Create placeholder pane to keep the right zone permanently occupied.
     # It lives in _hidden and is swapped in whenever all agents are parked.
@@ -372,6 +376,7 @@ def tmux_new_session(
     )
     placeholder_pane = result.stdout.strip()
     run_command(["tmux", "select-pane", "-t", placeholder_pane, "-T", "placeholder"])
+    run_command(["tmux", "set-option", "-p", "-t", placeholder_pane, "@role", ""])
     run_command(
         ["tmux", "break-pane", "-d", "-s", placeholder_pane, "-n", "_hidden"],
         check=False,
@@ -433,6 +438,7 @@ def create_agent_pane(
     )
     pane_id = result.stdout.strip()
     run_command(["tmux", "select-pane", "-t", pane_id, "-T", agent.role])
+    run_command(["tmux", "set-option", "-p", "-t", pane_id, "@role", agent.role])
 
     if not right_zone:
         # Was horizontal split — fix control width once

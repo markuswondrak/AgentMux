@@ -6,9 +6,9 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
-from src.models import AgentConfig
-from src.tmux import send_prompt
-from src.tmux import tmux_new_session
+from agentmux.models import AgentConfig
+from agentmux.tmux import send_prompt
+from agentmux.tmux import tmux_new_session
 
 
 class TmuxPromptReferencesTests(unittest.TestCase):
@@ -18,9 +18,9 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             prompt_file.write_text("line 1\\nline 2\\n", encoding="utf-8")
             sent: list[str] = []
 
-            with patch("src.tmux.tmux_pane_exists", return_value=True), patch(
-                "src.tmux.show_agent_pane", return_value=None
-            ), patch("src.tmux.send_text", side_effect=lambda _pane, text: sent.append(text)):
+            with patch("agentmux.tmux.tmux_pane_exists", return_value=True), patch(
+                "agentmux.tmux.show_agent_pane", return_value=None
+            ), patch("agentmux.tmux.send_text", side_effect=lambda _pane, text: sent.append(text)):
                 send_prompt("%1", prompt_file, session_name="session-x")
 
             self.assertEqual(1, len(sent))
@@ -56,9 +56,9 @@ class TmuxPromptReferencesTests(unittest.TestCase):
                     return CompletedProcess(args=args, returncode=0, stdout=f"{pane}\n", stderr="")
                 return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
-            with patch("src.tmux.run_command", side_effect=fake_run_command), patch(
-                "src.tmux._fix_control_width", return_value=None
-            ), patch("src.tmux.accept_trust_prompt", return_value=None):
+            with patch("agentmux.tmux.run_command", side_effect=fake_run_command), patch(
+                "agentmux.tmux._fix_control_width", return_value=None
+            ), patch("agentmux.tmux.accept_trust_prompt", return_value=None):
                 tmux_new_session("session-x", agents, feature_dir, config_path, trust_snippet=None)
 
             border_status_cmd = ["tmux", "set-option", "-t", "session-x", "pane-border-status", "top"]

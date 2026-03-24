@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src import monitor
+from agentmux import monitor
 
 
 class MonitorTests(unittest.TestCase):
@@ -125,7 +125,7 @@ class MonitorTests(unittest.TestCase):
             feature_dir = Path(td)
             log_path = feature_dir / "status_log.txt"
 
-            with patch("src.monitor.time.strftime", side_effect=["2026-03-21 11:20:05", "2026-03-21 11:20:08"]):
+            with patch("agentmux.monitor.time.strftime", side_effect=["2026-03-21 11:20:05", "2026-03-21 11:20:08"]):
                 prev = monitor.append_status_change(log_path, prev_status=None, status="planning")
                 prev = monitor.append_status_change(log_path, prev_status=prev, status="planning")
                 prev = monitor.append_status_change(log_path, prev_status=prev, status="implementing")
@@ -155,7 +155,7 @@ class MonitorTests(unittest.TestCase):
             }
 
             with patch(
-                "src.monitor.get_role_states",
+                "agentmux.monitor.get_role_states",
                 return_value={"architect": "inactive", "reviewer": "working", "coder": "idle"},
             ):
                 output = self._strip_ansi(

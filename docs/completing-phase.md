@@ -1,6 +1,6 @@
 # Completing Phase
 
-> Related source files: `src/phases.py` (CompletingPhase), `src/prompts/commands/confirmation.md`, `src/state.py`
+> Related source files: `agentmux/phases.py` (CompletingPhase), `agentmux/prompts/commands/confirmation.md`, `agentmux/state.py`
 
 When the review passes, the workflow first terminates all `coder` panes (primary and parallel workers), then enters the `documenting` phase (if docs updates are needed) and finally transitions to `completing`.
 

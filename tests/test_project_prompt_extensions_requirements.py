@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.prompts import (
+from agentmux.prompts import (
     build_architect_prompt,
     build_change_prompt,
     build_code_researcher_prompt,
@@ -20,7 +20,7 @@ from src.prompts import (
     build_reviewer_prompt,
     build_web_researcher_prompt,
 )
-from src.state import create_feature_files
+from agentmux.state import create_feature_files
 
 
 class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
@@ -32,18 +32,18 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
     def test_builtin_templates_expose_project_instruction_placeholder_before_constraints(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         template_paths = [
-            repo_root / "src/prompts/agents/architect.md",
-            repo_root / "src/prompts/agents/coder.md",
-            repo_root / "src/prompts/agents/reviewer.md",
-            repo_root / "src/prompts/agents/product-manager.md",
-            repo_root / "src/prompts/agents/code-researcher.md",
-            repo_root / "src/prompts/agents/web-researcher.md",
-            repo_root / "src/prompts/agents/designer.md",
-            repo_root / "src/prompts/commands/review.md",
-            repo_root / "src/prompts/commands/fix.md",
-            repo_root / "src/prompts/commands/confirmation.md",
-            repo_root / "src/prompts/commands/change.md",
-            repo_root / "src/prompts/commands/docs.md",
+            repo_root / "agentmux/prompts/agents/architect.md",
+            repo_root / "agentmux/prompts/agents/coder.md",
+            repo_root / "agentmux/prompts/agents/reviewer.md",
+            repo_root / "agentmux/prompts/agents/product-manager.md",
+            repo_root / "agentmux/prompts/agents/code-researcher.md",
+            repo_root / "agentmux/prompts/agents/web-researcher.md",
+            repo_root / "agentmux/prompts/agents/designer.md",
+            repo_root / "agentmux/prompts/commands/review.md",
+            repo_root / "agentmux/prompts/commands/fix.md",
+            repo_root / "agentmux/prompts/commands/confirmation.md",
+            repo_root / "agentmux/prompts/commands/change.md",
+            repo_root / "agentmux/prompts/commands/docs.md",
         ]
 
         for template_path in template_paths:
@@ -101,7 +101,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 self._write_project_prompt(project_dir, subdir, name, f"Project extension marker: {marker}\n")
 
             with patch(
-                "src.prompts.subprocess.run",
+                "agentmux.prompts.subprocess.run",
                 return_value=subprocess.CompletedProcess(args=["git", "status", "--porcelain"], returncode=0, stdout="", stderr=""),
             ):
                 for _, _, marker, builder in cases:

@@ -6,12 +6,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import pipeline
-from src.models import AgentConfig
-from src.phases import PlanningPhase
-from src.prompts import build_architect_prompt, build_web_researcher_prompt
-from src.state import create_feature_files, load_state, write_state
-from src.transitions import PipelineContext
+import agentmux.pipeline as pipeline
+from agentmux.models import AgentConfig
+from agentmux.phases import PlanningPhase
+from agentmux.prompts import build_architect_prompt, build_web_researcher_prompt
+from agentmux.state import create_feature_files, load_state, write_state
+from agentmux.transitions import PipelineContext
 
 
 class FakeRuntime:
@@ -216,7 +216,7 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             (feature_dir / "research" / "web-openai-models" / "done").touch()
 
             phase = PlanningPhase()
-            with patch("src.phases.send_text") as send_text:
+            with patch("agentmux.phases.send_text") as send_text:
                 result = phase.handle_event(load_state(state_path), "web_task_completed:openai-models", ctx)
 
             self.assertIsNone(result)

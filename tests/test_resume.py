@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import pipeline
-from src.state import infer_resume_phase, write_state
+import agentmux.pipeline as pipeline
+from agentmux.state import infer_resume_phase, write_state
 
 
 class ResumeCliAndSessionTests(unittest.TestCase):
@@ -187,16 +187,16 @@ class ResumeMainFlowTests(unittest.TestCase):
                 resume=True,
             )
 
-            with patch("pipeline.parse_args", return_value=args), patch(
-                "pipeline.ensure_dependencies", return_value=None
+            with patch("agentmux.pipeline.parse_args", return_value=args), patch(
+                "agentmux.pipeline.ensure_dependencies", return_value=None
             ), patch(
-                "pipeline.load_config",
+                "agentmux.pipeline.load_config",
                 return_value=("multi-agent-mvp", {}, 3),
             ), patch(
-                "pipeline.tmux_session_exists",
+                "agentmux.pipeline.tmux_session_exists",
                 return_value=False,
             ), patch(
-                "pipeline.Path.cwd",
+                "agentmux.pipeline.Path.cwd",
                 return_value=project_dir,
             ), self.assertRaises(SystemExit) as ctx:
                 pipeline.main()
@@ -233,26 +233,26 @@ class ResumeMainFlowTests(unittest.TestCase):
                 resume="20260101-120000-demo",
             )
 
-            with patch("pipeline.parse_args", return_value=args), patch(
-                "pipeline.ensure_dependencies",
+            with patch("agentmux.pipeline.parse_args", return_value=args), patch(
+                "agentmux.pipeline.ensure_dependencies",
                 return_value=None,
             ), patch(
-                "pipeline.load_config",
+                "agentmux.pipeline.load_config",
                 return_value=("multi-agent-mvp", {}, 3),
             ), patch(
-                "pipeline.tmux_session_exists",
+                "agentmux.pipeline.tmux_session_exists",
                 return_value=False,
             ), patch(
-                "pipeline.Path.cwd",
+                "agentmux.pipeline.Path.cwd",
                 return_value=project_dir,
             ), patch(
-                "pipeline.TmuxAgentRuntime.create",
+                "agentmux.pipeline.TmuxAgentRuntime.create",
                 return_value=object(),
             ) as create_mock, patch(
-                "pipeline.start_background_orchestrator",
+                "agentmux.pipeline.start_background_orchestrator",
                 return_value=None,
             ) as start_mock, patch(
-                "pipeline.subprocess.run",
+                "agentmux.pipeline.subprocess.run",
                 return_value=None,
             ) as attach_mock:
                 result = pipeline.main()

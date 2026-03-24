@@ -1,11 +1,11 @@
 # Prompt Templates and Rendering
 
-> Related source files: `src/prompts.py`, `src/prompts/agents/`, `src/prompts/commands/`
+> Related source files: `agentmux/prompts.py`, `agentmux/prompts/agents/`, `agentmux/prompts/commands/`
 
 ## Template directories
 
-- `src/prompts/agents/` — role-level prompts (define what each agent is): `architect.md`, `product-manager.md`, `reviewer.md`, `coder.md`, `code-researcher.md`, `web-researcher.md`, `designer.md`
-- `src/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `fix.md`, `confirmation.md`, `change.md`, `docs.md`
+- `agentmux/prompts/agents/` — role-level prompts (define what each agent is): `architect.md`, `product-manager.md`, `reviewer.md`, `coder.md`, `code-researcher.md`, `web-researcher.md`, `designer.md`
+- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `fix.md`, `confirmation.md`, `change.md`, `docs.md`
 
 ## Placeholder syntax
 
@@ -28,11 +28,11 @@ If a project file does not exist, `{project_instructions}` resolves to an empty 
 Project extension files are plain markdown. They do not need template placeholder syntax.
 Curly braces in project content are automatically escaped before `format_map()` runs, so text like `{example}` is preserved literally and cannot trigger placeholder errors.
 
-`src/prompts/context.md` is pipeline-controlled and is not project-extendable.
+`agentmux/prompts/context.md` is pipeline-controlled and is not project-extendable.
 
 ## Prompt injection
 
-Prompts are not injected as full text. Instead, `send_prompt()` in `src/tmux.py` sends a concise file reference message like:
+Prompts are not injected as full text. Instead, `send_prompt()` in `agentmux/tmux.py` sends a concise file reference message like:
 
 ```
 Read and follow the instructions in /full/path/to/prompt_file.md
@@ -42,7 +42,7 @@ Agents read the referenced file themselves, reducing keystroke overhead and allo
 
 ## Lazy build
 
-Prompt files are built lazily by handlers just before injection, not pre-generated. Each `build_*_prompt()` function in `src/prompts.py` loads and renders the markdown template for its phase.
+Prompt files are built lazily by handlers just before injection, not pre-generated. Each `build_*_prompt()` function in `agentmux/prompts.py` loads and renders the markdown template for its phase.
 
 Current split:
 - `build_architect_prompt()` renders planning prompts only

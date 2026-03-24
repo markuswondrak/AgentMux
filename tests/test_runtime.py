@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.models import AgentConfig
-from src.runtime import TmuxAgentRuntime
+from agentmux.models import AgentConfig
+from agentmux.runtime import TmuxAgentRuntime
 
 
 def _agents() -> dict[str, AgentConfig]:
@@ -41,9 +41,9 @@ class RuntimeTests(unittest.TestCase):
                 created.append((session_name, role, tuple(sorted(agents)), trust_snippet))
                 return "%42"
 
-            with patch("src.runtime.create_agent_pane", side_effect=fake_create_agent_pane), patch(
-                "src.runtime.park_agent_pane", return_value=None
-            ), patch("src.runtime.send_prompt", return_value=None):
+            with patch("agentmux.runtime.create_agent_pane", side_effect=fake_create_agent_pane), patch(
+                "agentmux.runtime.park_agent_pane", return_value=None
+            ), patch("agentmux.runtime.send_prompt", return_value=None):
                 runtime = TmuxAgentRuntime(
                     feature_dir=feature_dir,
                     session_name="session-x",
@@ -70,16 +70,16 @@ class RuntimeTests(unittest.TestCase):
             sent: list[str] = []
             killed: list[str] = []
 
-            with patch("src.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id == "%2"), patch(
-                "src.runtime.create_agent_pane", return_value="%99"
+            with patch("agentmux.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id == "%2"), patch(
+                "agentmux.runtime.create_agent_pane", return_value="%99"
             ), patch(
-                "src.runtime.show_agent_pane",
+                "agentmux.runtime.show_agent_pane",
                 side_effect=lambda pane_id, session_name, exclusive=True: shown.append((pane_id, exclusive)),
             ), patch(
-                "src.runtime.send_prompt",
+                "agentmux.runtime.send_prompt",
                 side_effect=lambda pane_id, prompt_file, *args: sent.append(f"{pane_id}:{prompt_file.name}"),
             ), patch(
-                "src.runtime.kill_agent_pane",
+                "agentmux.runtime.kill_agent_pane",
                 side_effect=lambda pane_id, session_name=None: killed.append(str(pane_id)),
             ):
                 runtime = TmuxAgentRuntime(
@@ -114,9 +114,9 @@ class RuntimeTests(unittest.TestCase):
             )
 
             with patch(
-                "src.runtime.tmux_pane_exists",
+                "agentmux.runtime.tmux_pane_exists",
                 side_effect=lambda pane_id: pane_id in {"%1", "%2", "%3"},
-            ), patch("src.runtime._find_pane_by_title", return_value=None):
+            ), patch("agentmux.runtime._find_pane_by_title", return_value=None):
                 runtime = TmuxAgentRuntime.attach(
                     feature_dir=feature_dir,
                     session_name="session-x",
@@ -145,7 +145,7 @@ class RuntimeTests(unittest.TestCase):
                 args_seen.append(trust_snippet)
                 return {"_control": "%0", "architect": "%1", "coder": None, "docs": None}
 
-            with patch("src.runtime.tmux_new_session", side_effect=fake_tmux_new_session):
+            with patch("agentmux.runtime.tmux_new_session", side_effect=fake_tmux_new_session):
                 TmuxAgentRuntime.create(
                     feature_dir=feature_dir,
                     session_name="session-x",
@@ -158,7 +158,7 @@ class RuntimeTests(unittest.TestCase):
     def test_kill_primary_kills_pane_clears_registry_and_persists_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            with patch("src.runtime.kill_agent_pane") as kill_mock:
+            with patch("agentmux.runtime.kill_agent_pane") as kill_mock:
                 runtime = TmuxAgentRuntime(
                     feature_dir=feature_dir,
                     session_name="session-x",

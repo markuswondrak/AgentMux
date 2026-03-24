@@ -26,7 +26,7 @@ python3 pipeline.py --resume <feature-dir-or-name>  # Resume specific session by
 There are no test or lint commands — this is an MVP system without formal test infrastructure.
 
 Default config resolution is layered:
-- built-in defaults from `src/defaults/config.yaml`
+- built-in defaults from `agentmux/defaults/config.yaml`
 - optional user config from `~/.config/agentmux/config.yaml`
 - project config from `.agentmux/config.yaml` (preferred) or legacy `pipeline_config.json`
 - explicit `--config <path>` override
@@ -37,7 +37,9 @@ This is a **tmux-based multi-agent orchestration system**. Instead of calling AI
 
 ### How it works
 
-`pipeline.py` is both the entry point and the orchestrator (started as a background subprocess with `--orchestrate`). It:
+`agentmux/pipeline.py` is the orchestrator implementation (started as a background subprocess with `--orchestrate`).
+The repo-root `pipeline.py` is a backward-compatible shim that calls `agentmux.pipeline:main`.
+The orchestrator:
 1. Creates a feature directory under `.multi-agent/<feature-name>/`
 2. Spawns a tmux session with a **control pane** (left, 15 cols) and agent panes (right)
    - Pane border titles are enabled so each pane shows its role name
@@ -68,23 +70,24 @@ Role routing in these phases:
 ### Module structure
 
 ```
-pipeline.py                    — entry point, CLI parsing, config loading, orchestrate() loop
-src/config.py                  — layered config loading, legacy compatibility, role resolution
-src/models.py                  — AgentConfig (with trust_snippet/model_flag) and RuntimeFiles dataclasses
-src/providers.py               — built-in provider compatibility helpers for profiles/models
-src/state.py                   — state.json CRUD, feature-directory lifecycle, parse_review_verdict
-src/tmux.py                    — all tmux interaction (sessions, panes, send-keys, trust-prompt)
-src/monitor.py                 — control pane status display (pipeline status, agent list, documents)
-src/runtime.py                 — TmuxAgentRuntime, spawns agents with resolved trust_snippet
-src/prompts.py                 — loads markdown templates and renders them with str.format_map()
-src/prompts/agents/            — role-level prompts (define what each agent is)
+pipeline.py                    — backward-compatible CLI shim (`agentmux.pipeline:main`)
+agentmux/pipeline.py           — CLI parsing, config loading, orchestrate() loop
+agentmux/config.py                  — layered config loading, legacy compatibility, role resolution
+agentmux/models.py                  — AgentConfig (with trust_snippet/model_flag) and RuntimeFiles dataclasses
+agentmux/providers.py               — built-in provider compatibility helpers for profiles/models
+agentmux/state.py                   — state.json CRUD, feature-directory lifecycle, parse_review_verdict
+agentmux/tmux.py                    — all tmux interaction (sessions, panes, send-keys, trust-prompt)
+agentmux/monitor.py                 — control pane status display (pipeline status, agent list, documents)
+agentmux/runtime.py                 — TmuxAgentRuntime, spawns agents with resolved trust_snippet
+agentmux/prompts.py                 — loads markdown templates and renders them with str.format_map()
+agentmux/prompts/agents/            — role-level prompts (define what each agent is)
   product-manager.md           —   product management phase
   architect.md                 —   planning phase
   reviewer.md                  —   review + confirmation phases
   coder.md                     —   implementation phase
   code-researcher.md           —   codebase analysis on architect request
   web-researcher.md            —   internet search on architect request
-src/prompts/commands/          — phase-specific command prompts (what to do at each step)
+agentmux/prompts/commands/          — phase-specific command prompts (what to do at each step)
   review.md                    —   code review
   fix.md                       —   fix review findings
   confirmation.md              —   user approval / changes gate

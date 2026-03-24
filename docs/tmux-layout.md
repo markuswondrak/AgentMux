@@ -1,6 +1,6 @@
 # Tmux Session Layout and Pane Management
 
-> Related source files: `src/tmux.py`, `src/runtime.py`
+> Related source files: `agentmux/tmux.py`, `agentmux/runtime.py`
 
 ## Zone approach
 
@@ -18,9 +18,9 @@ None of these operations affect the horizontal partition, so the monitor width s
 
 ## Key functions
 
-- `send_prompt()` in `src/tmux.py` — sends a concise file reference message to the agent pane (e.g., "Read and follow the instructions in `/path/to/prompt.md`"). The agent reads the file itself.
-- `tmux_*` helpers in `src/tmux.py` — create/kill sessions, panes, capture output
-- `_fix_control_width()` in `src/tmux.py` — one-shot resize fallback, only used when the right zone was empty
+- `send_prompt()` in `agentmux/tmux.py` — sends a concise file reference message to the agent pane (e.g., "Read and follow the instructions in `/path/to/prompt.md`"). The agent reads the file itself.
+- `tmux_*` helpers in `agentmux/tmux.py` — create/kill sessions, panes, capture output
+- `_fix_control_width()` in `agentmux/tmux.py` — one-shot resize fallback, only used when the right zone was empty
 
 ## Trust prompt handling
 

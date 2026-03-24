@@ -6,12 +6,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import pipeline
-from src.config import load_layered_config
-from src.providers import PROVIDERS, get_provider, resolve_agent
-from src.models import AgentConfig
-from src.tmux import build_agent_command
-from src.tmux import accept_trust_prompt
+import agentmux.pipeline as pipeline
+from agentmux.config import load_layered_config
+from agentmux.providers import PROVIDERS, get_provider, resolve_agent
+from agentmux.models import AgentConfig
+from agentmux.tmux import build_agent_command
+from agentmux.tmux import accept_trust_prompt
 
 
 class ProviderAbstractionTests(unittest.TestCase):
@@ -98,7 +98,7 @@ roles:
                 encoding="utf-8",
             )
 
-            with patch("src.config.USER_CONFIG_PATH", user_cfg_path):
+            with patch("agentmux.config.USER_CONFIG_PATH", user_cfg_path):
                 loaded = load_layered_config(project_dir)
 
             coder = loaded.agents["coder"]
@@ -128,12 +128,12 @@ profiles:
                 encoding="utf-8",
             )
 
-            with patch("src.config.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch("agentmux.config.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
                 with self.assertRaises(ValueError):
                     load_layered_config(project_dir)
 
     def test_accept_trust_prompt_skips_when_no_snippet(self) -> None:
-        with patch("src.tmux.capture_pane") as capture_pane, patch("src.tmux.run_command") as run_command:
+        with patch("agentmux.tmux.capture_pane") as capture_pane, patch("agentmux.tmux.run_command") as run_command:
             accept_trust_prompt("%1", snippet=None)
         capture_pane.assert_not_called()
         run_command.assert_not_called()
@@ -154,10 +154,10 @@ profiles:
         commands: list[list[str]] = []
 
         with patch(
-            "src.tmux.capture_pane",
+            "agentmux.tmux.capture_pane",
             side_effect=["some output", "Trust this folder?"],
         ), patch(
-            "src.tmux.run_command",
+            "agentmux.tmux.run_command",
             side_effect=lambda args, cwd=None, check=True: commands.append(args),
         ):
             accept_trust_prompt("%1", snippet="Trust this folder?", timeout_seconds=0.5)

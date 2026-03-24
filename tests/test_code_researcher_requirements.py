@@ -6,13 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import pipeline
-from src.models import AgentConfig
-from src.phases import PlanningPhase
-from src.prompts import build_code_researcher_prompt
-from src.runtime import TmuxAgentRuntime
-from src.state import create_feature_files, load_state, write_state
-from src.transitions import PipelineContext
+import agentmux.pipeline as pipeline
+from agentmux.models import AgentConfig
+from agentmux.phases import PlanningPhase
+from agentmux.prompts import build_code_researcher_prompt
+from agentmux.runtime import TmuxAgentRuntime
+from agentmux.state import create_feature_files, load_state, write_state
+from agentmux.transitions import PipelineContext
 
 
 class FakeRuntime:
@@ -137,18 +137,18 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             sent: list[str] = []
             killed: list[str] = []
 
-            with patch("src.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id in {"%1", "%2", "%3", "%9"}), patch(
-                "src.runtime._find_pane_by_title", return_value=None
+            with patch("agentmux.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id in {"%1", "%2", "%3", "%9"}), patch(
+                "agentmux.runtime._find_pane_by_title", return_value=None
             ), patch(
-                "src.runtime.create_agent_pane", return_value="%77"
+                "agentmux.runtime.create_agent_pane", return_value="%77"
             ), patch(
-                "src.runtime.show_agent_pane",
+                "agentmux.runtime.show_agent_pane",
                 side_effect=lambda pane_id, session_name, exclusive=False: shown.append((pane_id, exclusive)),
             ), patch(
-                "src.runtime.send_prompt",
+                "agentmux.runtime.send_prompt",
                 side_effect=lambda pane_id, pf, *args: sent.append(f"{pane_id}:{pf.name}"),
             ), patch(
-                "src.runtime.kill_agent_pane",
+                "agentmux.runtime.kill_agent_pane",
                 side_effect=lambda pane_id, session_name=None: killed.append(str(pane_id)),
             ):
                 runtime = TmuxAgentRuntime.attach(
@@ -249,7 +249,7 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             (feature_dir / "research" / "code-auth-module" / "done").touch()
 
             phase = PlanningPhase()
-            with patch("src.phases.send_text") as send_text:
+            with patch("agentmux.phases.send_text") as send_text:
                 result = phase.handle_event(load_state(state_path), "task_completed:auth-module", ctx)
 
             self.assertIsNone(result)

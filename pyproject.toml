@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentmux"
+version = "0.1.0"
+description = "Tmux-based multi-agent orchestration system"
+requires-python = ">=3.10"
+dependencies = [
+  "watchdog>=6.0.0",
+  "PyYAML>=6.0.0",
+]
+
+[project.scripts]
+agentmux = "agentmux.pipeline:main"
+
+[tool.setuptools.packages.find]
+include = ["agentmux*"]
+
+[tool.setuptools.package-data]
+agentmux = ["prompts/**/*.md", "defaults/*.yaml"]

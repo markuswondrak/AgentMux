@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.models import AgentConfig
-from src.phases import PHASES, get_phase
-from src.prompts import build_reviewer_prompt
-from src.state import create_feature_files, load_state, write_state
-from src.transitions import PipelineContext
+from agentmux.models import AgentConfig
+from agentmux.phases import PHASES, get_phase
+from agentmux.prompts import build_reviewer_prompt
+from agentmux.state import create_feature_files, load_state, write_state
+from agentmux.transitions import PipelineContext
 
 
 class FakeRuntime:

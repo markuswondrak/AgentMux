@@ -1,6 +1,6 @@
 # Monitor Display
 
-> Related source files: `src/monitor.py`
+> Related source files: `agentmux/monitor.py`
 
 The control pane renders a live status box with the following sections:
 

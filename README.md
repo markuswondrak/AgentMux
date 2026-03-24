@@ -72,20 +72,30 @@ Agents never talk to each other — the orchestrator mediates everything through
 ## Quickstart
 
 ```bash
-pip install -r requirements.txt
+# Option 1: Install from GitHub
+python3 -m pip install git+https://github.com/markuswondrak/AgentMux.git
+
+# Option 2: Install isolated CLI with pipx
+pipx install git+https://github.com/markuswondrak/AgentMux.git
+
+# Option 3: Editable install for local development
+python3 -m pip install -e .
 
 # Run a feature from description to reviewed, committed code
-python3 pipeline.py "Add rate limiting to the API"
+agentmux "Add rate limiting to the API"
 
 # Optional: start with a product management phase
-python3 pipeline.py "Add rate limiting to the API" --product-manager
+agentmux "Add rate limiting to the API" --product-manager
 
 # Bootstrap from a GitHub issue (title + body become the prompt)
-python3 pipeline.py --issue 42
-python3 pipeline.py --issue https://github.com/owner/repo/issues/42
+agentmux --issue 42
+agentmux --issue https://github.com/owner/repo/issues/42
 
 # Resume an interrupted run
-python3 pipeline.py --resume
+agentmux --resume
+
+# Backward-compatible clone-and-run entry point
+python3 pipeline.py "Add rate limiting to the API"
 ```
 
 When run with `--issue`, AgentMux fetches the issue title and body via the `gh` CLI and uses them as the feature prompt. If `gh` is authenticated, it also opens a pull request automatically once the pipeline completes.

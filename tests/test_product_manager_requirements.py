@@ -6,14 +6,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import pipeline
-from src import monitor
-from src.models import AgentConfig
-from src.phases import PHASES, ProductManagementPhase
-from src.prompts import build_product_manager_prompt
-from src.runtime import TmuxAgentRuntime
-from src.state import create_feature_files, infer_resume_phase, load_state, write_state
-from src.transitions import PipelineContext
+import agentmux.pipeline as pipeline
+from agentmux import monitor
+from agentmux.models import AgentConfig
+from agentmux.phases import PHASES, ProductManagementPhase
+from agentmux.prompts import build_product_manager_prompt
+from agentmux.runtime import TmuxAgentRuntime
+from agentmux.state import create_feature_files, infer_resume_phase, load_state, write_state
+from agentmux.transitions import PipelineContext
 
 
 class FakeRuntime:
@@ -180,7 +180,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             updated["research_tasks"] = {"market-fit": "dispatched"}
             write_state(state_path, updated)
             (feature_dir / "research" / "code-market-fit" / "done").touch()
-            with patch("src.phases.send_text") as send_text:
+            with patch("agentmux.phases.send_text") as send_text:
                 phase.handle_event(load_state(state_path), "task_completed:market-fit", ctx)
 
             send_text.assert_called_once_with(
@@ -233,7 +233,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
                 args_seen.append((primary_role, trust_snippet))
                 return {"_control": "%0", "architect": None, "product-manager": "%9"}
 
-            with patch("src.runtime.tmux_new_session", side_effect=fake_tmux_new_session):
+            with patch("agentmux.runtime.tmux_new_session", side_effect=fake_tmux_new_session):
                 TmuxAgentRuntime.create(
                     feature_dir=feature_dir,
                     session_name="session-x",

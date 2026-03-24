@@ -9,9 +9,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import pipeline
-from src.config import load_layered_config
-from src.github import (
+import agentmux.pipeline as pipeline
+from agentmux.config import load_layered_config
+from agentmux.github import (
     assemble_pr_body,
     check_gh_authenticated,
     check_gh_available,
@@ -19,7 +19,7 @@ from src.github import (
     extract_issue_number,
     fetch_issue,
 )
-from src.models import AgentConfig, GitHubConfig
+from agentmux.models import AgentConfig, GitHubConfig
 
 
 class GitHubConfigResolutionTests(unittest.TestCase):
@@ -28,7 +28,7 @@ class GitHubConfigResolutionTests(unittest.TestCase):
             project_dir = Path(td) / "project"
             project_dir.mkdir()
 
-            with patch("src.config.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch("agentmux.config.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
                 loaded = load_layered_config(project_dir)
 
             self.assertEqual("main", loaded.github.base_branch)
@@ -52,7 +52,7 @@ github:
                 encoding="utf-8",
             )
 
-            with patch("src.config.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch("agentmux.config.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
                 loaded = load_layered_config(project_dir)
 
             self.assertEqual("develop", loaded.github.base_branch)
@@ -72,13 +72,13 @@ class GitHubHelpersTests(unittest.TestCase):
             extract_issue_number("not-an-issue")
 
     def test_check_gh_available_and_authenticated_return_false_when_binary_missing(self) -> None:
-        with patch("src.github.subprocess.run", side_effect=FileNotFoundError):
+        with patch("agentmux.github.subprocess.run", side_effect=FileNotFoundError):
             self.assertFalse(check_gh_available())
             self.assertFalse(check_gh_authenticated())
 
     def test_fetch_issue_returns_title_and_body(self) -> None:
         with patch(
-            "src.github.subprocess.run",
+            "agentmux.github.subprocess.run",
             return_value=subprocess.CompletedProcess(
                 args=["gh", "issue", "view", "42", "--json", "title,body"],
                 returncode=0,
@@ -98,7 +98,7 @@ class GitHubHelpersTests(unittest.TestCase):
 
     def test_fetch_issue_raises_actionable_error_on_failure(self) -> None:
         with patch(
-            "src.github.subprocess.run",
+            "agentmux.github.subprocess.run",
             side_effect=subprocess.CalledProcessError(
                 returncode=1,
                 cmd=["gh", "issue", "view", "42", "--json", "title,body"],
@@ -161,7 +161,7 @@ Create branch and open draft PR.
             (feature_dir / "review" / "review.md").write_text("Verdict: pass\n", encoding="utf-8")
 
             with patch(
-                "src.github.subprocess.run",
+                "agentmux.github.subprocess.run",
                 side_effect=[
                     subprocess.CompletedProcess(args=["git", "checkout"], returncode=0, stdout="", stderr=""),
                     subprocess.CalledProcessError(returncode=1, cmd=["git", "push"], stderr="rejected"),
@@ -208,16 +208,16 @@ class PipelineIssueTriggerTests(unittest.TestCase):
                 issue="42",
             )
 
-            with patch("pipeline.parse_args", return_value=args), patch(
-                "pipeline.ensure_dependencies", return_value=None
+            with patch("agentmux.pipeline.parse_args", return_value=args), patch(
+                "agentmux.pipeline.ensure_dependencies", return_value=None
             ), patch(
-                "pipeline.Path.cwd", return_value=project_dir
+                "agentmux.pipeline.Path.cwd", return_value=project_dir
             ), patch(
-                "pipeline.load_runtime_config", return_value=self._loaded_config()
+                "agentmux.pipeline.load_runtime_config", return_value=self._loaded_config()
             ), patch(
-                "pipeline.tmux_session_exists", return_value=False
+                "agentmux.pipeline.tmux_session_exists", return_value=False
             ), patch(
-                "pipeline.check_gh_available", return_value=False
+                "agentmux.pipeline.check_gh_available", return_value=False
             ), self.assertRaises(SystemExit) as ctx:
                 pipeline.main()
 
@@ -237,29 +237,29 @@ class PipelineIssueTriggerTests(unittest.TestCase):
                 issue="https://github.com/acme/demo/issues/42",
             )
 
-            with patch("pipeline.parse_args", return_value=args), patch(
-                "pipeline.ensure_dependencies", return_value=None
+            with patch("agentmux.pipeline.parse_args", return_value=args), patch(
+                "agentmux.pipeline.ensure_dependencies", return_value=None
             ), patch(
-                "pipeline.Path.cwd", return_value=project_dir
+                "agentmux.pipeline.Path.cwd", return_value=project_dir
             ), patch(
-                "pipeline.load_runtime_config", return_value=self._loaded_config()
+                "agentmux.pipeline.load_runtime_config", return_value=self._loaded_config()
             ), patch(
-                "pipeline.tmux_session_exists", return_value=False
+                "agentmux.pipeline.tmux_session_exists", return_value=False
             ), patch(
-                "pipeline.check_gh_available", return_value=True
+                "agentmux.pipeline.check_gh_available", return_value=True
             ), patch(
-                "pipeline.check_gh_authenticated", return_value=True
+                "agentmux.pipeline.check_gh_authenticated", return_value=True
             ), patch(
-                "pipeline.fetch_issue",
+                "agentmux.pipeline.fetch_issue",
                 return_value={"title": "Fix API auth flow", "body": "Issue-sourced requirements"},
             ), patch(
-                "pipeline.datetime"
+                "agentmux.pipeline.datetime"
             ) as datetime_mock, patch(
-                "pipeline.TmuxAgentRuntime.create", return_value=object()
+                "agentmux.pipeline.TmuxAgentRuntime.create", return_value=object()
             ), patch(
-                "pipeline.start_background_orchestrator", return_value=None
+                "agentmux.pipeline.start_background_orchestrator", return_value=None
             ), patch(
-                "pipeline.subprocess.run", return_value=None
+                "agentmux.pipeline.subprocess.run", return_value=None
             ):
                 datetime_mock.now.return_value.strftime.return_value = "20260322-203228"
                 result = pipeline.main()
@@ -289,22 +289,22 @@ class PipelineIssueTriggerTests(unittest.TestCase):
                 issue=None,
             )
 
-            with patch("pipeline.parse_args", return_value=args), patch(
-                "pipeline.ensure_dependencies", return_value=None
+            with patch("agentmux.pipeline.parse_args", return_value=args), patch(
+                "agentmux.pipeline.ensure_dependencies", return_value=None
             ), patch(
-                "pipeline.Path.cwd", return_value=project_dir
+                "agentmux.pipeline.Path.cwd", return_value=project_dir
             ), patch(
-                "pipeline.load_runtime_config", return_value=self._loaded_config()
+                "agentmux.pipeline.load_runtime_config", return_value=self._loaded_config()
             ), patch(
-                "pipeline.tmux_session_exists", return_value=False
+                "agentmux.pipeline.tmux_session_exists", return_value=False
             ), patch(
-                "pipeline.check_gh_available", return_value=False
+                "agentmux.pipeline.check_gh_available", return_value=False
             ), patch(
-                "pipeline.TmuxAgentRuntime.create", return_value=object()
+                "agentmux.pipeline.TmuxAgentRuntime.create", return_value=object()
             ), patch(
-                "pipeline.start_background_orchestrator", return_value=None
+                "agentmux.pipeline.start_background_orchestrator", return_value=None
             ), patch(
-                "pipeline.subprocess.run", return_value=None
+                "agentmux.pipeline.subprocess.run", return_value=None
             ), patch("builtins.print") as print_mock:
                 result = pipeline.main()
 

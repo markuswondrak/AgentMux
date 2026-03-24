@@ -1,6 +1,6 @@
 # Research Task Dispatch
 
-> Related source files: `src/phases.py` (PlanningPhase, ProductManagementPhase), `src/prompts.py`, `src/prompts/agents/code-researcher.md`, `src/prompts/agents/web-researcher.md`
+> Related source files: `agentmux/phases.py` (PlanningPhase, ProductManagementPhase), `agentmux/prompts.py`, `agentmux/prompts/agents/code-researcher.md`, `agentmux/prompts/agents/web-researcher.md`
 
 During the planning phase, the architect can request research by writing request files. During the product management phase, the product manager can also request research. Both code-researcher and web-researcher follow the same dispatch pattern.
 
