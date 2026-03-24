@@ -6,18 +6,16 @@ from typing import Iterable, Protocol
 
 from .models import AgentConfig
 from .tmux import (
+    ContentZone,
     _find_pane_by_title,
     create_agent_pane,
-    kill_agent_pane,
-    park_agent_pane,
     send_prompt,
-    show_agent_pane,
     tmux_kill_session,
     tmux_new_session,
     tmux_pane_exists,
 )
 
-SNAPSHOT_VERSION = 1
+SNAPSHOT_VERSION = 2
 LEGACY_PANES_FILE = "panes.json"
 
 
@@ -58,12 +56,14 @@ class TmuxAgentRuntime:
         session_name: str,
         agents: dict[str, AgentConfig],
         primary_panes: dict[str, str | None],
+        zone: ContentZone,
         parallel_panes: dict[str, dict[int | str, str]] | None = None,
     ) -> None:
         self.feature_dir = feature_dir
         self.session_name = session_name
         self.agents = agents
         self.primary_panes = primary_panes
+        self._zone = zone
         self.parallel_panes = parallel_panes or {}
         self._normalize_primary_panes()
 
@@ -79,7 +79,7 @@ class TmuxAgentRuntime:
     ) -> "TmuxAgentRuntime":
         if initial_role not in agents:
             raise ValueError(f"Unknown initial role: {initial_role}")
-        panes = tmux_new_session(
+        panes, zone = tmux_new_session(
             session_name,
             agents,
             feature_dir,
@@ -92,6 +92,7 @@ class TmuxAgentRuntime:
             session_name=session_name,
             agents=agents,
             primary_panes=panes,
+            zone=zone,
         )
         runtime._persist_snapshot()
         return runtime
@@ -104,22 +105,24 @@ class TmuxAgentRuntime:
         session_name: str,
         agents: dict[str, AgentConfig],
     ) -> "TmuxAgentRuntime":
-        primary_panes, parallel_panes = cls._load_snapshot(feature_dir)
+        primary_panes, parallel_panes, visible = cls._load_snapshot(feature_dir)
         runtime = cls(
             feature_dir=feature_dir,
             session_name=session_name,
             agents=agents,
             primary_panes=primary_panes,
+            zone=ContentZone(session_name, visible=visible),
             parallel_panes=parallel_panes,
         )
         runtime._rehydrate()
+        runtime._zone.restore(runtime._all_known_panes())
         runtime._persist_snapshot()
         return runtime
 
     @staticmethod
     def _load_snapshot(
         feature_dir: Path,
-    ) -> tuple[dict[str, str | None], dict[str, dict[int | str, str]]]:
+    ) -> tuple[dict[str, str | None], dict[str, dict[int | str, str]], list[str]]:
         snapshot_path = feature_dir / "runtime_state.json"
         if snapshot_path.exists():
             raw = json.loads(snapshot_path.read_text(encoding="utf-8"))
@@ -139,11 +142,12 @@ class TmuxAgentRuntime:
                     parsed[key] = str(pane_id)
                 if parsed:
                     parallel[str(role)] = parsed
-            return primary, parallel
+            visible = [str(pane_id) for pane_id in list(raw.get("visible", [])) if pane_id]
+            return primary, parallel, visible
 
         legacy_path = feature_dir / LEGACY_PANES_FILE
         if not legacy_path.exists():
-            return {}, {}
+            return {}, {}, []
 
         panes = json.loads(legacy_path.read_text(encoding="utf-8"))
         primary: dict[str, str | None] = {}
@@ -155,7 +159,7 @@ class TmuxAgentRuntime:
                     parallel.setdefault("coder", {})[int(suffix)] = str(pane_id)
                 continue
             primary[str(role)] = None if pane_id is None else str(pane_id)
-        return primary, parallel
+        return primary, parallel, []
 
     def _normalize_primary_panes(self) -> None:
         self.primary_panes.setdefault("_control", None)
@@ -169,10 +173,14 @@ class TmuxAgentRuntime:
         data = {
             "version": SNAPSHOT_VERSION,
             "primary": self.primary_panes,
+            "visible": self._zone.visible,
             "parallel": {
                 role: {
                     str(worker): pane_id
-                    for worker, pane_id in sorted(workers.items(), key=lambda item: str(item[0]))
+                    for worker, pane_id in sorted(
+                        workers.items(),
+                        key=lambda item: str(item[0]),
+                    )
                 }
                 for role, workers in sorted(self.parallel_panes.items())
                 if workers
@@ -186,6 +194,17 @@ class TmuxAgentRuntime:
         if pane_id and tmux_pane_exists(pane_id):
             return pane_id
         return None
+
+    def _all_known_panes(self) -> list[str]:
+        panes: list[str] = []
+        for role, pane_id in self.primary_panes.items():
+            if role != "_control" and pane_id:
+                panes.append(pane_id)
+        for workers in self.parallel_panes.values():
+            for pane_id in workers.values():
+                if pane_id:
+                    panes.append(pane_id)
+        return panes
 
     def _rehydrate(self) -> None:
         for role, pane_id in list(self.primary_panes.items()):
@@ -221,7 +240,6 @@ class TmuxAgentRuntime:
             self.agents,
             self.agents[role].trust_snippet,
         )
-        park_agent_pane(pane_id, self.session_name)
         self.primary_panes[role] = pane_id
         self._persist_snapshot()
         return pane_id
@@ -230,7 +248,9 @@ class TmuxAgentRuntime:
         pane_id = self._ensure_primary_pane(role)
         if not pane_id:
             return
-        send_prompt(pane_id, prompt_file, self.session_name)
+        self._zone.show(pane_id)
+        send_prompt(pane_id, prompt_file)
+        self._persist_snapshot()
 
     def send_many(self, role: str, prompt_files: list[Path]) -> None:
         if not prompt_files:
@@ -240,10 +260,9 @@ class TmuxAgentRuntime:
             return
 
         workers: dict[int, str] = {}
-        for idx, prompt_file in enumerate(prompt_files, start=1):
+        for idx in range(1, len(prompt_files) + 1):
             if idx == 1:
                 pane_id = primary
-                show_agent_pane(pane_id, self.session_name, exclusive=True)
             else:
                 pane_id = create_agent_pane(
                     self.session_name,
@@ -251,31 +270,54 @@ class TmuxAgentRuntime:
                     self.agents,
                     self.agents[role].trust_snippet,
                 )
-                show_agent_pane(pane_id, self.session_name, exclusive=False)
             workers[idx] = pane_id
-            send_prompt(pane_id, prompt_file)
+
+        self._zone.show_parallel(list(workers.values()))
+        for idx, prompt_file in enumerate(prompt_files, start=1):
+            send_prompt(workers[idx], prompt_file)
 
         self.parallel_panes[role] = workers
         self._persist_snapshot()
 
     def deactivate(self, role: str) -> None:
-        park_agent_pane(self.primary_panes.get(role), self.session_name)
+        workers = self.parallel_panes.get(role, {})
+        if workers:
+            for pane_id in dict.fromkeys(workers.values()):
+                self._zone.hide(pane_id)
+        else:
+            pane_id = self.primary_panes.get(role)
+            if pane_id:
+                self._zone.hide(pane_id)
+        self._persist_snapshot()
 
     def deactivate_many(self, roles: Iterable[str]) -> None:
         for role in roles:
             self.deactivate(role)
 
     def kill_primary(self, role: str) -> None:
-        kill_agent_pane(self.primary_panes.get(role), self.session_name)
+        pane_id = self.primary_panes.get(role)
+        if pane_id:
+            self._zone.remove(pane_id)
         self.primary_panes[role] = None
+        workers = self.parallel_panes.get(role)
+        if workers:
+            remaining = {
+                worker: worker_pane
+                for worker, worker_pane in workers.items()
+                if worker_pane != pane_id
+            }
+            if remaining:
+                self.parallel_panes[role] = remaining
+            else:
+                self.parallel_panes.pop(role, None)
         self._persist_snapshot()
 
     def finish_many(self, role: str) -> None:
         workers = self.parallel_panes.get(role, {})
         primary = self.primary_panes.get(role)
-        for pane_id in workers.values():
+        for pane_id in dict.fromkeys(workers.values()):
             if pane_id != primary:
-                kill_agent_pane(pane_id, self.session_name)
+                self._zone.remove(pane_id)
         if role in self.parallel_panes:
             self.parallel_panes.pop(role, None)
             self._persist_snapshot()
@@ -289,7 +331,6 @@ class TmuxAgentRuntime:
             self.agents,
             self.agents[role].trust_snippet,
         )
-        park_agent_pane(pane_id, self.session_name)
         send_prompt(pane_id, prompt_file)
         self.parallel_panes.setdefault(role, {})[task_id] = pane_id
         self._persist_snapshot()
@@ -298,7 +339,7 @@ class TmuxAgentRuntime:
         workers = self.parallel_panes.get(role, {})
         pane_id = workers.get(task_id)
         if pane_id:
-            kill_agent_pane(pane_id, self.session_name)
+            self._zone.remove(pane_id)
         if task_id in workers:
             workers.pop(task_id, None)
         if not workers:

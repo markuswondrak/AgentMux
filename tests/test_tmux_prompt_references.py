@@ -19,9 +19,9 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             sent: list[str] = []
 
             with patch("agentmux.tmux.tmux_pane_exists", return_value=True), patch(
-                "agentmux.tmux.show_agent_pane", return_value=None
-            ), patch("agentmux.tmux.send_text", side_effect=lambda _pane, text: sent.append(text)):
-                send_prompt("%1", prompt_file, session_name="session-x")
+                "agentmux.tmux.send_text", side_effect=lambda _pane, text: sent.append(text)
+            ):
+                send_prompt("%1", prompt_file)
 
             self.assertEqual(1, len(sent))
             self.assertEqual(
@@ -59,7 +59,13 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             with patch("agentmux.tmux.run_command", side_effect=fake_run_command), patch(
                 "agentmux.tmux._fix_control_width", return_value=None
             ), patch("agentmux.tmux.accept_trust_prompt", return_value=None):
-                tmux_new_session("session-x", agents, feature_dir, config_path, trust_snippet=None)
+                panes, _zone = tmux_new_session(
+                    "session-x",
+                    agents,
+                    feature_dir,
+                    config_path,
+                    trust_snippet=None,
+                )
 
             border_status_cmd = ["tmux", "set-option", "-t", "session-x", "pane-border-status", "top"]
             border_format_cmd = next(
@@ -67,8 +73,9 @@ class TmuxPromptReferencesTests(unittest.TestCase):
                 for cmd in commands
                 if cmd[:5] == ["tmux", "set-option", "-t", "session-x", "pane-border-format"]
             )
+            self.assertEqual("%1", panes["architect"])
             self.assertIn(border_status_cmd, commands)
-            self.assertIn("#{pane_title}", border_format_cmd[5])
+            self.assertIn("#{@role}", border_format_cmd[5])
             split_index = commands.index(next(cmd for cmd in commands if cmd[:2] == ["tmux", "split-window"]))
             self.assertLess(commands.index(border_status_cmd), split_index)
             self.assertLess(commands.index(border_format_cmd), split_index)

@@ -2,26 +2,58 @@
 
 > Related source files: `agentmux/tmux.py`, `agentmux/runtime.py`
 
-## Zone approach
+## Content zone
 
-The tmux layout uses a "zone" approach: the **monitor zone** (left, fixed 15 cols) and the **agent zone** (right, remaining space). The control pane width is set once at session creation via `resize-pane -x 15` and never touched programmatically again.
+The tmux layout is split into two zones:
 
-Pane border titles are enabled at session creation (`pane-border-status top`). The `pane-border-format` uses a conditional: agent panes (non-empty title) show `bold role · dim feature-slug`; the monitor pane has an empty title and shows nothing in the border. The monitor pane ID is stored in the tmux session environment as `CONTROL_PANE` (analogous to `PLACEHOLDER_PANE`) and looked up via `_find_control_pane()` rather than by title scan.
+- **Monitor zone** on the left, fixed to 15 columns
+- **Content zone** on the right, managed exclusively by `ContentZone`
+
+`ContentZone` owns the right-hand pane state. Its `_visible` list is the single source of truth for which agent panes are currently mounted in the main window. The placeholder pane is internal and never part of `_visible`.
+
+## Invariant
+
+- If `_visible` is empty, the placeholder pane occupies the content zone in the main window
+- If `_visible` is non-empty, the placeholder pane lives in `_hidden`
+- Every `show()`, `show_parallel()`, `hide()`, `hide_all()`, and `remove()` mutation re-establishes that invariant immediately
+
+This avoids reconstructing visibility from ad-hoc tmux queries and keeps placeholder handling confined to one abstraction.
 
 ## Pane lifecycle
 
-- **Exclusive mode**: Agents are swapped into the right zone via `swap-pane` — only one agent visible at a time
-- **Parallel mode**: Agents are stacked with `join-pane -v` — multiple agents visible simultaneously
-- **Parking**: Idle agents are parked in a hidden `_hidden` window via `break-pane -d`
+- **Exclusive display**: `ContentZone.show(pane_id)` swaps a single agent into the content zone and parks any other visible agents
+- **Parallel display**: `ContentZone.show_parallel(pane_ids)` shows the first pane exclusively, then stacks the rest vertically with `join-pane -v`
+- **Parking**: hidden agents are moved to the `_hidden` window with `break-pane -d`
+- **Removal**: `ContentZone.remove(pane_id)` hides a visible pane if needed, then kills it
 
-None of these operations affect the horizontal partition, so the monitor width stays rock-solid.
+The monitor/content split is only created once during session setup. Later mutations use swaps, vertical joins, and breaks so the horizontal divider stays stable.
 
-## Key functions
+## Pane creation
 
-- `send_prompt()` in `agentmux/tmux.py` — sends a concise file reference message to the agent pane (e.g., "Read and follow the instructions in `/path/to/prompt.md`"). The agent reads the file itself.
-- `tmux_*` helpers in `agentmux/tmux.py` — create/kill sessions, panes, capture output
-- `_fix_control_width()` in `agentmux/tmux.py` — one-shot resize fallback, only used when the right zone was empty
+`create_agent_pane()` always seeds new panes from `_hidden` if possible. If the placeholder is currently the only pane in the content zone, tmux may briefly split against it and immediately break the new pane back into `_hidden`; the steady-state result is still that background panes are parked and not left in the main layout.
+
+`tmux_new_session()` returns both the initial pane registry and a `ContentZone` instance initialized with the primary role visible and the placeholder parked.
+
+## Runtime snapshot
+
+`runtime_state.json` is version 2 and persists:
+
+- `primary`: primary pane IDs per role
+- `parallel`: worker/task pane IDs
+- `visible`: ordered pane IDs currently shown in the content zone
+
+On resume, `TmuxAgentRuntime.attach()` rehydrates pane IDs, reconstructs `ContentZone` from `visible`, and reapplies the desired layout.
+
+## Prompt dispatch
+
+`send_prompt()` no longer creates or reveals panes. It only sends a concise file reference message such as:
+
+```text
+Read and follow the instructions in /path/to/prompt.md
+```
+
+Visibility is decided in `TmuxAgentRuntime` before prompt dispatch.
 
 ## Trust prompt handling
 
-Trust/confirmation prompts from CLI tools are automatically answered with Enter. The `trust_snippet` field on `AgentConfig` defines what text to detect for each provider.
+Trust or confirmation prompts from CLI tools are still answered automatically via `accept_trust_prompt()`, using the provider-specific `trust_snippet` on `AgentConfig`.

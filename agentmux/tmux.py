@@ -137,25 +137,29 @@ def _find_pane_by_title(session_name: str, title: str) -> str | None:
     return None
 
 
-def _list_agent_panes_in_main(session_name: str) -> list[str]:
-    """Return pane IDs of all non-control panes in the main window (right zone)."""
+def _list_window_panes(session_name: str, window_name: str) -> list[str]:
     result = run_command(
         [
             "tmux",
             "list-panes",
             "-t",
-            f"{session_name}:{MAIN_WINDOW}",
+            f"{session_name}:{window_name}",
             "-F",
-            "#{pane_id} #{@role}",
+            "#{pane_id}",
         ],
         check=False,
     )
-    panes = []
-    for line in result.stdout.splitlines():
-        parts = line.strip().split(None, 1)
-        if len(parts) == 2 and parts[1]:
-            panes.append(parts[0])
-    return panes
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _pane_in_window(pane_id: str | None, window_name: str) -> bool:
+    if not pane_id:
+        return False
+    result = run_command(
+        ["tmux", "display-message", "-p", "-t", pane_id, "#{window_name}"],
+        check=False,
+    )
+    return result.returncode == 0 and result.stdout.strip() == window_name
 
 
 def _fix_control_width(session_name: str) -> None:
@@ -170,118 +174,212 @@ def _fix_control_width(session_name: str) -> None:
         _log_layout(session_name)
 
 
-def _is_pane_visible(pane_id: str | None, session_name: str) -> bool:
-    """Check if a pane is in the main window (not hidden)."""
-    if not pane_id:
-        return False
-    result = run_command(
-        [
-            "tmux",
-            "list-panes",
-            "-t",
-            f"{session_name}:{MAIN_WINDOW}",
-            "-F",
-            "#{pane_id}",
-        ],
-        check=False,
-    )
-    return pane_id in result.stdout
+def _find_any_hidden_pane(session_name: str) -> str | None:
+    for pane_id in _list_window_panes(session_name, "_hidden"):
+        if tmux_pane_exists(pane_id):
+            return pane_id
+    placeholder = _get_placeholder_id(session_name)
+    if placeholder and tmux_pane_exists(placeholder):
+        return placeholder
+    return None
 
 
 # ---------------------------------------------------------------------------
-# Pane lifecycle: park / show
+# Pane lifecycle: content zone
 # ---------------------------------------------------------------------------
 
 
-def park_agent_pane(pane_id: str | None, session_name: str) -> None:
-    """Move a pane to the hidden window. Process keeps running.
+class ContentZone:
+    """Manage the content area right of the control pane.
 
-    If this is the last pane in the right zone, swaps with the placeholder pane
-    instead of breaking, so the right zone is never left empty.
+    `_visible` is the single source of truth for which agent panes occupy the
+    right zone. The placeholder pane is an internal implementation detail.
     """
-    if not pane_id:
-        return
-    if not _is_pane_visible(pane_id, session_name):
-        return
-    right_zone = _list_agent_panes_in_main(session_name)
-    if right_zone == [pane_id]:
-        placeholder = _get_placeholder_id(session_name)
-        if not placeholder or not tmux_pane_exists(placeholder):
-            _log(f"park_agent_pane: creating placeholder on-demand")
-            result = run_command(
-                [
-                    "tmux", "split-window", "-v", "-t", pane_id,
-                    "-P", "-F", "#{pane_id}", "sleep infinity",
-                ],
-                check=False,
-            )
-            placeholder = result.stdout.strip() if result.returncode == 0 else None
-            if placeholder:
-                run_command(["tmux", "set-option", "-p", "-t", placeholder, "@role", ""])
-                run_command(
-                    ["tmux", "break-pane", "-d", "-s", placeholder, "-n", "_hidden"],
-                    check=False,
-                )
-                _set_placeholder_id(session_name, placeholder)
-        if placeholder and not _is_pane_visible(placeholder, session_name):
-            _log(f"park_agent_pane: swap placeholder {placeholder} ↔ {pane_id}")
-            run_command(
-                ["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False
-            )
+
+    def __init__(
+        self,
+        session_name: str,
+        *,
+        visible: list[str] | None = None,
+        placeholder: str | None = None,
+    ) -> None:
+        self._session = session_name
+        self._visible: list[str] = []
+        seen: set[str] = set()
+        for pane_id in visible or []:
+            if pane_id and pane_id not in seen:
+                self._visible.append(pane_id)
+                seen.add(pane_id)
+        self._placeholder = placeholder or _get_placeholder_id(session_name)
+        if self._placeholder and not tmux_pane_exists(self._placeholder):
+            self._placeholder = None
+
+    @property
+    def visible(self) -> list[str]:
+        return list(self._visible)
+
+    def is_visible(self, pane_id: str) -> bool:
+        return pane_id in self._visible
+
+    def restore(self, known_panes: list[str]) -> None:
+        desired = self._visible_from_snapshot(known_panes)
+        current_visible: list[str] = []
+        seen: set[str] = set()
+        for pane_id in known_panes:
+            if (
+                pane_id
+                and pane_id not in seen
+                and tmux_pane_exists(pane_id)
+                and _pane_in_window(pane_id, MAIN_WINDOW)
+            ):
+                current_visible.append(pane_id)
+                seen.add(pane_id)
+        self._visible = current_visible
+        if desired:
+            self.show_parallel(desired)
+        else:
+            self.hide_all()
+
+    def show(self, pane_id: str) -> None:
+        if not pane_id or not tmux_pane_exists(pane_id):
             return
-    _log(f"park_agent_pane: Breaking pane {pane_id}")
-    run_command(
-        ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
-    )
+        if self._visible == [pane_id]:
+            return
 
+        if not self._visible:
+            placeholder = self._require_placeholder()
+            if not placeholder:
+                return
+            _log(f"ContentZone.show: swap-pane -s {pane_id} -t {placeholder}")
+            run_command(["tmux", "swap-pane", "-s", pane_id, "-t", placeholder], check=False)
+        else:
+            keep = pane_id if pane_id in self._visible else self._visible[-1]
+            for other in list(self._visible):
+                if other != keep:
+                    self._park(other)
+            if keep != pane_id:
+                _log(f"ContentZone.show: swap-pane -s {pane_id} -t {keep}")
+                run_command(["tmux", "swap-pane", "-s", pane_id, "-t", keep], check=False)
 
-def show_agent_pane(
-    pane_id: str | None, session_name: str, *, exclusive: bool = True
-) -> None:
-    """Join a pane into the main window.
+        self._visible = [pane_id]
+        self._enforce_invariant()
+        _log_layout(self._session)
 
-    If exclusive=True (default), park all other agent panes first so only
-    this agent is visible. Set exclusive=False for parallel mode.
+    def show_parallel(self, pane_ids: list[str]) -> None:
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for pane_id in pane_ids:
+            if pane_id and pane_id not in seen and tmux_pane_exists(pane_id):
+                ordered.append(pane_id)
+                seen.add(pane_id)
+        if not ordered:
+            self.hide_all()
+            return
 
-    Uses swap-pane for exclusive replacement to avoid touching the
-    horizontal partition between monitor and agent zone.
-    """
-    if not pane_id:
-        return
-    if _is_pane_visible(pane_id, session_name):
-        return
-    _log(f"show_agent_pane: Showing pane {pane_id} (exclusive={exclusive})")
-
-    right_zone = _list_agent_panes_in_main(session_name)
-
-    if exclusive and right_zone:
-        # Park extras, then swap with the remaining one
-        keep = right_zone[0]
-        for other in right_zone[1:]:
-            _log(f"show_agent_pane: parking extra {other}")
+        self.show(ordered[0])
+        anchor = ordered[0]
+        visible = [anchor]
+        for pane_id in ordered[1:]:
+            if pane_id == anchor:
+                continue
+            _log(f"ContentZone.show_parallel: join-pane -v -s {pane_id} -t {anchor}")
             run_command(
-                ["tmux", "break-pane", "-d", "-s", other, "-n", "_hidden"],
+                ["tmux", "join-pane", "-v", "-s", pane_id, "-t", anchor],
                 check=False,
             )
-        _log(f"show_agent_pane: swap-pane -s {pane_id} -t {keep}")
-        run_command(["tmux", "swap-pane", "-s", pane_id, "-t", keep], check=False)
-    elif not exclusive and right_zone:
-        # Stack vertically with existing agent panes
-        _log(f"show_agent_pane: join-pane -v -s {pane_id} -t {right_zone[0]}")
-        run_command(
-            ["tmux", "join-pane", "-v", "-s", pane_id, "-t", right_zone[0]],
-            check=False,
-        )
-    else:
-        # Right zone empty — fallback: horizontal join + one-time width fix
-        control = _find_control_pane(session_name)
-        _log(f"show_agent_pane: join-pane -h -s {pane_id} -t {control} (fallback)")
-        run_command(
-            ["tmux", "join-pane", "-h", "-s", pane_id, "-t", control], check=False
-        )
-        _fix_control_width(session_name)
+            visible.append(pane_id)
 
-    _log_layout(session_name)
+        self._visible = visible
+        self._enforce_invariant()
+        _log_layout(self._session)
+
+    def hide(self, pane_id: str) -> None:
+        if pane_id not in self._visible:
+            return
+        if len(self._visible) == 1:
+            placeholder = self._require_placeholder()
+            if not placeholder:
+                return
+            _log(f"ContentZone.hide: swap-pane -s {placeholder} -t {pane_id}")
+            run_command(["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False)
+            self._visible = []
+        else:
+            self._park(pane_id)
+            self._visible = [current for current in self._visible if current != pane_id]
+
+        self._enforce_invariant()
+        _log_layout(self._session)
+
+    def hide_all(self) -> None:
+        if not self._visible:
+            self._enforce_invariant()
+            return
+
+        keep = self._visible[-1]
+        for pane_id in list(self._visible[:-1]):
+            self._park(pane_id)
+
+        placeholder = self._require_placeholder()
+        if placeholder:
+            _log(f"ContentZone.hide_all: swap-pane -s {placeholder} -t {keep}")
+            run_command(["tmux", "swap-pane", "-s", placeholder, "-t", keep], check=False)
+            self._visible = []
+            self._enforce_invariant()
+            _log_layout(self._session)
+
+    def remove(self, pane_id: str) -> None:
+        if not pane_id:
+            return
+        if pane_id in self._visible:
+            self.hide(pane_id)
+        _log(f"ContentZone.remove: kill-pane {pane_id}")
+        run_command(["tmux", "kill-pane", "-t", pane_id], check=False)
+        self._visible = [current for current in self._visible if current != pane_id]
+
+    def _visible_from_snapshot(self, known_panes: list[str]) -> list[str]:
+        known = {pane_id for pane_id in known_panes if pane_id}
+        return [pane_id for pane_id in self._visible if pane_id in known]
+
+    def _park(self, pane_id: str) -> None:
+        _log(f"ContentZone: break-pane -d -s {pane_id} -n _hidden")
+        run_command(["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False)
+
+    def _require_placeholder(self) -> str | None:
+        if self._placeholder and tmux_pane_exists(self._placeholder):
+            return self._placeholder
+        placeholder = _get_placeholder_id(self._session)
+        if placeholder and tmux_pane_exists(placeholder):
+            self._placeholder = placeholder
+            return placeholder
+        return None
+
+    def _ensure_placeholder_hidden(self) -> None:
+        placeholder = self._require_placeholder()
+        if placeholder and _pane_in_window(placeholder, MAIN_WINDOW):
+            self._park(placeholder)
+
+    def _ensure_placeholder_visible(self) -> None:
+        placeholder = self._require_placeholder()
+        if not placeholder:
+            return
+        if _pane_in_window(placeholder, MAIN_WINDOW):
+            return
+        for pane_id in reversed(self._visible):
+            if tmux_pane_exists(pane_id) and _pane_in_window(pane_id, MAIN_WINDOW):
+                _log(f"ContentZone: swap-pane -s {placeholder} -t {pane_id}")
+                run_command(["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False)
+                return
+        control = _find_control_pane(self._session)
+        if control:
+            _log(f"ContentZone: join-pane -h -s {placeholder} -t {control}")
+            run_command(["tmux", "join-pane", "-h", "-s", placeholder, "-t", control], check=False)
+            _fix_control_width(self._session)
+
+    def _enforce_invariant(self) -> None:
+        if self._visible:
+            self._ensure_placeholder_hidden()
+        else:
+            self._ensure_placeholder_visible()
 
 
 # ---------------------------------------------------------------------------
@@ -296,11 +394,8 @@ def tmux_new_session(
     config_path: Path | None,
     trust_snippet: str | None,
     primary_role: str = "architect",
-) -> dict[str, str | None]:
-    """Create the tmux session with control pane + primary agent pane.
-
-    Other agents are created lazily on first send_prompt via _ensure_agent_pane.
-    """
+) -> tuple[dict[str, str | None], ContentZone]:
+    """Create the tmux session with control pane + primary agent pane."""
     project_root = Path(__file__).resolve().parent.parent
     monitor_cmd = (
         f"cd {shlex.quote(str(project_root))} && "
@@ -397,7 +492,11 @@ def tmux_new_session(
         if role != primary_role:
             panes[role] = None
 
-    return panes
+    return panes, ContentZone(
+        session_name,
+        visible=[primary_pane],
+        placeholder=placeholder_pane,
+    )
 
 
 def create_agent_pane(
@@ -406,28 +505,21 @@ def create_agent_pane(
     agents: dict[str, AgentConfig],
     trust_snippet: str | None,
 ) -> str:
-    """Create a new agent pane. Used for lazy creation and parallel coders."""
+    """Create a new agent pane and leave it parked in the hidden window."""
     agent = agents[agent_name]
     agent_cmd = build_agent_command(agent)
-    right_zone = _list_agent_panes_in_main(session_name)
-
-    if right_zone:
-        split_dir = "-v"
-        split_target = right_zone[0]
-    else:
-        split_dir = "-h"
-        split_target = (
-            _find_control_pane(session_name) or f"{session_name}:{MAIN_WINDOW}"
-        )
+    split_target = _find_any_hidden_pane(session_name)
+    if not split_target:
+        raise RuntimeError(f"No pane available to seed hidden pane creation for {session_name}")
 
     _log(
-        f"create_agent_pane: Creating {agent_name} with split-window {split_dir} at {split_target}"
+        f"create_agent_pane: Creating {agent_name} hidden at {split_target}"
     )
     result = run_command(
         [
             "tmux",
             "split-window",
-            split_dir,
+            "-v",
             "-t",
             split_target,
             "-P",
@@ -439,10 +531,8 @@ def create_agent_pane(
     pane_id = result.stdout.strip()
     run_command(["tmux", "select-pane", "-t", pane_id, "-T", agent.role])
     run_command(["tmux", "set-option", "-p", "-t", pane_id, "@role", agent.role])
-
-    if not right_zone:
-        # Was horizontal split — fix control width once
-        _fix_control_width(session_name)
+    if _pane_in_window(pane_id, MAIN_WINDOW):
+        run_command(["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False)
 
     accept_trust_prompt(pane_id, snippet=trust_snippet)
     time.sleep(0.5)  # let the CLI tool finish starting up before sending keys
@@ -501,46 +591,12 @@ def send_text(target_pane: str, text: str) -> None:
     run_command(["tmux", "send-keys", "-t", target_pane, "Enter"], check=False)
 
 
-def send_prompt(
-    target_pane: str | None,
-    prompt_file: Path,
-    session_name: str | None = None,
-    *,
-    role: str | None = None,
-    agents: dict[str, AgentConfig] | None = None,
-    panes: dict[str, str | None] | None = None,
-) -> None:
-    """Send a prompt to a pane. If session_name is given, auto-show the pane first.
-
-    If target_pane is None and role/agents/panes are provided, the agent pane
-    is created lazily (first use).
-    """
-    if target_pane is None and role and agents and panes and session_name:
-        target_pane = _ensure_agent_pane(session_name, role, agents, panes)
+def send_prompt(target_pane: str | None, prompt_file: Path) -> None:
+    """Send a prompt reference message to an existing pane."""
     if not target_pane or not tmux_pane_exists(target_pane):
         return
-    if session_name:
-        show_agent_pane(target_pane, session_name)
     prompt_reference = f"Read and follow the instructions in {prompt_file.resolve()}"
     send_text(target_pane, prompt_reference)
-
-
-def _ensure_agent_pane(
-    session_name: str,
-    role: str,
-    agents: dict[str, AgentConfig],
-    panes: dict[str, str | None],
-) -> str | None:
-    """Create an agent pane if it doesn't exist yet. Returns the pane ID."""
-    if panes.get(role) and tmux_pane_exists(panes[role]):
-        return panes[role]
-    if role not in agents:
-        return None
-    pane_id = create_agent_pane(session_name, role, agents, agents[role].trust_snippet)
-    # Immediately park it — show_agent_pane will bring it back
-    park_agent_pane(pane_id, session_name)
-    panes[role] = pane_id
-    return pane_id
 
 
 def accept_trust_prompt(

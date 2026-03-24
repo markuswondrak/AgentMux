@@ -45,6 +45,30 @@ class FakeRuntime:
         self.calls.append(("shutdown", keep_session))
 
 
+class FakeZone:
+    def __init__(self, session_name: str, visible: list[str] | None = None) -> None:
+        self.session_name = session_name
+        self.visible = list(visible or [])
+        self.restored: list[list[str]] = []
+        self.removed: list[str] = []
+
+    def restore(self, known_panes: list[str]) -> None:
+        self.restored.append(list(known_panes))
+
+    def remove(self, pane_id: str) -> None:
+        self.removed.append(pane_id)
+        self.visible = [current for current in self.visible if current != pane_id]
+
+    def show(self, pane_id: str) -> None:
+        self.visible = [pane_id]
+
+    def show_parallel(self, pane_ids: list[str]) -> None:
+        self.visible = list(pane_ids)
+
+    def hide(self, pane_id: str) -> None:
+        self.visible = [current for current in self.visible if current != pane_id]
+
+
 class CodeResearcherRequirementsTests(unittest.TestCase):
     def _make_ctx(self, feature_dir: Path) -> tuple[PipelineContext, Path]:
         project_dir = feature_dir.parent / "project"
@@ -133,23 +157,18 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
                 "code-researcher": AgentConfig(role="code-researcher", cli="claude", model="haiku", args=[]),
             }
 
-            shown: list[tuple[str, bool]] = []
             sent: list[str] = []
-            killed: list[str] = []
 
             with patch("agentmux.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id in {"%1", "%2", "%3", "%9"}), patch(
                 "agentmux.runtime._find_pane_by_title", return_value=None
             ), patch(
                 "agentmux.runtime.create_agent_pane", return_value="%77"
             ), patch(
-                "agentmux.runtime.show_agent_pane",
-                side_effect=lambda pane_id, session_name, exclusive=False: shown.append((pane_id, exclusive)),
+                "agentmux.runtime.ContentZone",
+                side_effect=lambda session_name, visible=None: FakeZone(session_name, visible),
             ), patch(
                 "agentmux.runtime.send_prompt",
-                side_effect=lambda pane_id, pf, *args: sent.append(f"{pane_id}:{pf.name}"),
-            ), patch(
-                "agentmux.runtime.kill_agent_pane",
-                side_effect=lambda pane_id, session_name=None: killed.append(str(pane_id)),
+                side_effect=lambda pane_id, pf: sent.append(f"{pane_id}:{pf.name}"),
             ):
                 runtime = TmuxAgentRuntime.attach(
                     feature_dir=feature_dir,
@@ -160,9 +179,8 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
                 runtime.spawn_task("code-researcher", "db-schema", prompt_file)
                 runtime.finish_task("code-researcher", "db-schema")
 
-            self.assertEqual([], shown)
             self.assertEqual(["%77:research_prompt_auth-module.md"], sent)
-            self.assertEqual(["%77"], killed)
+            self.assertEqual(["%77"], runtime._zone.removed)
             snapshot = json.loads((feature_dir / "runtime_state.json").read_text(encoding="utf-8"))
             self.assertEqual({"auth-module": "%9"}, snapshot["parallel"]["code-researcher"])
             self.assertNotIn("db-schema", snapshot["parallel"]["code-researcher"])
