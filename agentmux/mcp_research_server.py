@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .models import SESSION_DIR_NAMES
+
 try:
     from mcp.server.fastmcp import FastMCP
 except ImportError:  # pragma: no cover - runtime dependency check
@@ -63,7 +65,7 @@ def _normalize_scope_hints(scope_hints: str | list[str] | None) -> list[str] | N
 
 
 def _research_dir(topic: str, research_type: str, feature_dir: str | None = None) -> Path:
-    return _feature_dir(feature_dir) / "research" / f"{research_type}-{topic}"
+    return _feature_dir(feature_dir) / SESSION_DIR_NAMES["research"] / f"{research_type}-{topic}"
 
 
 def _request_content(context: str, questions: list[str], scope_hints: list[str] | None) -> str:

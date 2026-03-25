@@ -1,6 +1,6 @@
 # Research Task Dispatch
 
-> Related source files: `agentmux/mcp_research_server.py`, `agentmux/mcp_config.py`, `agentmux/pipeline.py`, `agentmux/defaults/config.yaml`, `agentmux/prompts/agents/architect.md`, `agentmux/prompts/agents/product-manager.md`
+> Related source files: `agentmux/mcp_research_server.py`, `agentmux/mcp_config.py`, `agentmux/pipeline.py`, `agentmux/defaults/config.yaml`, `agentmux/prompts.py`, `agentmux/prompts/agents/architect.md`, `agentmux/prompts/agents/product-manager.md`, `agentmux/prompts/agents/coder.md`
 
 Research dispatch is now MCP-first. The architect and product-manager should call MCP tools to create research requests, then wait for AgentMux to push a completion message.
 
@@ -26,6 +26,8 @@ Typical flow:
 3. Read `summary.md` first and `detail.md` only when needed.
 
 Research completion stays file-driven: the orchestrator detects `done`, updates task state, and sends a follow-up message telling the owner agent which `summary.md` / `detail.md` files to read. AgentMux passes the active session directory explicitly as `feature_dir`, so the server does not rely on provider-specific environment propagation.
+
+Completed research topics are also used for coder handoff: coder prompts include references to `03_research/<type>-<topic>/summary.md` (and `detail.md` when present) for topics that have a `done` marker.
 
 ## File protocol fallback
 

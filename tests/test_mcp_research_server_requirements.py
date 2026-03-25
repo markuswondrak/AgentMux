@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 import agentmux.mcp_research_server as mcp_research_server
+from agentmux.models import SESSION_DIR_NAMES
 
 
 class McpResearchServerRequirementsTests(unittest.TestCase):
@@ -19,7 +20,7 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
                 scope_hints=["agentmux/", "tests/"],
             )
 
-            request_path = feature_dir / "research" / "code-auth-module" / "request.md"
+            request_path = feature_dir / SESSION_DIR_NAMES["research"] / "code-auth-module" / "request.md"
             request = request_path.read_text(encoding="utf-8")
             self.assertEqual("Code research on 'auth-module' dispatched.", result)
             self.assertIn("## Context", request)
@@ -42,7 +43,7 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
                 scope_hints=None,
             )
 
-            request_path = feature_dir / "research" / "web-sdk-compat" / "request.md"
+            request_path = feature_dir / SESSION_DIR_NAMES["research"] / "web-sdk-compat" / "request.md"
             request = request_path.read_text(encoding="utf-8")
             self.assertEqual("Web research on 'sdk-compat' dispatched.", result)
             self.assertIn("## Scope hints", request)
@@ -59,7 +60,9 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
                 scope_hints="Start with prompts and planning tests.",
             )
 
-            request = (feature_dir / "research" / "code-planning-conventions" / "request.md").read_text(encoding="utf-8")
+            request = (
+                feature_dir / SESSION_DIR_NAMES["research"] / "code-planning-conventions" / "request.md"
+            ).read_text(encoding="utf-8")
             self.assertIn("- Start with prompts and planning tests.", request)
 
     def test_dispatch_code_treats_blank_scope_hints_string_as_none(self) -> None:
@@ -73,7 +76,9 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
                 scope_hints="   ",
             )
 
-            request = (feature_dir / "research" / "code-feature-surface" / "request.md").read_text(encoding="utf-8")
+            request = (
+                feature_dir / SESSION_DIR_NAMES["research"] / "code-feature-surface" / "request.md"
+            ).read_text(encoding="utf-8")
             self.assertIn("- (none provided)", request)
 
     def test_dispatch_rejects_invalid_topic_slug(self) -> None:

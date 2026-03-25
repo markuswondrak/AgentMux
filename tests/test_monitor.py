@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agentmux import monitor
+from agentmux.models import SESSION_DIR_NAMES
 
 
 class MonitorTests(unittest.TestCase):
@@ -144,6 +145,26 @@ class MonitorTests(unittest.TestCase):
             self.assertIn("› design …", output)
             self.assertIn("✓ 02_planning", output)
             self.assertIn("✓ 04_design", output)
+
+    def test_render_research_section_uses_numbered_research_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            research_dir = feature_dir / SESSION_DIR_NAMES["research"] / "code-auth-module"
+
+            state_path.write_text(
+                '{"phase": "planning", "research_tasks": {"auth-module": "dispatched"}}',
+                encoding="utf-8",
+            )
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            research_dir.mkdir(parents=True, exist_ok=True)
+            (research_dir / "done").write_text("", encoding="utf-8")
+
+            output = self._strip_ansi(self._render(feature_dir, width=40, height=24))
+
+            self.assertIn(" RESEARCH 1/1", output)
+            self.assertIn("✓ c· auth-module", output)
 
     def test_append_status_change_logs_only_when_changed(self) -> None:
         with tempfile.TemporaryDirectory() as td:

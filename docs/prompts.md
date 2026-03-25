@@ -44,8 +44,23 @@ Agents read the referenced file themselves, reducing keystroke overhead and allo
 
 Prompt files are built lazily by handlers just before injection, not pre-generated. Each `build_*_prompt()` function in `agentmux/prompts.py` loads and renders the markdown template for its phase.
 
+## Coder research handoff
+
+Coder prompt rendering injects a `Research handoff` block into `agentmux/prompts/agents/coder.md` via the `{research_handoff}` placeholder.
+
+Behavior contract:
+
+- Applies to both `build_coder_prompt()` and `build_coder_subplan_prompt()`
+- Scans topic directories under `03_research/` in sorted (deterministic) order
+- Includes a topic only when both `done` and `summary.md` are present
+- Lists `summary.md` as the primary reference
+- Adds `detail.md` as an additional reference only when present
+- Uses feature-relative paths (for example `03_research/code-auth/summary.md`)
+- Omits the entire handoff section when no completed research topics are available
+
 Current split:
 - `build_architect_prompt()` renders planning prompts only
 - `build_product_manager_prompt()` renders the PM analysis prompt
+- `build_coder_prompt()` / `build_coder_subplan_prompt()` render coder implementation prompts with completion marker instructions and optional research handoff references
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
 - `build_confirmation_prompt()` renders the confirmation command prompt used in completion

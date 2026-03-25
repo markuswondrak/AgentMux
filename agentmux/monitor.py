@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from .config import infer_project_dir, load_layered_config
+from .models import SESSION_DIR_NAMES
 from .tmux import MONITOR_WIDTH
 
 RESET = "\033[0m"
@@ -598,7 +599,7 @@ def _render_research_section(width: int, state: dict, feature_dir: Path) -> list
     if not code_tasks and not web_tasks:
         return []
 
-    research_dir = feature_dir / "research"
+    research_dir = feature_dir / SESSION_DIR_NAMES["research"]
     all_tasks: list[tuple[str, str, str]] = [
         ("c", topic, f"code-{topic}/done") for topic in code_tasks
     ] + [

@@ -29,6 +29,22 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
+    def _create_research_topic(
+        self,
+        feature_dir: Path,
+        topic_dir_name: str,
+        *,
+        done: bool,
+        include_detail: bool = True,
+    ) -> None:
+        topic_dir = feature_dir / "03_research" / topic_dir_name
+        topic_dir.mkdir(parents=True, exist_ok=True)
+        (topic_dir / "summary.md").write_text(f"# Summary for {topic_dir_name}\n", encoding="utf-8")
+        if include_detail:
+            (topic_dir / "detail.md").write_text(f"# Detail for {topic_dir_name}\n", encoding="utf-8")
+        if done:
+            (topic_dir / "done").write_text("", encoding="utf-8")
+
     def test_builtin_templates_expose_project_instruction_placeholder_before_constraints(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         template_paths = [
@@ -126,6 +142,68 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
 
             self.assertIn(injected, prompt)
             self.assertNotIn("{project_instructions}", prompt)
+
+    def test_coder_prompt_includes_completed_research_references(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "research handoff", "session")
+
+            self._create_research_topic(feature_dir, "web-openai-models", done=True, include_detail=False)
+            self._create_research_topic(feature_dir, "code-auth-module", done=True, include_detail=True)
+            self._create_research_topic(feature_dir, "code-incomplete-topic", done=False, include_detail=True)
+
+            prompt = build_coder_prompt(files)
+
+            self.assertIn("Research handoff (read before new exploration):", prompt)
+            self.assertIn("03_research/code-auth-module/summary.md", prompt)
+            self.assertIn("03_research/code-auth-module/detail.md", prompt)
+            self.assertIn("03_research/web-openai-models/summary.md", prompt)
+            self.assertNotIn("03_research/web-openai-models/detail.md", prompt)
+            self.assertNotIn("03_research/code-incomplete-topic/summary.md", prompt)
+            self.assertLess(
+                prompt.index("03_research/code-auth-module/summary.md"),
+                prompt.index("03_research/web-openai-models/summary.md"),
+            )
+
+    def test_coder_subplan_prompt_includes_completed_research_references(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "research handoff", "session")
+
+            self._create_research_topic(feature_dir, "web-routing", done=True, include_detail=True)
+            self._create_research_topic(feature_dir, "code-db-indexes", done=True, include_detail=True)
+
+            prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
+
+            self.assertIn("Research handoff (read before new exploration):", prompt)
+            self.assertIn("03_research/code-db-indexes/summary.md", prompt)
+            self.assertIn("03_research/code-db-indexes/detail.md", prompt)
+            self.assertIn("03_research/web-routing/summary.md", prompt)
+            self.assertIn("03_research/web-routing/detail.md", prompt)
+
+    def test_coder_prompts_omit_research_handoff_when_no_completed_topics(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "research handoff", "session")
+
+            self._create_research_topic(feature_dir, "code-incomplete-topic", done=False, include_detail=True)
+
+            prompt = build_coder_prompt(files)
+            subplan_prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
+
+            self.assertNotIn("Research handoff (read before new exploration):", prompt)
+            self.assertNotIn("Research handoff (read before new exploration):", subplan_prompt)
+            self.assertNotIn("03_research/code-incomplete-topic/summary.md", prompt)
+            self.assertNotIn("03_research/code-incomplete-topic/summary.md", subplan_prompt)
 
 
 if __name__ == "__main__":

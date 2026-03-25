@@ -10,6 +10,8 @@ Read these files first:
 - 04_design/design.md (if present)
 - state.json
 
+{research_handoff}
+
 Your job:
 1. You must at first create tests that implement the requirements.
 2. Implement the plan in the project directory {project_dir}.

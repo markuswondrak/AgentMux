@@ -28,6 +28,31 @@ def write_prompt_file(feature_dir: Path, name: str, content: str) -> Path:
     return prompt_path
 
 
+def _build_coder_research_handoff(files: RuntimeFiles) -> str:
+    research_dir = files.research_dir
+    if not research_dir.is_dir():
+        return ""
+
+    references: list[str] = []
+    for topic_dir in sorted(path for path in research_dir.iterdir() if path.is_dir()):
+        done_path = topic_dir / "done"
+        summary_path = topic_dir / "summary.md"
+        detail_path = topic_dir / "detail.md"
+        if not done_path.is_file() or not summary_path.is_file():
+            continue
+        references.append(f"- `{files.relative_path(summary_path)}` (primary)")
+        if detail_path.is_file():
+            references.append(f"- `{files.relative_path(detail_path)}` (additional detail)")
+
+    if not references:
+        return ""
+
+    return "\n".join([
+        "Research handoff (read before new exploration):",
+        *references,
+    ])
+
+
 def build_architect_prompt(files: RuntimeFiles) -> str:
     return _load_template(
         "agents",
@@ -80,6 +105,7 @@ def build_coder_prompt(files: RuntimeFiles) -> str:
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "plan_file": files.relative_path(files.plan),
+        "research_handoff": _build_coder_research_handoff(files),
         "completion_instruction": completion_instruction,
         "completion_constraints": completion_constraints,
     })
@@ -130,6 +156,7 @@ def build_coder_subplan_prompt(
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "plan_file": files.relative_path(subplan_path),
+        "research_handoff": _build_coder_research_handoff(files),
         "completion_instruction": completion_instruction,
         "completion_constraints": completion_constraints,
     })

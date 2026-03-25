@@ -98,7 +98,7 @@ agentmux/state.py                   — state.json CRUD, feature-directory lifec
 agentmux/tmux.py                    — all tmux interaction (sessions, panes, send-keys, trust-prompt, env-prefixed launch command)
 agentmux/monitor.py                 — control pane status display (pipeline status, agent list, documents)
 agentmux/runtime.py                 — TmuxAgentRuntime, spawns agents with resolved trust_snippet
-agentmux/prompts.py                 — loads markdown templates and renders them with str.format_map()
+agentmux/prompts.py                 — loads markdown templates, renders them with str.format_map(), and injects coder research handoff references from completed `03_research/` topics
 agentmux/prompts/agents/            — role-level prompts (define what each agent is)
   product-manager.md           —   product management phase
   architect.md                 —   planning phase
@@ -148,5 +148,5 @@ Deeper context on specific subsystems:
 - `docs/research-dispatch.md` — Code-researcher and web-researcher task dispatch
 - `docs/completing-phase.md` — Approval flow, commit selection, cleanup
 - `docs/monitor.md` — Control pane display sections, constants, rendering
-- `docs/prompts.md` — Prompt templates, placeholders, rendering pipeline
+- `docs/prompts.md` — Prompt templates, placeholders, rendering pipeline, and coder research handoff injection
 - `docs/session-resumption.md` — Resume flag, phase inference, runtime rehydration
