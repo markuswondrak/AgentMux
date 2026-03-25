@@ -59,7 +59,7 @@ The orchestrator:
 1. Creates a feature directory under `.multi-agent/<feature-name>/`
 2. Spawns a tmux session with a **control pane** (left, 15 cols) and agent panes (right)
    - Pane border titles are enabled so each pane shows its role name
-3. Watches the feature directory with `watchdog` and normalizes file activity to feature-relative paths
+3. Starts a session file monitor that watches the feature directory with `watchdog` and normalizes file activity to feature-relative paths
 4. Fans those file events out to listeners that wake the orchestration loop and append first-seen file creations to `created_files.log` (including startup files via one-time seeding)
 5. Advances the workflow state machine (`state.json`) based on which workflow artifacts appear/change
 6. Injects the next prompt into the appropriate tmux pane
@@ -89,6 +89,7 @@ Role routing in these phases:
 ```
 pipeline.py                    — backward-compatible CLI shim (`agentmux.pipeline:main`)
 agentmux/pipeline.py           — CLI parsing, config loading, orchestrate() loop
+agentmux/session_events.py     — feature-directory watchdog integration, session file-event dispatch, created-files logging
 agentmux/config.py                  — layered config loading, legacy compatibility, role resolution
 agentmux/init.py                    — project initialization wizard (detect CLIs, role config, setup files)
 agentmux/models.py                  — AgentConfig (cli/model/args/env/trust_snippet) and RuntimeFiles dataclasses

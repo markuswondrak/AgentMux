@@ -6,8 +6,32 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
-import agentmux.pipeline as pipeline
+import agentmux.session_events as session_events
+
+
+class _FakeObserver:
+    last_instance: "_FakeObserver | None" = None
+
+    def __init__(self) -> None:
+        self.schedule_calls: list[tuple[object, str, bool]] = []
+        self.started = False
+        self.stopped = False
+        self.joined = False
+        _FakeObserver.last_instance = self
+
+    def schedule(self, handler, path: str, recursive: bool = False) -> None:
+        self.schedule_calls.append((handler, path, recursive))
+
+    def start(self) -> None:
+        self.started = True
+
+    def stop(self) -> None:
+        self.stopped = True
+
+    def join(self) -> None:
+        self.joined = True
 
 
 class SessionFileLoggingRequirementsTests(unittest.TestCase):
@@ -15,17 +39,17 @@ class SessionFileLoggingRequirementsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             wake_event = threading.Event()
-            dispatcher = pipeline.SessionFileEventDispatcher()
-            logger = pipeline.CreatedFilesLogListener(
+            dispatcher = session_events.SessionFileEventDispatcher()
+            logger = session_events.CreatedFilesLogListener(
                 feature_dir / "created_files.log",
                 now=lambda: datetime(2026, 3, 25, 18, 50, 7),
             )
-            dispatcher.register(pipeline.build_transition_wake_listener(wake_event))
+            dispatcher.register(session_events.build_transition_wake_listener(wake_event))
             dispatcher.register(logger.handle_event)
 
             dispatcher.publish(
-                pipeline.SessionFileEvent(
-                    event_type=pipeline.FILE_EVENT_CREATED,
+                session_events.SessionFileEvent(
+                    event_type=session_events.FILE_EVENT_CREATED,
                     relative_path="03_research/code-topic/request.md",
                 )
             )
@@ -39,21 +63,21 @@ class SessionFileLoggingRequirementsTests(unittest.TestCase):
     def test_modification_and_duplicate_created_events_are_deduplicated(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            dispatcher = pipeline.SessionFileEventDispatcher()
-            logger = pipeline.CreatedFilesLogListener(
+            dispatcher = session_events.SessionFileEventDispatcher()
+            logger = session_events.CreatedFilesLogListener(
                 feature_dir / "created_files.log",
                 now=lambda: datetime(2026, 3, 25, 18, 50, 7),
             )
             dispatcher.register(logger.handle_event)
 
-            created = pipeline.SessionFileEvent(
-                event_type=pipeline.FILE_EVENT_CREATED,
+            created = session_events.SessionFileEvent(
+                event_type=session_events.FILE_EVENT_CREATED,
                 relative_path="context.md",
             )
             dispatcher.publish(created)
             dispatcher.publish(
-                pipeline.SessionFileEvent(
-                    event_type=pipeline.FILE_EVENT_ACTIVITY,
+                session_events.SessionFileEvent(
+                    event_type=session_events.FILE_EVENT_ACTIVITY,
                     relative_path="context.md",
                 )
             )
@@ -67,13 +91,13 @@ class SessionFileLoggingRequirementsTests(unittest.TestCase):
     def test_moved_file_is_logged_at_destination_path(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            dispatcher = pipeline.SessionFileEventDispatcher()
-            logger = pipeline.CreatedFilesLogListener(
+            dispatcher = session_events.SessionFileEventDispatcher()
+            logger = session_events.CreatedFilesLogListener(
                 feature_dir / "created_files.log",
                 now=lambda: datetime(2026, 3, 25, 18, 50, 7),
             )
             dispatcher.register(logger.handle_event)
-            handler = pipeline.FeatureEventHandler(feature_dir, dispatcher)
+            handler = session_events.FeatureEventHandler(feature_dir, dispatcher)
 
             handler.on_any_event(
                 SimpleNamespace(
@@ -96,15 +120,15 @@ class SessionFileLoggingRequirementsTests(unittest.TestCase):
             (feature_dir / "a").mkdir()
             (feature_dir / "a" / "a.txt").write_text("a", encoding="utf-8")
 
-            dispatcher = pipeline.SessionFileEventDispatcher()
-            logger = pipeline.CreatedFilesLogListener(
+            dispatcher = session_events.SessionFileEventDispatcher()
+            logger = session_events.CreatedFilesLogListener(
                 feature_dir / "created_files.log",
                 now=lambda: datetime(2026, 3, 25, 18, 50, 7),
             )
             dispatcher.register(logger.handle_event)
 
-            pipeline.seed_existing_files(feature_dir, dispatcher)
-            pipeline.seed_existing_files(feature_dir, dispatcher)
+            session_events.seed_existing_files(feature_dir, dispatcher)
+            session_events.seed_existing_files(feature_dir, dispatcher)
 
             self.assertEqual(
                 [
@@ -113,6 +137,31 @@ class SessionFileLoggingRequirementsTests(unittest.TestCase):
                 ],
                 (feature_dir / "created_files.log").read_text(encoding="utf-8").splitlines(),
             )
+
+    def test_start_session_file_monitor_schedules_feature_directory_recursively(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            wake_event = threading.Event()
+
+            with patch("agentmux.session_events.Observer", _FakeObserver):
+                monitor = session_events.start_session_file_monitor(
+                    feature_dir,
+                    feature_dir / "created_files.log",
+                    wake_event,
+                )
+
+            observer = _FakeObserver.last_instance
+            self.assertIsNotNone(observer)
+            assert observer is not None
+            self.assertTrue(observer.started)
+            self.assertEqual(1, len(observer.schedule_calls))
+            _, path, recursive = observer.schedule_calls[0]
+            self.assertEqual(str(feature_dir), path)
+            self.assertTrue(recursive)
+
+            monitor.stop()
+            self.assertTrue(observer.stopped)
+            self.assertTrue(observer.joined)
 
 
 if __name__ == "__main__":
