@@ -27,7 +27,7 @@ class ProviderAbstractionTests(unittest.TestCase):
         )
         self.assertEqual("coder", agent.role)
         self.assertEqual(PROVIDERS["codex"].cli, agent.cli)
-        self.assertEqual("gpt-5.1-mini", agent.model)
+        self.assertEqual("gpt-5.1-codex-mini", agent.model)
         self.assertEqual(["--x"], agent.args)
         self.assertIsNone(agent.trust_snippet)
 
