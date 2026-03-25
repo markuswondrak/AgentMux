@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from .config import infer_project_dir, load_layered_config
+from .tmux import MONITOR_WIDTH
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -761,6 +762,14 @@ def main() -> None:
     try:
         while True:
             width, height = get_terminal_size()
+            if width != MONITOR_WIDTH:
+                own_pane = os.environ.get("TMUX_PANE", "")
+                if own_pane:
+                    subprocess.run(
+                        ["tmux", "resize-pane", "-t", own_pane, "-x", str(MONITOR_WIDTH)],
+                        check=False,
+                    )
+                    width, height = get_terminal_size()
             output = render(
                 args.session_name, state_path, runtime_state_path, agents,
                 width, height, start_time, log_path=status_log_path,
