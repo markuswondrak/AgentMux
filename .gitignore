@@ -9,6 +9,7 @@ build/
 
 # Multi-agent working directory
 .multi-agent/
+.claude/
 
 # OS
 .DS_Store
