@@ -1,8 +1,8 @@
 # Shared File Protocol
 
-> Related source files: `agentmux/models.py`, `agentmux/state.py`, `agentmux/phases.py`, `agentmux/handlers.py`
+> Related source files: `agentmux/models.py`, `agentmux/state.py`, `agentmux/session_events.py`, `agentmux/pipeline.py`, `agentmux/phases.py`, `agentmux/handlers.py`
 
-Agents communicate via files in `.multi-agent/<feature-name>/`. Files are grouped by phase subdirectories and created on-demand as needed.
+Agents communicate via files in `.multi-agent/<feature-name>/`. Files are grouped by phase subdirectories and created on-demand as needed, while a small set of root runtime artifacts is maintained directly by the orchestrator.
 
 ## Root files
 
@@ -10,6 +10,7 @@ Agents communicate via files in `.multi-agent/<feature-name>/`. Files are groupe
 - `requirements.md` — initial request passed to architect
 - `context.md` — auto-generated rules/session info injected into prompts
 - `runtime_state.json` / `orchestrator.log` — runtime tracking and orchestrator logs
+- `created_files.log` — append-only created-file history written by the orchestrator as `YYYY-MM-DD HH:MM:SS  relative/path`; records files only (not directories), deduplicated by relative path, and seeded once at startup to include pre-existing session files
 
 ## Product Management (`01_product_management/`)
 
@@ -53,7 +54,10 @@ Agents communicate via files in `.multi-agent/<feature-name>/`. Files are groupe
 
 ## Key functions
 
-- `orchestrate()` in `agentmux/pipeline.py` — main file-watch loop; dispatches to role-specific handlers
+- `orchestrate()` in `agentmux/pipeline.py` — main file-watch loop; starts/stops the session file monitor and drives phase-cycle transitions
+- `start_session_file_monitor()` in `agentmux/session_events.py` — wires wake + created-file listeners, seeds pre-existing files, and starts the recursive watchdog observer
+- `FeatureEventHandler` / `SessionFileEventDispatcher` in `agentmux/session_events.py` — normalize watchdog events under the feature directory and fan them out to listeners
+- `CreatedFilesLogListener` / `seed_existing_files()` in `agentmux/session_events.py` — enforce created-file logging semantics (`created_files.log`, first-seen only, bootstrap coverage)
 - `build_initial_prompts()` in `agentmux/prompts.py` — builds only the architect prompt at startup
 - `build_*_prompt()` in `agentmux/prompts.py` — loads and renders the markdown template for each phase; called lazily by handlers
 - Handler functions in `agentmux/handlers.py` — each builds and writes its prompt file just before sending to agent

@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import agentmux.pipeline as pipeline
 from agentmux.handlers import load_plan_meta
@@ -13,24 +13,12 @@ from agentmux.state import create_feature_files
 from agentmux.transitions import EXIT_SUCCESS
 
 
-class _FakeObserver:
-    last_instance: "_FakeObserver | None" = None
-
+class _FakeSessionFileMonitor:
     def __init__(self) -> None:
-        self.schedule_calls: list[tuple[object, str, bool]] = []
-        _FakeObserver.last_instance = self
-
-    def schedule(self, handler, path: str, recursive: bool = False) -> None:
-        self.schedule_calls.append((handler, path, recursive))
-
-    def start(self) -> None:
-        return None
+        self.stop_calls = 0
 
     def stop(self) -> None:
-        return None
-
-    def join(self) -> None:
-        return None
+        self.stop_calls += 1
 
 
 class _FakeRuntime:
@@ -105,15 +93,19 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
             self.assertTrue((planning_dir / "plan_1.md").exists())
             self.assertTrue((planning_dir / "plan_2.md").exists())
 
-    def test_orchestrate_watches_feature_directory_recursively(self) -> None:
+    def test_orchestrate_starts_and_stops_session_file_monitor(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "phase dirs", "session-x")
+            monitor = _FakeSessionFileMonitor()
 
-            with patch("agentmux.pipeline.Observer", _FakeObserver), patch(
+            with patch(
+                "agentmux.pipeline.start_session_file_monitor",
+                return_value=monitor,
+            ) as start_monitor_mock, patch(
                 "agentmux.pipeline.build_initial_prompts",
                 return_value={},
             ), patch(
@@ -129,13 +121,12 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
                 )
 
             self.assertEqual(0, result)
-            observer = _FakeObserver.last_instance
-            self.assertIsNotNone(observer)
-            assert observer is not None
-            self.assertEqual(1, len(observer.schedule_calls))
-            _, path, recursive = observer.schedule_calls[0]
-            self.assertEqual(str(feature_dir), path)
-            self.assertTrue(recursive)
+            start_monitor_mock.assert_called_once_with(
+                files.feature_dir,
+                files.created_files_log,
+                ANY,
+            )
+            self.assertEqual(1, monitor.stop_calls)
 
 
 if __name__ == "__main__":

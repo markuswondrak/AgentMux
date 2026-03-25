@@ -59,9 +59,10 @@ The orchestrator:
 1. Creates a feature directory under `.multi-agent/<feature-name>/`
 2. Spawns a tmux session with a **control pane** (left, 15 cols) and agent panes (right)
    - Pane border titles are enabled so each pane shows its role name
-3. Watches the feature directory with `watchdog` for file changes
-4. Advances the workflow state machine (`state.json`) based on which workflow artifacts appear/change
-5. Injects the next prompt into the appropriate tmux pane
+3. Starts a session file monitor that watches the feature directory with `watchdog` and normalizes file activity to feature-relative paths
+4. Fans those file events out to listeners that wake the orchestration loop and append first-seen file creations to `created_files.log` (including startup files via one-time seeding)
+5. Advances the workflow state machine (`state.json`) based on which workflow artifacts appear/change
+6. Injects the next prompt into the appropriate tmux pane
 
 ### State machine
 
@@ -88,6 +89,7 @@ Role routing in these phases:
 ```
 pipeline.py                    — backward-compatible CLI shim (`agentmux.pipeline:main`)
 agentmux/pipeline.py           — CLI parsing, config loading, orchestrate() loop
+agentmux/session_events.py     — feature-directory watchdog integration, session file-event dispatch, created-files logging
 agentmux/config.py                  — layered config loading, legacy compatibility, role resolution
 agentmux/init.py                    — project initialization wizard (detect CLIs, role config, setup files)
 agentmux/models.py                  — AgentConfig (cli/model/args/env/trust_snippet) and RuntimeFiles dataclasses
@@ -117,7 +119,7 @@ agentmux/prompts/commands/          — phase-specific command prompts (what to 
 
 - Agents never communicate with each other directly; the orchestrator mediates via files
 - The orchestrator polls via watchdog events, not timers — no busy-waiting
-- Files are created on-demand — only essential files (`state.json`, `requirements.md`, `context.md`) exist at startup; all others are created when the corresponding workflow step fires
+- Files are created on-demand for workflow phases, and the orchestrator also maintains a root-level `created_files.log` runtime artifact that records first-seen created files once per relative path
 - Prompt files are built lazily by handlers just before injection, not pre-generated
 - Human can attach to the tmux session at any time to observe or intervene
 - Trust/confirmation prompts from CLI tools are automatically answered with Enter

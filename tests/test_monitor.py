@@ -251,9 +251,93 @@ class MonitorTests(unittest.TestCase):
                 )
 
             self.assertIn(" LOG", output)
-            self.assertIn("11:20 › planning", output)
-            self.assertIn("11:20 › implementing", output)
+            self.assertIn("11:20 > planning", output)
+            self.assertIn("11:20 > implementing", output)
             self.assertNotIn("╠══ LOG ╣", output)
+
+    def test_render_merges_phase_log_with_allowed_created_files(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            status_log_path = feature_dir / "status_log.txt"
+            created_files_log_path = feature_dir / "created_files.log"
+
+            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            status_log_path.write_text(
+                "2026-03-21 11:20:05  planning\n2026-03-21 11:20:09  implementing\n",
+                encoding="utf-8",
+            )
+            created_files_log_path.write_text(
+                "\n".join(
+                    [
+                        "2026-03-21 11:20:06  context.md",
+                        "2026-03-21 11:20:07  02_planning/architect_prompt.md",
+                        "2026-03-21 11:20:08  02_planning/plan.md",
+                        "2026-03-21 11:20:10  03_research/code-auth/request.md",
+                        "2026-03-21 11:20:11  03_research/code-auth/summary.md",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("agentmux.monitor.time.time", return_value=0.0):
+                output = self._strip_ansi(
+                    monitor.render(
+                        session_name="session-x",
+                        state_path=state_path,
+                        runtime_state_path=runtime_state_path,
+                        agents={},
+                        width=60,
+                        height=30,
+                        start_time=0.0,
+                        log_path=status_log_path,
+                    )
+                )
+
+            self.assertIn("11:20 > planning", output)
+            self.assertIn("11:20 + 02_planning/plan.md", output)
+            self.assertIn("11:20 + 03_research/code-auth/summary.md", output)
+            self.assertIn("11:20 > implementing", output)
+            self.assertNotIn("context.md", output)
+            self.assertNotIn("architect_prompt.md", output)
+            self.assertNotIn("code-auth/request.md", output)
+            self.assertLess(output.index("11:20 > planning"), output.index("11:20 + 02_planning/plan.md"))
+            self.assertLess(output.index("11:20 + 02_planning/plan.md"), output.index("11:20 > implementing"))
+
+    def test_render_shows_allowed_created_file_entries_without_status_log(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            status_log_path = feature_dir / "status_log.txt"
+            created_files_log_path = feature_dir / "created_files.log"
+
+            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            created_files_log_path.write_text(
+                "2026-03-21 11:20:08  06_review/review.md\n",
+                encoding="utf-8",
+            )
+
+            with patch("agentmux.monitor.time.time", return_value=0.0):
+                output = self._strip_ansi(
+                    monitor.render(
+                        session_name="session-x",
+                        state_path=state_path,
+                        runtime_state_path=runtime_state_path,
+                        agents={},
+                        width=50,
+                        height=24,
+                        start_time=0.0,
+                        log_path=status_log_path,
+                    )
+                )
+
+            self.assertIn(" LOG", output)
+            self.assertIn("11:20 + 06_review/review.md", output)
 
 
 if __name__ == "__main__":

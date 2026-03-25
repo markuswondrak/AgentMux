@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -10,6 +11,7 @@ import subprocess
 import sys
 import textwrap
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from .config import infer_project_dir, load_layered_config
@@ -85,6 +87,32 @@ DOCUMENT_FILES = [
     "06_review/review.md",
     "08_completion/changes.md",
 ]
+MONITOR_FILE_EVENT_PATTERNS = (
+    "requirements.md",
+    "01_product_management/analysis.md",
+    "02_planning/plan.md",
+    "02_planning/tasks.md",
+    "03_research/code-*/summary.md",
+    "03_research/code-*/detail.md",
+    "03_research/code-*/done",
+    "03_research/web-*/summary.md",
+    "03_research/web-*/detail.md",
+    "03_research/web-*/done",
+    "04_design/design.md",
+    "05_implementation/done_*",
+    "06_review/review.md",
+    "06_review/fix_request.md",
+    "08_completion/changes.md",
+    "08_completion/approval.json",
+)
+
+
+@dataclass(frozen=True)
+class MonitorLogEntry:
+    timestamp: str
+    time_str: str
+    sort_order: int
+    message: str
 
 
 def get_terminal_size() -> tuple[int, int]:
@@ -222,25 +250,87 @@ def _trim_model(model: str, cli: str) -> str:
     return model
 
 
-def _read_event_log(log_path: Path, n: int) -> list[tuple[str, str]]:
-    """Return the last *n* entries from status_log.txt as (time_str, phase) pairs."""
+def _parse_timestamped_log_line(line: str) -> tuple[str, str] | None:
+    raw = line.strip()
+    if not raw:
+        return None
+    parts = raw.split("  ", 1)
+    if len(parts) != 2:
+        return None
+    timestamp, payload = parts
+    if len(timestamp) != 19:
+        return None
+    return timestamp, payload.strip()
+
+
+def _should_render_file_event(relative_path: str) -> bool:
+    return any(fnmatch.fnmatch(relative_path, pattern) for pattern in MONITOR_FILE_EVENT_PATTERNS)
+
+
+def _read_status_log_entries(log_path: Path) -> list[MonitorLogEntry]:
     try:
         text = log_path.read_text(encoding="utf-8")
     except Exception:
         return []
-    entries: list[tuple[str, str]] = []
+
+    entries: list[MonitorLogEntry] = []
     for line in text.splitlines():
-        parts = line.strip().split()
-        # Format: "2026-03-21 14:30:00  implementing"
-        if len(parts) >= 3:
-            time_str = parts[1][:5]  # HH:MM
-            phase = parts[2]
-            entries.append((time_str, phase))
-        elif len(parts) == 2:
-            time_str = parts[0][:5]
-            phase = parts[1]
-            entries.append((time_str, phase))
-    return entries[-n:] if entries else []
+        parsed = _parse_timestamped_log_line(line)
+        if parsed is None:
+            continue
+        timestamp, phase = parsed
+        entries.append(
+            MonitorLogEntry(
+                timestamp=timestamp,
+                time_str=timestamp[11:16],
+                sort_order=0,
+                message=f"> {_format_event(phase)}",
+            )
+        )
+    return entries
+
+
+def _read_created_file_log_entries(log_path: Path) -> list[MonitorLogEntry]:
+    try:
+        text = log_path.read_text(encoding="utf-8")
+    except Exception:
+        return []
+
+    entries: list[MonitorLogEntry] = []
+    for line in text.splitlines():
+        parsed = _parse_timestamped_log_line(line)
+        if parsed is None:
+            continue
+        timestamp, relative_path = parsed
+        if not _should_render_file_event(relative_path):
+            continue
+        entries.append(
+            MonitorLogEntry(
+                timestamp=timestamp,
+                time_str=timestamp[11:16],
+                sort_order=1,
+                message=f"+ {relative_path}",
+            )
+        )
+    return entries
+
+
+def _read_monitor_log_entries(
+    status_log_path: Path | None,
+    created_files_log_path: Path | None,
+    n: int,
+) -> list[MonitorLogEntry]:
+    entries: list[MonitorLogEntry] = []
+    if status_log_path is not None:
+        entries.extend(_read_status_log_entries(status_log_path))
+    if created_files_log_path is not None:
+        entries.extend(_read_created_file_log_entries(created_files_log_path))
+
+    if not entries:
+        return []
+
+    ordered = sorted(entries, key=lambda entry: (entry.timestamp, entry.sort_order, entry.message))
+    return ordered[-n:]
 
 
 def _read_feature_request(state_path: Path) -> str:
@@ -648,6 +738,7 @@ def render(
 ) -> str:
     state = load_state(state_path)
     role_states = get_role_states(session_name, runtime_state_path)
+    created_files_log_path = state_path.parent / "created_files.log"
 
     status = state.get("phase", "waiting…")
     last_event = str(state.get("last_event", "")).strip()
@@ -700,12 +791,14 @@ def render(
         available_for_log = height - reserved - spacer
         if available_for_log >= 2:
             max_entries = max(1, available_for_log - 2)
-            entries = _read_event_log(log_path, max_entries)
+            entries = _read_monitor_log_entries(log_path, created_files_log_path, max_entries)
             if entries:
                 log_rows = [_section_title("LOG"), ""]
-                max_phase = max(1, width - 8)
-                for ts, phase in entries:
-                    log_rows.append(f" {DIM}{ts}{RESET} › {_truncate_text(_format_event(phase), max_phase)}")
+                max_message = max(1, width - 8)
+                for entry in entries:
+                    log_rows.append(
+                        f" {DIM}{entry.time_str}{RESET} {_truncate_text(entry.message, max_message)}"
+                    )
 
     lines = list(body)
     if log_rows:

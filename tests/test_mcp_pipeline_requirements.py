@@ -17,17 +17,8 @@ from agentmux.tmux import build_agent_command
 from agentmux.transitions import EXIT_SUCCESS
 
 
-class _FakeObserver:
-    def schedule(self, handler, path: str, recursive: bool = False) -> None:
-        _ = (handler, path, recursive)
-
-    def start(self) -> None:
-        return None
-
+class _FakeSessionFileMonitor:
     def stop(self) -> None:
-        return None
-
-    def join(self) -> None:
         return None
 
 
@@ -50,7 +41,10 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 raise ImportError("missing mcp")
             return real_import(name, globals, locals, fromlist, level)
 
-        with patch("builtins.__import__", side_effect=fake_import):
+        with patch("builtins.__import__", side_effect=fake_import), patch(
+            "agentmux.pipeline.ensure_watchdog_available",
+            return_value=None,
+        ):
             with self.assertRaises(SystemExit) as exc:
                 pipeline.ensure_dependencies()
 
@@ -80,7 +74,10 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             files = create_feature_files(project_dir, feature_dir, "mcp cleanup", "session-x")
             runtime = _FakeRuntime()
 
-            with patch("agentmux.pipeline.Observer", _FakeObserver), patch(
+            with patch(
+                "agentmux.pipeline.start_session_file_monitor",
+                return_value=_FakeSessionFileMonitor(),
+            ), patch(
                 "agentmux.pipeline.build_initial_prompts",
                 return_value={},
             ), patch(

@@ -26,11 +26,14 @@ class TasksRequirementsTests(unittest.TestCase):
 
             self.assertEqual(feature_dir / "02_planning" / "tasks.md", files.tasks)
             self.assertEqual(feature_dir / "02_planning" / "tasks.md", loaded.tasks)
+            self.assertEqual(feature_dir / "created_files.log", files.created_files_log)
+            self.assertEqual(feature_dir / "created_files.log", loaded.created_files_log)
             self.assertFalse(files.plan.exists())
             self.assertFalse(files.tasks.exists())
             self.assertFalse(files.design.exists())
             self.assertFalse(files.review.exists())
             self.assertFalse(files.fix_request.exists())
+            self.assertFalse(files.created_files_log.exists())
 
     def test_architect_and_coder_prompts_reference_plan_meta_and_done_marker(self) -> None:
         with tempfile.TemporaryDirectory() as td:

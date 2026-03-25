@@ -8,15 +8,6 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any  # noqa: F401 — used by watchdog type stub
-
-try:
-    from watchdog.events import FileSystemEvent, FileSystemEventHandler
-    from watchdog.observers import Observer
-except ImportError:  # pragma: no cover - handled at runtime
-    FileSystemEvent = Any  # type: ignore[assignment]
-    FileSystemEventHandler = object  # type: ignore[assignment]
-    Observer = None
 
 from .config import LoadedConfig, load_explicit_config, load_layered_config
 from .github import (
@@ -31,6 +22,7 @@ from .models import AgentConfig, GitHubConfig
 from .phases import run_phase_cycle
 from .prompts import build_initial_prompts
 from .runtime import TmuxAgentRuntime
+from .session_events import ensure_watchdog_available, start_session_file_monitor
 from .state import (
     create_feature_files,
     feature_slug_from_dir,
@@ -185,27 +177,13 @@ def select_session(sessions: list[tuple[Path, dict]]) -> Path:
 
 
 def ensure_dependencies() -> None:
-    if Observer is None:
-        raise SystemExit(
-            "Missing dependency: watchdog. Install it with `python3 -m pip install -r requirements.txt`."
-        )
+    ensure_watchdog_available()
     try:
         from mcp.server.fastmcp import FastMCP  # noqa: F401
     except ImportError as exc:
         raise SystemExit(
             "Missing dependency: mcp. Install it with `python3 -m pip install -r requirements.txt`."
         ) from exc
-
-
-class FeatureEventHandler(FileSystemEventHandler):
-    def __init__(self, wake_event: threading.Event) -> None:
-        super().__init__()
-        self.wake_event = wake_event
-
-    def on_any_event(self, event: FileSystemEvent) -> None:
-        if getattr(event, "is_directory", False):
-            return
-        self.wake_event.set()
 
 
 def orchestrate(
@@ -219,22 +197,21 @@ def orchestrate(
 ) -> int:
     _ = product_manager
     wake_event = threading.Event()
-    observer = Observer()
-    observer.schedule(
-        FeatureEventHandler(wake_event), str(files.feature_dir), recursive=True
-    )
-    observer.start()
-
-    ctx = PipelineContext(
-        files=files,
-        runtime=runtime,
-        agents=agents,
-        max_review_iterations=max_review_iterations,
-        prompts=build_initial_prompts(files),
-        github_config=github_config or GitHubConfig(),
+    session_file_monitor = start_session_file_monitor(
+        files.feature_dir,
+        files.created_files_log,
+        wake_event,
     )
 
     try:
+        ctx = PipelineContext(
+            files=files,
+            runtime=runtime,
+            agents=agents,
+            max_review_iterations=max_review_iterations,
+            prompts=build_initial_prompts(files),
+            github_config=github_config or GitHubConfig(),
+        )
         while True:
             wake_event.wait(timeout=1.0)
             wake_event.clear()
@@ -245,12 +222,13 @@ def orchestrate(
             if result == EXIT_FAILURE:
                 return 1
     finally:
-        observer.stop()
-        observer.join()
         try:
-            cleanup_mcp(files.feature_dir, files.project_dir)
+            session_file_monitor.stop()
         finally:
-            runtime.shutdown(keep_session)
+            try:
+                cleanup_mcp(files.feature_dir, files.project_dir)
+            finally:
+                runtime.shutdown(keep_session)
 
 
 def start_background_orchestrator(

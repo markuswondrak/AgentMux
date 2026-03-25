@@ -57,6 +57,7 @@ class RuntimeFiles:
     state: Path
     runtime_state: Path
     orchestrator_log: Path
+    created_files_log: Path
 
     def relative_path(self, path: Path) -> str:
         return path.relative_to(self.feature_dir).as_posix()
