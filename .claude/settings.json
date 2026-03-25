@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agentmux-research": {
+      "type": "stdio",
+      "command": "/home/markus/.venvs/doc-pipeline/bin/python3",
+      "args": [
+        "-m",
+        "agentmux.mcp_research_server"
+      ]
+    }
+  }
+}

@@ -39,7 +39,10 @@ The `agentmux init` command scaffolds a new project with configuration, setup fi
 - **Prompt stubs** — Generates optional project-specific instructions in `.agentmux/prompts/agents/<role>.md`
 - **Config validation** — Verifies the generated `.agentmux/config.yaml` parses correctly
 
-There are no test or lint commands — this is an MVP system without formal test infrastructure.
+Test command:
+- `python -m pytest tests`
+
+There are no lint commands in this repository.
 
 Default config resolution is layered:
 - built-in defaults from `agentmux/defaults/config.yaml`
