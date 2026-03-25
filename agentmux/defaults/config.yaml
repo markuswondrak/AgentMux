@@ -109,7 +109,7 @@ profiles:
     standard:
       model: gpt-5.3-codex
     low:
-      model: gpt-5.1-mini
+      model: gpt-5.1-codex-mini
 
   gemini:
     max:

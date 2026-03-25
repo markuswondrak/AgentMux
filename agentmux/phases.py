@@ -272,7 +272,7 @@ class ProductManagementPhase(_ResearchDispatchMixin, Phase):
 
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
         if event == "pm_completed":
-            ctx.runtime.deactivate("product-manager")
+            ctx.runtime.kill_primary("product-manager")
             write_phase(ctx, state, "planning", "pm_completed")
             return None
         self._handle_research_event(state, event, ctx, owner_role="product-manager")
@@ -561,7 +561,7 @@ class DocumentingPhase(Phase):
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
         if event != "docs_completed":
             return None
-        ctx.runtime.deactivate("docs")
+        ctx.runtime.kill_primary("docs")
         write_phase(ctx, state, "completing", "docs_completed")
         return None
 
@@ -592,7 +592,10 @@ class CompletingPhase(Phase):
         _ = state
         approval_path = ctx.files.completion_dir / "approval.json"
         if phase_input_changed(ctx, "approval", file_signature(approval_path)):
-            payload = json.loads(approval_path.read_text(encoding="utf-8"))
+            raw = approval_path.read_text(encoding="utf-8").strip()
+            if not raw:
+                return None
+            payload = json.loads(raw)
             if payload.get("action") == "approve":
                 return "approval_received"
         if phase_input_changed(ctx, "changes", file_signature(ctx.files.changes)):

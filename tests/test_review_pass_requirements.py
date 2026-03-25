@@ -147,6 +147,29 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             self.assertEqual(2, updated["review_iteration"])
             self.assertTrue(ctx.files.fix_request.exists())
 
+    def test_documenting_phase_completion_kills_docs_pane_and_transitions(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=True)
+
+            state = load_state(state_path)
+            state["phase"] = "documenting"
+            write_state(state_path, state)
+
+            ctx.files.docs_dir.mkdir(parents=True, exist_ok=True)
+            (ctx.files.docs_dir / "docs_done").touch()
+
+            phase = get_phase(load_state(state_path))
+            event = phase.detect_event(load_state(state_path), ctx)
+            self.assertEqual("docs_completed", event)
+            phase.handle_event(load_state(state_path), "docs_completed", ctx)
+
+            updated = load_state(state_path)
+            self.assertEqual("completing", updated["phase"])
+            self.assertEqual("docs_completed", updated["last_event"])
+            self.assertIn(("kill_primary", "docs"), ctx.runtime.calls)
+            self.assertNotIn(("deactivate", "docs"), ctx.runtime.calls)
+
 
 if __name__ == "__main__":
     unittest.main()

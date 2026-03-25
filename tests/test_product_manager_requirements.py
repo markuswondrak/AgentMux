@@ -155,6 +155,8 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             updated = load_state(state_path)
             self.assertEqual("planning", updated["phase"])
             self.assertEqual("pm_completed", updated["last_event"])
+            self.assertIn(("kill_primary", "product-manager"), ctx.runtime.calls)
+            self.assertNotIn(("deactivate", "product-manager"), ctx.runtime.calls)
 
     def test_product_management_research_dispatch_and_completion(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -228,10 +230,13 @@ class ProductManagerRequirementsTests(unittest.TestCase):
                 config_path: Path,
                 trust_snippet: str | None,
                 primary_role: str,
-            ) -> dict[str, str | None]:
+            ) -> tuple[dict[str, str | None], object]:
                 _ = (session_name, agents_arg, feature_dir_arg, config_path)
                 args_seen.append((primary_role, trust_snippet))
-                return {"_control": "%0", "architect": None, "product-manager": "%9"}
+                return (
+                    {"_control": "%0", "architect": None, "product-manager": "%9"},
+                    type("ZoneStub", (), {"visible": []})(),
+                )
 
             with patch("agentmux.runtime.tmux_new_session", side_effect=fake_tmux_new_session):
                 TmuxAgentRuntime.create(

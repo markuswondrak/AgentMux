@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 import time
 from pathlib import Path
 
@@ -20,6 +21,7 @@ GREEN = "\033[92m"   # bright green – phosphor
 YELLOW = "\033[33m"  # amber – idle / warning
 RED = "\033[31m"
 CYAN = "\033[36m"
+MAGENTA = "\033[35m"
 
 # Box-drawing characters (double-line style)
 _TL = "╔"
@@ -96,7 +98,7 @@ def _vlen(s: str) -> int:
     return len(_ANSI_RE.sub("", s))
 
 
-def _box_top(width: int, label: str = "PIPELINE") -> str:
+def _box_top(width: int, label: str = "AgentMux") -> str:
     inner = width - 2
     padded = f" {label} "
     right_fill = max(0, inner - 2 - len(padded))
@@ -258,12 +260,338 @@ def _read_feature_request(state_path: Path) -> str:
     return ""
 
 
+def _load_header_logo() -> list[tuple[str, str]]:
+    logo_path = Path(__file__).resolve().parent.parent / "logo.md"
+    try:
+        raw = logo_path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return [
+            (CYAN, "╭───────────╮"),
+            (CYAN, "│ AGENTMUX │"),
+            (MAGENTA, "╰───────────╯"),
+        ]
+
+    lines: list[str] = []
+    in_block = False
+    for line in raw:
+        if line.strip() == "```":
+            if in_block:
+                break
+            in_block = True
+            continue
+        if in_block:
+            lines.append(line)
+
+    if not lines:
+        lines = [line.rstrip("\n") for line in raw if line.strip()]
+    if not lines:
+        lines = [
+            "╭───────────╮",
+            "│ AGENTMUX │",
+            "╰───────────╯",
+        ]
+
+    logo: list[tuple[str, str]] = []
+    for idx, line in enumerate(lines):
+        if idx in (0, 1):
+            color = CYAN
+        else:
+            color = MAGENTA
+        logo.append((color, line))
+    return logo
+
+
+def _wrap_feature_lines(text: str, width: int, *, max_lines: int = 4) -> list[str]:
+    if width <= 0:
+        return [""] * max_lines
+    clean = " ".join(text.split())
+    if not clean:
+        return [""] * max_lines
+
+    wrapped = textwrap.wrap(
+        clean,
+        width=width,
+        break_long_words=True,
+        break_on_hyphens=False,
+    )
+    if len(wrapped) > max_lines:
+        head = wrapped[: max_lines - 1]
+        tail = " ".join(wrapped[max_lines - 1 :])
+        shortened = textwrap.shorten(tail, width=width, placeholder="…")
+        wrapped = head + [shortened]
+    while len(wrapped) < max_lines:
+        wrapped.append("")
+    return wrapped[:max_lines]
+
+
+def _truncate_text(text: str, width: int) -> str:
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width == 1:
+        return "…"
+    return text[: width - 1] + "…"
+
+
+def _separator(width: int) -> str:
+    return f"{DIM}{'─' * max(1, width)}{RESET}"
+
+
+def _section_title(label: str) -> str:
+    return f" {BOLD}{label}{RESET}"
+
+
+def _compose_line(
+    width: int,
+    *,
+    prefix_plain: str = "",
+    prefix_rendered: str = "",
+    left_plain: str = "",
+    left_rendered: str = "",
+    right_plain: str = "",
+    right_rendered: str = "",
+) -> str:
+    prefix_rendered = prefix_rendered or prefix_plain
+    left_rendered = left_rendered or left_plain
+    right_rendered = right_rendered or right_plain
+
+    if width <= 0:
+        return ""
+
+    available = max(0, width - len(prefix_plain))
+    if right_plain:
+        min_gap = 1
+        left_max = max(0, available - len(right_plain) - min_gap)
+        left_plain = _truncate_text(left_plain, left_max)
+        if _vlen(left_rendered) > len(left_plain):
+            left_rendered = left_plain
+        gap = available - len(left_plain) - len(right_plain)
+        if gap < min_gap:
+            right_max = max(0, available - len(left_plain) - min_gap)
+            right_plain = _truncate_text(right_plain, right_max)
+            if _vlen(right_rendered) > len(right_plain):
+                right_rendered = right_plain
+            gap = max(min_gap, available - len(left_plain) - len(right_plain))
+        return f"{prefix_rendered}{left_rendered}{' ' * gap}{right_rendered}"
+
+    left_plain = _truncate_text(left_plain, available)
+    if _vlen(left_rendered) > len(left_plain):
+        left_rendered = left_plain
+    return f"{prefix_rendered}{left_rendered}"
+
+
+def _spinner_frame() -> str:
+    frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    return frames[int(time.time() * 8) % len(frames)]
+
+
+def _render_feature_header(width: int, state_path: Path) -> list[str]:
+    feature_request = _read_feature_request(state_path)
+    header_logo = _load_header_logo()
+    if not header_logo:
+        return []
+    logo_width = max(_vlen(row) for _, row in header_logo)
+    gap = 2
+    text_width = width - logo_width - gap
+
+    if text_width >= 10:
+        feature_lines = _wrap_feature_lines(feature_request, text_width, max_lines=len(header_logo))
+        rows: list[str] = []
+        for (color, logo_row), feature_line in zip(header_logo, feature_lines):
+            padded_logo = logo_row + (" " * max(0, logo_width - _vlen(logo_row)))
+            logo_text = f"{BOLD}{color}{padded_logo}{RESET}"
+            rows.append(f"{logo_text}{' ' * gap}{feature_line}" if feature_line else logo_text)
+        return rows
+
+    if width >= logo_width:
+        rows = [f"{BOLD}{color}{logo_row}{RESET}" for color, logo_row in header_logo]
+        if feature_request:
+            rows.extend(line for line in _wrap_feature_lines(feature_request, width, max_lines=2) if line)
+        return rows
+
+    if feature_request:
+        return [line for line in _wrap_feature_lines(feature_request, max(1, width), max_lines=2) if line]
+    return []
+
+
 def _format_event(raw: str) -> str:
     return EVENT_LABELS.get(raw, raw.replace("_", " "))
 
 
+def _render_pipeline_section(
+    width: int,
+    *,
+    status: str,
+    last_event: str,
+    review_iter: int,
+    subplan_count: int,
+) -> list[str]:
+    lines = [_section_title("PIPELINE"), ""]
+    display_stages = [
+        stage
+        for stage in PIPELINE_STATES
+        if stage not in OPTIONAL_PHASES or stage == status
+    ]
+    gutter_plain = " │ "
+
+    try:
+        current_idx = PIPELINE_STATES.index(status)
+    except ValueError:
+        current_idx = -1
+
+    active_added = False
+
+    for stage in display_stages:
+        stage_label = stage.replace("_", " ")
+        try:
+            stage_idx = PIPELINE_STATES.index(stage)
+        except ValueError:
+            stage_idx = current_idx + 1
+
+        if stage == status:
+            lines.append(
+                _compose_line(
+                    width,
+                    prefix_plain=gutter_plain,
+                    prefix_rendered=f" {CYAN}│{RESET} ",
+                    left_plain=f"▶ {stage_label}",
+                    left_rendered=f"{BOLD}{CYAN}▶ {stage_label}{RESET}",
+                )
+            )
+            if last_event:
+                lines.append(
+                    _compose_line(
+                        width,
+                        prefix_plain=" │   ",
+                        prefix_rendered=f" {CYAN}│{RESET}   ",
+                        left_plain=f"› {_format_event(last_event)}",
+                        left_rendered=f"{DIM}› {_format_event(last_event)}{RESET}",
+                    )
+                )
+            if review_iter:
+                lines.append(
+                    _compose_line(
+                        width,
+                        prefix_plain=" │   ",
+                        prefix_rendered=f" {CYAN}│{RESET}   ",
+                        left_plain=f"› iter {review_iter}",
+                        left_rendered=f"{DIM}› iter {review_iter}{RESET}",
+                    )
+                )
+            if subplan_count > 1:
+                lines.append(
+                    _compose_line(
+                        width,
+                        prefix_plain=" │   ",
+                        prefix_rendered=f" {CYAN}│{RESET}   ",
+                        left_plain=f"› {subplan_count} subplans",
+                        left_rendered=f"{DIM}› {subplan_count} subplans{RESET}",
+                    )
+                )
+            active_added = True
+        elif stage_idx < current_idx:
+            lines.append(
+                _compose_line(
+                    width,
+                    prefix_plain=gutter_plain,
+                    prefix_rendered=f" {GREEN}│{RESET} ",
+                    left_plain=f"✓ {stage_label}",
+                    left_rendered=f"{GREEN}✓{RESET} {DIM}{stage_label}{RESET}",
+                )
+            )
+        else:
+            lines.append(
+                _compose_line(
+                    width,
+                    prefix_plain=gutter_plain,
+                    prefix_rendered=f" {DIM}│{RESET} ",
+                    left_plain=f"· {stage_label}",
+                    left_rendered=f"{DIM}· {stage_label}{RESET}",
+                )
+            )
+
+    if status not in PIPELINE_STATES and status != "waiting…" and not active_added:
+        status_label = status.replace("_", " ")
+        lines.append(
+            _compose_line(
+                width,
+                prefix_plain=gutter_plain,
+                prefix_rendered=f" {CYAN}│{RESET} ",
+                left_plain=f"▶ {status_label}",
+                left_rendered=f"{BOLD}{CYAN}▶ {status_label}{RESET}",
+            )
+        )
+
+    return lines
+
+
+def _render_agents_section(
+    width: int,
+    *,
+    agents: dict[str, dict[str, str]],
+    role_states: dict[str, str],
+) -> list[str]:
+    lines = [_section_title("AGENTS"), ""]
+
+    def _agent_row(display_name: str, agent_state: str, cfg: dict[str, str]) -> None:
+        if agent_state == "working":
+            lines.append(
+                _compose_line(
+                    width,
+                    prefix_plain=" ",
+                    prefix_rendered=" ",
+                    left_plain=f"● {display_name}",
+                    left_rendered=f"{CYAN}●{RESET} {BOLD}{display_name}{RESET}",
+                    right_plain="[ WORKING ]",
+                    right_rendered=f"{GREEN}[ WORKING ]{RESET}",
+                )
+            )
+        elif agent_state == "idle":
+            lines.append(
+                _compose_line(
+                    width,
+                    prefix_plain=" ",
+                    prefix_rendered=" ",
+                    left_plain=f"○ {display_name}",
+                    left_rendered=f"{DIM}○{RESET} {display_name}",
+                    right_plain="[ IDLE ]",
+                    right_rendered=f"{YELLOW}[ IDLE ]{RESET}",
+                )
+            )
+        else:
+            return
+
+        cli = cfg.get("cli", "?")
+        model = _trim_model(cfg.get("model", ""), cli)
+        info = _truncate_text(f"{cli}/{model}", max(1, width - 3))
+        lines.append(f"   {DIM}{info}{RESET}")
+        lines.append("")
+
+    for role, cfg in agents.items():
+        if role == "coder":
+            parallel_keys = sorted(
+                [k for k in role_states if k.startswith("coder_")],
+                key=lambda k: int(k.split("_")[1]) if k.split("_")[1].isdigit() else 0,
+            )
+            if parallel_keys:
+                for ckey in parallel_keys:
+                    if role_states.get(ckey, "inactive") == "inactive":
+                        continue
+                    _agent_row(f"coder {ckey.split('_')[1]}", role_states.get(ckey, "inactive"), cfg)
+            else:
+                if role_states.get("coder", "inactive") != "inactive":
+                    _agent_row("coder", role_states.get("coder", "inactive"), cfg)
+        else:
+            if role_states.get(role, "inactive") != "inactive":
+                _agent_row(role, role_states.get(role, "inactive"), cfg)
+
+    if lines[-1] == "":
+        lines.pop()
+    return lines
+
+
 def _render_research_section(width: int, state: dict, feature_dir: Path) -> list[str]:
-    """Return box rows for the RESEARCH section, or [] if no tasks exist."""
     code_tasks = state.get("research_tasks", {})
     web_tasks = state.get("web_research_tasks", {})
     if not code_tasks and not web_tasks:
@@ -279,30 +607,19 @@ def _render_research_section(width: int, state: dict, feature_dir: Path) -> list
     done_count = sum(1 for _, _, marker in all_tasks if (research_dir / marker).exists())
     total = len(all_tasks)
 
-    rows: list[str] = []
-    rows.append(_box_divider(width, f"RESEARCH {done_count}/{total}"))
-    rows.append(_box_row(width))
-
+    rows = [_section_title(f"RESEARCH {done_count}/{total}"), ""]
     pulse_on = int(time.time()) % 2 == 0
-    max_topic = max(1, width - 2 - 6)  # inner minus " X p· "
 
     for type_prefix, topic, marker in all_tasks:
         done = (research_dir / marker).exists()
-        slug = topic if len(topic) <= max_topic else topic[: max_topic - 1] + "…"
+        slug = _truncate_text(topic, max(1, width - 7))
         if done:
-            icon = f"{GREEN}✓{RESET}"
-            label = f"{DIM}{type_prefix}·{RESET}{slug}"
-            rows.append(_box_row(width, f" {icon} {label}"))
+            rows.append(f" {GREEN}✓{RESET} {DIM}{type_prefix}·{RESET} {slug}")
         else:
             if pulse_on:
-                icon = f"{YELLOW}⟳{RESET}"
-                label = f"{DIM}{type_prefix}·{RESET}{BOLD}{slug}{RESET}"
+                rows.append(f" {YELLOW}{_spinner_frame()}{RESET} {DIM}{type_prefix}·{RESET} {BOLD}{slug}{RESET}")
             else:
-                icon = f"{DIM}⟳{RESET}"
-                label = f"{DIM}{type_prefix}·{slug}{RESET}"
-            rows.append(_box_row(width, f" {icon} {label}"))
-
-    rows.append(_box_row(width))
+                rows.append(f" {DIM}{_spinner_frame()}{RESET} {DIM}{type_prefix}· {slug}{RESET}")
     return rows
 
 
@@ -311,10 +628,9 @@ def _render_documents_section(width: int, feature_dir: Path) -> list[str]:
     if not present:
         return []
 
-    rows = [_box_divider(width, "DOCUMENTS"), _box_row(width)]
+    rows = [_section_title("DOCUMENTS"), ""]
     for filename in present:
-        rows.append(_box_row(width, f" {GREEN}✓{RESET} {DIM}{filename}{RESET}"))
-    rows.append(_box_row(width))
+        rows.append(f" {GREEN}✓{RESET} {DIM}{_truncate_text(filename, max(1, width - 3))}{RESET}")
     return rows
 
 
@@ -336,140 +652,67 @@ def render(
     review_iter = state.get("review_iteration", 0)
     subplan_count = state.get("subplan_count", 0)
 
-    inner = width - 2
-    lines: list[str] = []
+    body: list[str] = []
+    header_rows = _render_feature_header(width, state_path)
+    if header_rows:
+        body.extend(header_rows)
+    body.append(_separator(width))
+    body.append("")
 
-    # ── top border ────────────────────────────────────────────────────────
-    lines.append(_box_top(width))
+    body.extend(
+        _render_pipeline_section(
+            width,
+            status=status,
+            last_event=last_event,
+            review_iter=review_iter,
+            subplan_count=subplan_count,
+        )
+    )
 
-    # ── feature request ───────────────────────────────────────────────────
-    feature_request = _read_feature_request(state_path)
-    if feature_request:
-        max_len = max(1, inner - 2)
-        if len(feature_request) > max_len:
-            feature_request = feature_request[: max_len - 1] + "…"
-        lines.append(_box_row(width, f" {DIM}{feature_request}{RESET}"))
-        lines.append(_box_divider(width))
+    agent_rows = _render_agents_section(width, agents=agents, role_states=role_states)
+    if agent_rows:
+        body.append("")
+        body.extend(agent_rows)
 
-    # ── pipeline stages ───────────────────────────────────────────────────
-    max_stage = max(1, inner - 5)
-    display_stages = [
-        stage
-        for stage in PIPELINE_STATES
-        if stage not in OPTIONAL_PHASES or stage == status
-    ]
-    lines.append(_box_row(width))
-    for stage in display_stages:
-        display = stage[:max_stage]
-        if stage == status:
-            color = CYAN if stage in OPTIONAL_PHASES else status_color(stage)
-            lines.append(_box_row(width, f"  {BOLD}{color}▶ {display}{RESET}"))
-        else:
-            lines.append(_box_row(width, f"  {DIM}· {display}{RESET}"))
-    lines.append(_box_row(width))
+    research_rows = _render_research_section(width, state, state_path.parent)
+    if research_rows:
+        body.append("")
+        body.extend(research_rows)
 
-    # unknown status not in list
-    if status not in PIPELINE_STATES and status != "waiting…":
-        color = status_color(status)
-        display = status[:max_stage]
-        lines.append(_box_row(width, f"  {BOLD}{color}▶ {display}{RESET}"))
+    document_rows = _render_documents_section(width, state_path.parent)
+    if document_rows:
+        body.append("")
+        body.extend(document_rows)
 
-    # extra pipeline metadata
-    if last_event:
-        label = _format_event(last_event)
-        max_ev = max(1, inner - 5)
-        ev = label if len(label) <= max_ev else label[: max_ev - 1] + "…"
-        lines.append(_box_row(width, f"   {DIM}↳{RESET} {DIM}{ev}{RESET}"))
-    if review_iter:
-        lines.append(_box_row(width, f"   {DIM}iter {review_iter}{RESET}"))
-    if subplan_count > 1:
-        lines.append(_box_row(width, f"   {DIM}{subplan_count} subplans{RESET}"))
-
-    # ── agents ────────────────────────────────────────────────────────────
-    lines.append(_box_divider(width, "AGENTS"))
-    lines.append(_box_row(width))
-
-    def _agent_row(display_name: str, agent_state: str, cfg: dict[str, str]) -> None:
-        max_name = 8
-        if agent_state == "working":
-            bullet = f"{GREEN}●{RESET}"
-            label = f"{GREEN}WORKING{RESET}"
-            name = f"{BOLD}{display_name:<{max_name}}{RESET}"
-        elif agent_state == "idle":
-            bullet = f"{YELLOW}●{RESET}"
-            label = f"{YELLOW}IDLE{RESET}"
-            name = f"{display_name:<{max_name}}"
-        else:
-            bullet = f"{DIM}○{RESET}"
-            label = f"{DIM}inactive{RESET}"
-            name = f"{DIM}{display_name:<{max_name}}{RESET}"
-        lines.append(_box_row(width, f" {bullet} {name} {label}"))
-        cli = cfg.get("cli", "?")
-        model = _trim_model(cfg.get("model", ""), cli)
-        info = f"{cli}/{model}"
-        max_info = max(1, inner - 4)
-        if len(info) > max_info:
-            info = info[: max_info - 1] + "…"
-        lines.append(_box_row(width, f"   {DIM}{info}{RESET}"))
-        lines.append(_box_row(width))
-
-    for role, cfg in agents.items():
-        if role == "coder":
-            parallel_keys = sorted(
-                [k for k in role_states if k.startswith("coder_")],
-                key=lambda k: int(k.split("_")[1]) if k.split("_")[1].isdigit() else 0,
-            )
-            if parallel_keys:
-                for ckey in parallel_keys:
-                    if role_states.get(ckey, "inactive") == "inactive":
-                        continue
-                    num = ckey.split("_")[1]
-                    _agent_row(f"coder {num}", role_states.get(ckey, "inactive"), cfg)
-            else:
-                if role_states.get("coder", "inactive") == "inactive":
-                    continue
-                _agent_row("coder", role_states.get("coder", "inactive"), cfg)
-        else:
-            if role_states.get(role, "inactive") == "inactive":
-                continue
-            _agent_row(role, role_states.get(role, "inactive"), cfg)
-
-    # ── research tasks ────────────────────────────────────────────────────
-    lines.extend(_render_research_section(width, state, state_path.parent))
-    lines.extend(_render_documents_section(width, state_path.parent))
-
-    # ── event log (fills remaining height, pinned above footer) ──────────
-    if log_path is not None:
-        footer_height = 3  # divider + elapsed + bottom
-        available_for_log = height - len(lines) - footer_height
-        # min 2 rows to bother showing (divider + at least one entry)
-        if available_for_log >= 2:
-            max_entries = available_for_log - 1  # -1 for the LOG divider
-            entries = _read_event_log(log_path, max_entries)
-            if entries:
-                lines.append(_box_divider(width, "LOG"))
-                max_phase = max(1, inner - 9)  # " HH:MM phase" = 1+5+1+phase
-                for ts, phase in entries:
-                    ph = phase[:max_phase]
-                    lines.append(_box_row(width, f" {DIM}{ts}  {ph}{RESET}"))
-
-    # ── elapsed footer (pinned to bottom) ─────────────────────────────────
     elapsed_seconds = max(0, int(time.time() - start_time))
     hours = elapsed_seconds // 3600
     minutes = (elapsed_seconds % 3600) // 60
     seconds = elapsed_seconds % 60
     elapsed_str = f"{hours}:{minutes:02d}:{seconds:02d}"
+    footer = [_separator(width), f"{DIM}◷ {elapsed_str}{RESET}"]
 
-    footer = [
-        _box_divider(width),
-        _box_row(width, f" {DIM}↑ {elapsed_str}{RESET}"),
-        _box_bottom(width),
-    ]
+    log_rows: list[str] = []
+    if log_path is not None:
+        reserved = len(body) + len(footer)
+        spacer = 1
+        available_for_log = height - reserved - spacer
+        if available_for_log >= 2:
+            max_entries = max(1, available_for_log - 2)
+            entries = _read_event_log(log_path, max_entries)
+            if entries:
+                log_rows = [_section_title("LOG"), ""]
+                max_phase = max(1, width - 8)
+                for ts, phase in entries:
+                    log_rows.append(f" {DIM}{ts}{RESET} › {_truncate_text(_format_event(phase), max_phase)}")
 
-    # pad middle with empty box rows so footer sits at the bottom
-    target_body = height - len(footer)
+    lines = list(body)
+    if log_rows:
+        lines.append("")
+        lines.extend(log_rows)
+
+    target_body = max(0, height - len(footer))
     while len(lines) < target_body:
-        lines.append(_box_row(width))
+        lines.append("")
 
     all_lines = lines[:target_body] + footer
     return "\n".join(all_lines[:height])
