@@ -2,7 +2,7 @@
 
 > Related source files: `agentmux/models.py`, `agentmux/state.py`, `agentmux/session_events.py`, `agentmux/pipeline.py`, `agentmux/phases.py`, `agentmux/handlers.py`
 
-Agents communicate via files in `.multi-agent/<feature-name>/`. Files are grouped by phase subdirectories and created on-demand as needed, while a small set of root runtime artifacts is maintained directly by the orchestrator.
+Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are grouped by phase subdirectories and created on-demand as needed, while a small set of root runtime artifacts is maintained directly by the orchestrator.
 
 ## Root files
 

@@ -124,7 +124,7 @@ class MonitorTests(unittest.TestCase):
             self.assertIn("› plan ready", output)
             self.assertNotIn("plan_written", output)
 
-    def test_render_shows_documents_section_in_open_layout(self) -> None:
+    def test_render_does_not_show_documents_section_even_when_docs_exist(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             state_path = feature_dir / "state.json"
@@ -141,10 +141,9 @@ class MonitorTests(unittest.TestCase):
 
             output = self._strip_ansi(self._render(feature_dir, width=15, height=24))
 
-            self.assertIn(" DOCUMENTS", output)
-            self.assertIn("› design …", output)
-            self.assertIn("✓ 02_planning", output)
-            self.assertIn("✓ 04_design", output)
+            self.assertNotIn(" DOCUMENTS", output)
+            self.assertNotIn("02_planning", output)
+            self.assertNotIn("04_design", output)
 
     def test_render_research_section_uses_numbered_research_directory(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -254,6 +253,30 @@ class MonitorTests(unittest.TestCase):
             self.assertIn("11:20 > planning", output)
             self.assertIn("11:20 > implementing", output)
             self.assertNotIn("╠══ LOG ╣", output)
+
+    def test_render_phase_log_entries_in_white_for_contrast(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            log_path = feature_dir / "status_log.txt"
+            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            log_path.write_text("2026-03-21 11:20:05  planning\n", encoding="utf-8")
+
+            with patch("agentmux.monitor.time.time", return_value=0.0):
+                output = monitor.render(
+                    session_name="session-x",
+                    state_path=state_path,
+                    runtime_state_path=runtime_state_path,
+                    agents={},
+                    width=40,
+                    height=24,
+                    start_time=0.0,
+                    log_path=log_path,
+                )
+
+            self.assertIn(f"{monitor.WHITE}> planning{monitor.RESET}", output)
 
     def test_render_merges_phase_log_with_allowed_created_files(self) -> None:
         with tempfile.TemporaryDirectory() as td:

@@ -118,7 +118,7 @@ def load_runtime_config(project_dir: Path, config_path: Path | None) -> LoadedCo
 
 
 def multi_agent_root(project_dir: Path) -> Path:
-    return project_dir / ".multi-agent"
+    return project_dir / ".agentmux" / ".sessions"
 
 
 def list_resumable_sessions(project_dir: Path) -> list[tuple[Path, dict]]:
@@ -379,9 +379,9 @@ def main() -> int:
             if resume_target.is_absolute():
                 feature_dir = resume_target.resolve()
             else:
-                in_multi_agent = multi_agent_root(project_dir) / resume_target
-                if in_multi_agent.exists():
-                    feature_dir = in_multi_agent.resolve()
+                in_session_root = multi_agent_root(project_dir) / resume_target
+                if in_session_root.exists():
+                    feature_dir = in_session_root.resolve()
                 else:
                     feature_dir = (project_dir / resume_target).resolve()
         if not feature_dir.exists():

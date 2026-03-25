@@ -86,6 +86,8 @@ def load_layered_config(
 
 
 def infer_project_dir(feature_dir: Path) -> Path:
+    if feature_dir.parent.name == ".sessions" and feature_dir.parent.parent.name == ".agentmux":
+        return feature_dir.parent.parent.parent
     if feature_dir.parent.name == ".multi-agent":
         return feature_dir.parent.parent
     return feature_dir.parent

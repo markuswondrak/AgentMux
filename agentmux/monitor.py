@@ -26,6 +26,7 @@ YELLOW = "\033[33m"  # amber – idle / warning
 RED = "\033[31m"
 CYAN = "\033[36m"
 MAGENTA = "\033[35m"
+WHITE = "\033[97m"
 
 # Box-drawing characters (double-line style)
 _TL = "╔"
@@ -80,13 +81,6 @@ EVENT_LABELS: dict[str, str] = {
     "confirmation_sent": "awaiting ok",
     "pm_completed": "pm done",
 }
-DOCUMENT_FILES = [
-    "02_planning/plan.md",
-    "02_planning/tasks.md",
-    "04_design/design.md",
-    "06_review/review.md",
-    "08_completion/changes.md",
-]
 MONITOR_HEADER_LOGO = [
     (CYAN, "╭───────────╮"),
     (CYAN, "│ ▄▀█ █▀▄▀█ │"),
@@ -119,6 +113,7 @@ class MonitorLogEntry:
     time_str: str
     sort_order: int
     message: str
+    phase_event: bool
 
 
 def get_terminal_size() -> tuple[int, int]:
@@ -291,6 +286,7 @@ def _read_status_log_entries(log_path: Path) -> list[MonitorLogEntry]:
                 time_str=timestamp[11:16],
                 sort_order=0,
                 message=f"> {_format_event(phase)}",
+                phase_event=True,
             )
         )
     return entries
@@ -316,6 +312,7 @@ def _read_created_file_log_entries(log_path: Path) -> list[MonitorLogEntry]:
                 time_str=timestamp[11:16],
                 sort_order=1,
                 message=f"+ {relative_path}",
+                phase_event=False,
             )
         )
     return entries
@@ -684,17 +681,6 @@ def _render_research_section(width: int, state: dict, feature_dir: Path) -> list
     return rows
 
 
-def _render_documents_section(width: int, feature_dir: Path) -> list[str]:
-    present = [filename for filename in DOCUMENT_FILES if (feature_dir / filename).exists()]
-    if not present:
-        return []
-
-    rows = [_section_title("DOCUMENTS"), ""]
-    for filename in present:
-        rows.append(f" {GREEN}✓{RESET} {DIM}{_truncate_text(filename, max(1, width - 3))}{RESET}")
-    return rows
-
-
 def render(
     session_name: str,
     state_path: Path,
@@ -741,11 +727,6 @@ def render(
         body.append("")
         body.extend(research_rows)
 
-    document_rows = _render_documents_section(width, state_path.parent)
-    if document_rows:
-        body.append("")
-        body.extend(document_rows)
-
     elapsed_seconds = max(0, int(time.time() - start_time))
     hours = elapsed_seconds // 3600
     minutes = (elapsed_seconds % 3600) // 60
@@ -765,8 +746,12 @@ def render(
                 log_rows = [_section_title("LOG"), ""]
                 max_message = max(1, width - 8)
                 for entry in entries:
+                    message = _truncate_text(entry.message, max_message)
+                    rendered_message = (
+                        f"{WHITE}{message}{RESET}" if entry.phase_event else message
+                    )
                     log_rows.append(
-                        f" {DIM}{entry.time_str}{RESET} {_truncate_text(entry.message, max_message)}"
+                        f" {DIM}{entry.time_str}{RESET} {rendered_message}"
                     )
 
     lines = list(body)

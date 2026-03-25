@@ -191,7 +191,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
 
             send_text.assert_called_once_with(
                 "%7",
-                "Code-research on 'market-fit' is complete. Read 03_research/code-market-fit/summary.md first, then 03_research/code-market-fit/detail.md if you need more detail, and continue from there.",
+                "Code-research on 'market-fit' is complete. Read 03_research/code-market-fit/summary.md and continue from there.",
             )
 
     def test_infer_resume_phase_handles_product_management_marker(self) -> None:

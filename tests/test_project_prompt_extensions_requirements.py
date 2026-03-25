@@ -143,6 +143,20 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertIn(injected, prompt)
             self.assertNotIn("{project_instructions}", prompt)
 
+    def test_docs_prompt_reads_and_updates_readme_and_claude(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "docs prompt", "session")
+
+            prompt = build_docs_prompt(files)
+
+            self.assertIn(f"- {project_dir}/README.md", prompt)
+            self.assertIn(f"- {project_dir}/CLAUDE.md", prompt)
+            self.assertIn(f"Update {project_dir}/README.md, {project_dir}/CLAUDE.md", prompt)
+
     def test_coder_prompt_includes_completed_research_references(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
