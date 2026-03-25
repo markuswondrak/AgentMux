@@ -59,7 +59,7 @@ This is a **tmux-based multi-agent orchestration system**. Instead of calling AI
 `agentmux/pipeline.py` is the orchestrator implementation (started as a background subprocess with `--orchestrate`).
 The repo-root `pipeline.py` is a backward-compatible shim that calls `agentmux.pipeline:main`.
 The orchestrator:
-1. Creates a feature directory under `.multi-agent/<feature-name>/`
+1. Creates a feature directory under `.agentmux/.sessions/<feature-name>/`
 2. Spawns a tmux session with a **control pane** (left, 15 cols) and agent panes (right)
    - Pane border titles are enabled so each pane shows its role name
 3. Starts a session file monitor that watches the feature directory with `watchdog` and normalizes file activity to feature-relative paths
@@ -69,7 +69,7 @@ The orchestrator:
 
 ### State machine
 
-The workflow progresses through these states (stored in `.multi-agent/<feature>/state.json`):
+The workflow progresses through these states (stored in `.agentmux/.sessions/<feature>/state.json`):
 
 ```
 product_management? → planning → designing? → implementing → reviewing
@@ -93,7 +93,7 @@ Role routing in these phases:
 pipeline.py                    — backward-compatible CLI shim (`agentmux.pipeline:main`)
 agentmux/pipeline.py           — CLI parsing, config loading, orchestrate() loop
 agentmux/session_events.py     — feature-directory watchdog integration, session file-event dispatch, created-files logging
-agentmux/config.py                  — layered config loading, legacy compatibility, role resolution
+agentmux/config.py                  — layered config loading, legacy compatibility, role resolution, project-dir inference from session paths
 agentmux/init.py                    — project initialization wizard (detect CLIs, role config, setup files)
 agentmux/models.py                  — AgentConfig (cli/model/args/env/trust_snippet) and RuntimeFiles dataclasses
 agentmux/mcp_config.py              — provider-native MCP setup plus runtime env wiring for architect + product-manager

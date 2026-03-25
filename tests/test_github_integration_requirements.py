@@ -265,7 +265,7 @@ class PipelineIssueTriggerTests(unittest.TestCase):
                 result = pipeline.main()
 
             self.assertEqual(0, result)
-            feature_dir = project_dir / ".multi-agent" / "20260322-203228-fix-api-auth-flow"
+            feature_dir = project_dir / ".agentmux" / ".sessions" / "20260322-203228-fix-api-auth-flow"
             self.assertTrue(feature_dir.exists())
             req_text = (feature_dir / "requirements.md").read_text(encoding="utf-8")
             self.assertIn("Issue-sourced requirements", req_text)
@@ -310,7 +310,9 @@ class PipelineIssueTriggerTests(unittest.TestCase):
 
             self.assertEqual(0, result)
             state = json.loads(
-                (project_dir / ".multi-agent" / "demo" / "state.json").read_text(encoding="utf-8")
+                (project_dir / ".agentmux" / ".sessions" / "demo" / "state.json").read_text(
+                    encoding="utf-8"
+                )
             )
             self.assertFalse(state["gh_available"])
             printed = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)

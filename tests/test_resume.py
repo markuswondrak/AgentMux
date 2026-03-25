@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from agentmux.config import infer_project_dir
 import agentmux.pipeline as pipeline
 from agentmux.models import SESSION_DIR_NAMES
 from agentmux.state import infer_resume_phase, write_state
@@ -32,7 +33,7 @@ class ResumeCliAndSessionTests(unittest.TestCase):
     def test_list_resumable_sessions_sorts_by_updated_at_desc(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            root = project_dir / ".multi-agent"
+            root = project_dir / ".agentmux" / ".sessions"
             older = root / "20260101-100000-older"
             newer = root / "20260101-200000-newer"
             no_state = root / "ignore-me"
@@ -59,6 +60,14 @@ class ResumeCliAndSessionTests(unittest.TestCase):
             sessions = pipeline.list_resumable_sessions(project_dir)
 
             self.assertEqual([newer, older], [path for path, _ in sessions])
+
+    def test_multi_agent_root_uses_agentmux_sessions_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            self.assertEqual(
+                project_dir / ".agentmux" / ".sessions",
+                pipeline.multi_agent_root(project_dir),
+            )
 
     def test_select_session_errors_when_none(self) -> None:
         with self.assertRaises(SystemExit) as ctx:
@@ -212,7 +221,7 @@ class ResumeMainFlowTests(unittest.TestCase):
     def test_main_resume_by_name_updates_state_and_starts_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            feature_dir = project_dir / ".multi-agent" / "20260101-120000-demo"
+            feature_dir = project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
             feature_dir.mkdir(parents=True)
             initial_state = {
                 "feature_dir": str(feature_dir),
@@ -274,6 +283,14 @@ class ResumeMainFlowTests(unittest.TestCase):
             self.assertEqual("resumed", updated_state["last_event"])
             self.assertEqual({"b": "done"}, updated_state["research_tasks"])
             self.assertEqual({"y": "done"}, updated_state["web_research_tasks"])
+
+
+class ProjectDirInferenceTests(unittest.TestCase):
+    def test_infer_project_dir_from_agentmux_sessions_path(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            feature_dir = project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            self.assertEqual(project_dir, infer_project_dir(feature_dir))
 
 
 if __name__ == "__main__":

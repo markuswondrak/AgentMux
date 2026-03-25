@@ -23,9 +23,9 @@ Typical flow:
 
 1. Dispatch one or more research topics (`code` and/or `web`).
 2. Stop and wait idle. AgentMux will send the owner agent a completion message when each topic finishes.
-3. Read `summary.md` first and `detail.md` only when needed.
+3. Read `summary.md` first. `detail.md` remains available when deeper implementation context is needed.
 
-Research completion stays file-driven: the orchestrator detects `done`, updates task state, and sends a follow-up message telling the owner agent which `summary.md` / `detail.md` files to read. AgentMux passes the active session directory explicitly as `feature_dir`, so the server does not rely on provider-specific environment propagation.
+Research completion stays file-driven: the orchestrator detects `done`, updates task state, and sends a follow-up message pointing the owner agent to `summary.md`. `detail.md` remains available as a secondary artifact. AgentMux passes the active session directory explicitly as `feature_dir`, so the server does not rely on provider-specific environment propagation.
 
 Completed research topics are also used for coder handoff: coder prompts include references to `03_research/<type>-<topic>/summary.md` (and `detail.md` when present) for topics that have a `done` marker.
 

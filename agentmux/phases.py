@@ -174,8 +174,7 @@ class _ResearchDispatchMixin:
                     owner_pane,
                     (
                         f"Code-research on '{topic}' is complete. Read "
-                        f"{ctx.files.relative_path(ctx.files.research_dir / f'code-{topic}' / 'summary.md')} first, then "
-                        f"{ctx.files.relative_path(ctx.files.research_dir / f'code-{topic}' / 'detail.md')} if you need more detail, and continue from there."
+                        f"{ctx.files.relative_path(ctx.files.research_dir / f'code-{topic}' / 'summary.md')} and continue from there."
                     ),
                 )
             research_tasks = {
@@ -226,8 +225,7 @@ class _ResearchDispatchMixin:
                     owner_pane,
                     (
                         f"Web research on '{topic}' is complete. Read "
-                        f"{ctx.files.relative_path(ctx.files.research_dir / f'web-{topic}' / 'summary.md')} first, then "
-                        f"{ctx.files.relative_path(ctx.files.research_dir / f'web-{topic}' / 'detail.md')} if you need more detail, and continue from there."
+                        f"{ctx.files.relative_path(ctx.files.research_dir / f'web-{topic}' / 'summary.md')} and continue from there."
                     ),
                 )
             web_research_tasks = {

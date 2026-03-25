@@ -226,7 +226,7 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             self.assertEqual(("finish_task", "web-researcher", "openai-models"), ctx.runtime.calls[-1])
             send_text.assert_called_once_with(
                 "%1",
-                "Web research on 'openai-models' is complete. Read 03_research/web-openai-models/summary.md first, then 03_research/web-openai-models/detail.md if you need more detail, and continue from there.",
+                "Web research on 'openai-models' is complete. Read 03_research/web-openai-models/summary.md and continue from there.",
             )
             updated = load_state(state_path)
             self.assertEqual("done", updated["web_research_tasks"]["openai-models"])

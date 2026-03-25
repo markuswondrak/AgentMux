@@ -277,7 +277,7 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             self.assertEqual(("finish_task", "code-researcher", "auth-module"), ctx.runtime.calls[-1])
             send_text.assert_called_once_with(
                 "%1",
-                "Code-research on 'auth-module' is complete. Read 03_research/code-auth-module/summary.md first, then 03_research/code-auth-module/detail.md if you need more detail, and continue from there.",
+                "Code-research on 'auth-module' is complete. Read 03_research/code-auth-module/summary.md and continue from there.",
             )
             updated = load_state(state_path)
             self.assertEqual("done", updated["research_tasks"]["auth-module"])
