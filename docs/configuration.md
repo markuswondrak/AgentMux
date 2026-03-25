@@ -1,6 +1,6 @@
 # Agent Configuration
 
-> Related source files: `agentmux/config.py`, `agentmux/init.py`, `agentmux/providers.py`, `agentmux/models.py`, `.agentmux/config.yaml`
+> Related source files: `agentmux/config.py`, `agentmux/init.py`, `agentmux/providers.py`, `agentmux/models.py`, `agentmux/mcp_config.py`, `agentmux/pipeline.py`, `agentmux/tmux.py`, `agentmux/defaults/config.yaml`, `.agentmux/config.yaml`
 
 ## Overview
 
@@ -136,7 +136,7 @@ Compatibility rules:
 |---------|--------|-------|--------|----------|
 | max | `opus` | `gpt-5.4` | `gemini-2.5-pro` | `anthropic/claude-opus-4-6` |
 | standard | `sonnet` | `gpt-5.3-codex` | `gemini-2.5-flash` | `anthropic/claude-sonnet-4-20250514` |
-| low | `haiku` | `gpt-5.1-mini` | `gemini-2.5-flash-lite` | `anthropic/claude-haiku-4-5-20251001` |
+| low | `haiku` | `gpt-5.1-codex-mini` | `gemini-2.5-flash-lite` | `anthropic/claude-haiku-4-5-20251001` |
 
 ## Resolution
 
@@ -146,6 +146,18 @@ Each role resolves to an `AgentConfig` with:
 - `model_flag`
 - `model`
 - `args`
+- `env` (optional runtime environment variables to prepend via `env KEY=VALUE ...`)
 - `trust_snippet`
 
 The tmux runtime launches agents from that fully resolved config. The orchestrator still never talks to model APIs directly.
+
+## Runtime MCP injection for research tools
+
+MCP server wiring for research is applied at runtime (not authored in project config). During pipeline startup, `setup_mcp(...)` injects the `agentmux-research` server for `architect` and `product-manager` only:
+
+- Claude: appends `--mcp-config <feature_dir>/mcp_claude.json`
+- Codex: sets `CODEX_HOME=<feature_dir>/codex_home` with staged `config.toml`
+- Gemini: writes `.gemini/settings.json` only if absent; skips injection when user config already exists
+- OpenCode: sets `OPENCODE_CONFIG=<feature_dir>/mcp_opencode.json`
+
+Claude additionally needs explicit allowlisting, so defaults include `mcp__agentmux-research__*` in architect/product-manager `--allowedTools`. Other bundled providers already run in approval modes that auto-approve tool calls.

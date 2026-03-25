@@ -19,6 +19,7 @@ class PackagingRequirementsTests(unittest.TestCase):
         self.assertIn("PyYAML>=6.0.0", project["dependencies"])
         self.assertIn("questionary>=2.0.0", project["dependencies"])
         self.assertIn("rich>=13.0.0", project["dependencies"])
+        self.assertIn("mcp>=1.0.0", project["dependencies"])
 
         scripts = project["scripts"]
         self.assertEqual("agentmux.pipeline:main", scripts["agentmux"])
@@ -42,6 +43,11 @@ class PackagingRequirementsTests(unittest.TestCase):
     def test_pipeline_module_lives_inside_agentmux_package(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         self.assertTrue((repo_root / "agentmux" / "pipeline.py").exists())
+
+    def test_requirements_include_mcp_sdk_dependency(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        requirements = (repo_root / "requirements.txt").read_text(encoding="utf-8")
+        self.assertIn("mcp>=1.0.0", requirements)
 
 
 if __name__ == "__main__":

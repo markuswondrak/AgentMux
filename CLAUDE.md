@@ -89,10 +89,12 @@ pipeline.py                    — backward-compatible CLI shim (`agentmux.pipel
 agentmux/pipeline.py           — CLI parsing, config loading, orchestrate() loop
 agentmux/config.py                  — layered config loading, legacy compatibility, role resolution
 agentmux/init.py                    — project initialization wizard (detect CLIs, role config, setup files)
-agentmux/models.py                  — AgentConfig (with trust_snippet/model_flag) and RuntimeFiles dataclasses
+agentmux/models.py                  — AgentConfig (cli/model/args/env/trust_snippet) and RuntimeFiles dataclasses
+agentmux/mcp_config.py              — provider-specific MCP injection/cleanup for architect + product-manager
+agentmux/mcp_research_server.py     — shared MCP server exposing research dispatch/await tools
 agentmux/providers.py               — built-in provider compatibility helpers for profiles/models
 agentmux/state.py                   — state.json CRUD, feature-directory lifecycle, parse_review_verdict
-agentmux/tmux.py                    — all tmux interaction (sessions, panes, send-keys, trust-prompt)
+agentmux/tmux.py                    — all tmux interaction (sessions, panes, send-keys, trust-prompt, env-prefixed launch command)
 agentmux/monitor.py                 — control pane status display (pipeline status, agent list, documents)
 agentmux/runtime.py                 — TmuxAgentRuntime, spawns agents with resolved trust_snippet
 agentmux/prompts.py                 — loads markdown templates and renders them with str.format_map()

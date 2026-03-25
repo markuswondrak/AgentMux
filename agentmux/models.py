@@ -11,6 +11,7 @@ class AgentConfig:
     model: str
     model_flag: str = "--model"
     args: list[str] = None
+    env: dict[str, str] | None = None
     trust_snippet: str | None = None
 
 

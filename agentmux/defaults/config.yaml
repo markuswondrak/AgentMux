@@ -21,12 +21,12 @@ launchers:
         - --permission-mode
         - acceptEdits
         - --allowedTools
-        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
       product-manager:
         - --permission-mode
         - acceptEdits
         - --allowedTools
-        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
       reviewer:
         - --permission-mode
         - acceptEdits

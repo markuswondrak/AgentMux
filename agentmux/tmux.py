@@ -25,8 +25,12 @@ def run_command(
 
 
 def build_agent_command(agent: AgentConfig) -> str:
+    env_prefix = ""
+    if agent.env:
+        env_items = [f"{shlex.quote(str(key))}={shlex.quote(str(value))}" for key, value in agent.env.items()]
+        env_prefix = f"env {' '.join(env_items)} "
     extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
-    return f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}" + (
+    return env_prefix + f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}" + (
         f" {extra_args}" if extra_args else ""
     )
 

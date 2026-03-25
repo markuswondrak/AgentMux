@@ -19,7 +19,8 @@ roles:
   designer:
     profile: standard
   docs:
-    profile: low
+    provider: codex
+    profile: standard
   code-researcher:
     profile: low
   web-researcher:
