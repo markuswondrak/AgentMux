@@ -8,6 +8,8 @@ from pathlib import Path
 from .models import AgentConfig
 
 MONITOR_WIDTH = 40
+MONITOR_MIN_WIDTH = MONITOR_WIDTH
+MONITOR_MAX_WIDTH = MONITOR_WIDTH
 MAIN_WINDOW = "pipeline"
 
 
@@ -181,20 +183,32 @@ def _get_pane_width(pane_id: str | None) -> int | None:
         return None
 
 
-def _enforce_monitor_width(session_name: str) -> None:
-    """Pin the monitor pane to exactly MONITOR_WIDTH columns."""
+def _enforce_monitor_min_width(session_name: str) -> None:
+    """Clamp the monitor pane width to the supported range."""
     control = _find_control_pane(session_name)
     if not control:
         return
     width = _get_pane_width(control)
-    if width == MONITOR_WIDTH:
+    if width is None:
         return
-    _log(f"_enforce_monitor_width: resizing {control} to {MONITOR_WIDTH}")
+    target_width: int | None = None
+    if width < MONITOR_MIN_WIDTH:
+        target_width = MONITOR_MIN_WIDTH
+    elif width > MONITOR_MAX_WIDTH:
+        target_width = MONITOR_MAX_WIDTH
+    if target_width is None:
+        return
+    _log(f"_enforce_monitor_min_width: resizing {control} to {target_width}")
     run_command(
-        ["tmux", "resize-pane", "-t", control, "-x", str(MONITOR_WIDTH)],
+        ["tmux", "resize-pane", "-t", control, "-x", str(target_width)],
         check=False,
     )
     _log_layout(session_name)
+
+
+def _enforce_monitor_width(session_name: str) -> None:
+    """Backward-compatible alias for monitor width enforcement."""
+    _enforce_monitor_min_width(session_name)
 
 
 def _find_any_hidden_pane(session_name: str) -> str | None:
@@ -286,7 +300,7 @@ class ContentZone:
 
         self._visible = [pane_id]
         self._enforce_invariant()
-        _enforce_monitor_width(self._session)
+        _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
     def show_parallel(self, pane_ids: list[str]) -> None:
@@ -315,7 +329,7 @@ class ContentZone:
 
         self._visible = visible
         self._enforce_invariant()
-        _enforce_monitor_width(self._session)
+        _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
     def hide(self, pane_id: str) -> None:
@@ -333,7 +347,7 @@ class ContentZone:
             self._visible = [current for current in self._visible if current != pane_id]
 
         self._enforce_invariant()
-        _enforce_monitor_width(self._session)
+        _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
     def hide_all(self) -> None:
@@ -351,7 +365,7 @@ class ContentZone:
             run_command(["tmux", "swap-pane", "-s", placeholder, "-t", keep], check=False)
             self._visible = []
             self._enforce_invariant()
-            _enforce_monitor_width(self._session)
+            _enforce_monitor_min_width(self._session)
             _log_layout(self._session)
 
     def remove(self, pane_id: str) -> None:
@@ -362,7 +376,7 @@ class ContentZone:
         _log(f"ContentZone.remove: kill-pane {pane_id}")
         run_command(["tmux", "kill-pane", "-t", pane_id], check=False)
         self._visible = [current for current in self._visible if current != pane_id]
-        _enforce_monitor_width(self._session)
+        _enforce_monitor_min_width(self._session)
 
     def _visible_from_snapshot(self, known_panes: list[str]) -> list[str]:
         known = {pane_id for pane_id in known_panes if pane_id}
@@ -401,7 +415,7 @@ class ContentZone:
         if control:
             _log(f"ContentZone: join-pane -h -s {placeholder} -t {control}")
             run_command(["tmux", "join-pane", "-h", "-s", placeholder, "-t", control], check=False)
-            _enforce_monitor_width(self._session)
+            _enforce_monitor_min_width(self._session)
 
     def _enforce_invariant(self) -> None:
         if self._visible:
@@ -514,8 +528,10 @@ def tmux_new_session(
     )
     _set_placeholder_id(session_name, placeholder_pane)
 
-    _log(f"tmux_new_session: enforcing monitor width {MONITOR_WIDTH}")
-    _enforce_monitor_width(session_name)
+    _log(
+        f"tmux_new_session: enforcing monitor width {MONITOR_MIN_WIDTH}-{MONITOR_MAX_WIDTH}"
+    )
+    _enforce_monitor_min_width(session_name)
     accept_trust_prompt(primary_pane, snippet=trust_snippet)
 
     panes: dict[str, str | None] = {

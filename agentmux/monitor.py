@@ -85,6 +85,12 @@ DOCUMENT_FILES = [
     "06_review/review.md",
     "08_completion/changes.md",
 ]
+MONITOR_HEADER_LOGO = [
+    (CYAN, "╭───────────╮"),
+    (CYAN, "│ ▄▀█ █▀▄▀█ │"),
+    (MAGENTA, "│ █▀█ █ ▀ █ │"),
+    (MAGENTA, "╰───────────╯"),
+]
 
 
 def get_terminal_size() -> tuple[int, int]:
@@ -263,44 +269,7 @@ def _read_feature_request(state_path: Path) -> str:
 
 
 def _load_header_logo() -> list[tuple[str, str]]:
-    logo_path = Path(__file__).resolve().parent.parent / "logo.md"
-    try:
-        raw = logo_path.read_text(encoding="utf-8").splitlines()
-    except Exception:
-        return [
-            (CYAN, "╭───────────╮"),
-            (CYAN, "│ AGENTMUX │"),
-            (MAGENTA, "╰───────────╯"),
-        ]
-
-    lines: list[str] = []
-    in_block = False
-    for line in raw:
-        if line.strip() == "```":
-            if in_block:
-                break
-            in_block = True
-            continue
-        if in_block:
-            lines.append(line)
-
-    if not lines:
-        lines = [line.rstrip("\n") for line in raw if line.strip()]
-    if not lines:
-        lines = [
-            "╭───────────╮",
-            "│ AGENTMUX │",
-            "╰───────────╯",
-        ]
-
-    logo: list[tuple[str, str]] = []
-    for idx, line in enumerate(lines):
-        if idx in (0, 1):
-            color = CYAN
-        else:
-            color = MAGENTA
-        logo.append((color, line))
-    return logo
+    return list(MONITOR_HEADER_LOGO)
 
 
 def _wrap_feature_lines(text: str, width: int, *, max_lines: int = 4) -> list[str]:
