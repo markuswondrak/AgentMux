@@ -76,6 +76,11 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "project-specific prompts", "session")
+            files.planning_dir.mkdir(parents=True, exist_ok=True)
+            (files.planning_dir / "plan_meta.json").write_text(
+                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/prompts.md"]}',
+                encoding="utf-8",
+            )
 
             cases: list[tuple[str, str, str, object]] = [
                 ("agents", "architect", "EXT-ARCHITECT", lambda runtime: build_architect_prompt(runtime)),
@@ -143,19 +148,41 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertIn(injected, prompt)
             self.assertNotIn("{project_instructions}", prompt)
 
-    def test_docs_prompt_reads_and_updates_readme_and_claude(self) -> None:
+    def test_docs_prompt_targets_architect_declared_doc_files(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "docs prompt", "session")
+            files.planning_dir.mkdir(parents=True, exist_ok=True)
+            (files.planning_dir / "plan_meta.json").write_text(
+                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md", "docs/prompts.md"]}',
+                encoding="utf-8",
+            )
 
             prompt = build_docs_prompt(files)
 
-            self.assertIn(f"- {project_dir}/README.md", prompt)
-            self.assertIn(f"- {project_dir}/CLAUDE.md", prompt)
-            self.assertIn(f"Update {project_dir}/README.md, {project_dir}/CLAUDE.md", prompt)
+            self.assertIn(f"- {project_dir}/docs/file-protocol.md", prompt)
+            self.assertIn(f"- {project_dir}/docs/prompts.md", prompt)
+            self.assertNotIn(f"- {project_dir}/README.md", prompt)
+            self.assertNotIn(f"- {project_dir}/CLAUDE.md", prompt)
+
+    def test_docs_prompt_fails_when_plan_meta_lacks_doc_files(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "docs prompt", "session")
+            files.planning_dir.mkdir(parents=True, exist_ok=True)
+            (files.planning_dir / "plan_meta.json").write_text(
+                '{"needs_design": false, "needs_docs": true}',
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(RuntimeError):
+                build_docs_prompt(files)
 
     def test_coder_prompt_includes_completed_research_references(self) -> None:
         with tempfile.TemporaryDirectory() as td:

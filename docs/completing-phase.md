@@ -2,7 +2,11 @@
 
 > Related source files: `agentmux/phases.py` (CompletingPhase), `agentmux/prompts/commands/confirmation.md`, `agentmux/state.py`
 
-When the review passes, the workflow first terminates all `coder` panes (primary and parallel workers), then enters the `documenting` phase (if docs updates are needed) and finally transitions to `completing`.
+When the review passes, the workflow first terminates all `coder` panes (primary and parallel workers), then checks `02_planning/plan_meta.json`:
+- if `needs_docs` is `true`, it enters `documenting` (and requires a configured `docs` role)
+- if `needs_docs` is `false`, it transitions directly to `completing`
+
+In `documenting`, the docs prompt is scoped only to `plan_meta.json` `doc_files`. `README.md` and `CLAUDE.md` are updated only if explicitly listed there.
 
 ## Flow
 

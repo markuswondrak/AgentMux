@@ -50,6 +50,10 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("write the final plan to `02_planning/plan.md`", architect_prompt)
             self.assertIn("also write `02_planning/tasks.md`", architect_prompt)
             self.assertIn("write `02_planning/plan_meta.json`", architect_prompt)
+            self.assertIn("needs_design", architect_prompt)
+            self.assertIn("needs_docs", architect_prompt)
+            self.assertIn("doc_files", architect_prompt)
+            self.assertIn("empty list when `needs_docs` is `false`", architect_prompt)
             self.assertIn("05_implementation/done_1", coder_prompt)
             self.assertIn("Do not update state.json", coder_prompt)
 
@@ -75,6 +79,10 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("- 02_planning/tasks.md", prompt)
             self.assertIn("- 08_completion/changes.md", prompt)
             self.assertIn("02_planning/plan_meta.json", prompt)
+            self.assertIn("needs_design", prompt)
+            self.assertIn("needs_docs", prompt)
+            self.assertIn("doc_files", prompt)
+            self.assertIn("empty list when `needs_docs` is `false`", prompt)
             self.assertNotIn("1. Example task", prompt)
 
     def test_architect_prompt_no_longer_accepts_review_mode_and_reviewer_prompt_handles_review(self) -> None:

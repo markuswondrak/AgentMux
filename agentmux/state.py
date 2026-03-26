@@ -188,6 +188,7 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
         return "planning"
 
     plan_meta_path = planning_dir / "plan_meta.json"
+    plan_meta: dict[str, Any] = {}
     if plan_meta_path.exists():
         try:
             plan_meta = json.loads(plan_meta_path.read_text(encoding="utf-8"))
@@ -227,7 +228,8 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
     if verdict is None:
         return "reviewing"
 
-    if verdict == "pass" and not (docs_dir / "docs_done").exists():
+    needs_docs = bool(plan_meta.get("needs_docs"))
+    if verdict == "pass" and needs_docs and not (docs_dir / "docs_done").exists():
         return "documenting"
 
     return "completing"

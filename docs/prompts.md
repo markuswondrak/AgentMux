@@ -60,7 +60,9 @@ Behavior contract:
 
 Current split:
 - `build_architect_prompt()` renders planning prompts only
+- planning/replanning prompt contracts require `02_planning/plan_meta.json` with `needs_design`, `needs_docs`, and `doc_files` (empty list when `needs_docs` is `false`)
 - `build_product_manager_prompt()` renders the PM analysis prompt
 - `build_coder_prompt()` / `build_coder_subplan_prompt()` render coder implementation prompts with completion marker instructions and optional research handoff references
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
+- `build_docs_prompt()` requires `02_planning/plan_meta.json` with `needs_docs: true` and a non-empty `doc_files` list, then injects those file paths as the only docs-update scope
 - `build_confirmation_prompt()` renders the confirmation command prompt used in completion

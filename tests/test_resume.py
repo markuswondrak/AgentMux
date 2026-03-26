@@ -153,10 +153,30 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
+            self._write_json(
+                feature_dir / PLANNING_DIR / "plan_meta.json",
+                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md"]}',
+            )
             (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
             (feature_dir / REVIEW_DIR / "review.md").write_text("Verdict: pass\n", encoding="utf-8")
             state = {"phase": "failed", "subplan_count": 1}
             self.assertEqual("documenting", infer_resume_phase(feature_dir, state))
+
+    def test_failed_review_pass_without_docs_requirement_resumes_completing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
+            self._write_json(
+                feature_dir / PLANNING_DIR / "plan_meta.json",
+                '{"needs_design": false, "needs_docs": false, "doc_files": []}',
+            )
+            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
+            (feature_dir / REVIEW_DIR / "review.md").write_text("Verdict: pass\n", encoding="utf-8")
+            state = {"phase": "failed", "subplan_count": 1}
+            self.assertEqual("completing", infer_resume_phase(feature_dir, state))
 
     def test_failed_when_docs_done_resumes_completing(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -166,6 +186,10 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / DOCS_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
+            self._write_json(
+                feature_dir / PLANNING_DIR / "plan_meta.json",
+                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md"]}',
+            )
             (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
             (feature_dir / REVIEW_DIR / "review.md").write_text("Verdict: pass\n", encoding="utf-8")
             (feature_dir / DOCS_DIR / "docs_done").write_text("", encoding="utf-8")

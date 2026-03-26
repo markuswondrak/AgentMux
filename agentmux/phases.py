@@ -474,7 +474,13 @@ class ReviewingPhase(Phase):
         if event == "review_passed":
             ctx.runtime.finish_many("coder")
             ctx.runtime.kill_primary("coder")
-            next_phase = "documenting" if "docs" in ctx.agents else "completing"
+            meta = load_plan_meta(ctx.files.planning_dir)
+            needs_docs = bool(meta.get("needs_docs"))
+            if needs_docs and "docs" not in ctx.agents:
+                raise RuntimeError(
+                    "plan_meta.json requires docs phase (`needs_docs: true`) but no docs role is configured."
+                )
+            next_phase = "documenting" if needs_docs else "completing"
             write_phase(ctx, state, next_phase, "review_passed")
             return None
         if event != "review_failed":

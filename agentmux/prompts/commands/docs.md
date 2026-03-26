@@ -5,15 +5,17 @@ Session directory: {feature_dir}
 Read these files first:
 - requirements.md
 - 02_planning/plan.md
+- 02_planning/plan_meta.json
 - state.json
-- {project_dir}/README.md
-- {project_dir}/CLAUDE.md
+{doc_targets_block}
 
 Your job:
 1. Read `requirements.md`, `02_planning/plan.md` to confirm what was implemented.
-2. Update {project_dir}/README.md, {project_dir}/CLAUDE.md, and any other relevant documentation files referenced there in the repository so docs match the implemented changes.
+2. Update only the architect-declared documentation scope from `02_planning/plan_meta.json` so docs match the implemented changes:
+{doc_targets_block}
 3. Keep documentation changes focused and accurate to what is already implemented.
-4. FINAL STEP ONLY — once all documentation updates are complete, create the completion marker file `07_docs/docs_done` in the session directory and leave it empty. This must be the very last action you take.
+4. Do not update `README.md` or `CLAUDE.md` unless they are explicitly listed in `doc_files`.
+5. FINAL STEP ONLY — once all documentation updates are complete, create the completion marker file `07_docs/docs_done` in the session directory and leave it empty. This must be the very last action you take.
 
 {project_instructions}
 

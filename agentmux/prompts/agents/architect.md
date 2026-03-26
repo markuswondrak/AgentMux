@@ -61,7 +61,10 @@ Do not poll for `done` yourself. AgentMux will notify you when `03_research/code
 9. Wait for the user to review. Incorporate any feedback and revise the draft as needed. Repeat until the user explicitly approves.
 10. Only after the user explicitly approves (e.g. says 'approved', 'looks good', 'go ahead'), write the final plan to `02_planning/plan.md`.
 11. After writing `02_planning/plan.md`, also write `02_planning/tasks.md` as a numbered checklist derived from the plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z"). If you created sub-plans, group tasks under the corresponding `## Sub-plan <N>: <title>` header.
-12. After writing `02_planning/plan.md` and `02_planning/tasks.md`, write `02_planning/plan_meta.json` with this exact shape: `{{ "needs_design": true|false }}`. Set it to `true` only when the plan requires a dedicated design handoff before coding.
+12. After writing `02_planning/plan.md` and `02_planning/tasks.md`, write `02_planning/plan_meta.json` with this exact shape: `{{ "needs_design": true|false, "needs_docs": true|false, "doc_files": ["path/to/doc.md", ...] }}`.
+Set `needs_design` to `true` only when the plan requires a dedicated design handoff before coding.
+Set `needs_docs` to `true` only when documentation updates are required for this feature scope.
+`doc_files` must list the documentation files expected to change when `needs_docs` is `true`, and must be an empty list when `needs_docs` is `false`.
 13. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
 
 {project_instructions}

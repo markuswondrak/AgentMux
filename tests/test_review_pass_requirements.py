@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -67,6 +68,18 @@ class ReviewPassRequirementsTests(unittest.TestCase):
         )
         return ctx, files.state
 
+    def _write_plan_meta(self, ctx: PipelineContext, *, needs_docs: bool, doc_files: list[str] | None = None) -> None:
+        ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
+        plan_meta = {
+            "needs_design": False,
+            "needs_docs": needs_docs,
+            "doc_files": doc_files if doc_files is not None else [],
+        }
+        (ctx.files.planning_dir / "plan_meta.json").write_text(
+            json.dumps(plan_meta) + "\n",
+            encoding="utf-8",
+        )
+
     def test_reviewer_prompt_requires_review_md_for_pass_and_fail(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
@@ -103,6 +116,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=True)
+            self._write_plan_meta(ctx, needs_docs=True, doc_files=["docs/file-protocol.md"])
 
             state = load_state(state_path)
             state["phase"] = "reviewing"
@@ -115,10 +129,11 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             self.assertEqual("documenting", updated["phase"])
             self.assertEqual("review_passed", updated["last_event"])
 
-    def test_handle_review_passed_moves_to_completing_without_docs_agent(self) -> None:
+    def test_handle_review_passed_moves_to_completing_when_docs_not_required(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
-            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=False)
+            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=True)
+            self._write_plan_meta(ctx, needs_docs=False, doc_files=[])
 
             state = load_state(state_path)
             state["phase"] = "reviewing"
@@ -130,6 +145,20 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             updated = load_state(state_path)
             self.assertEqual("completing", updated["phase"])
             self.assertEqual("review_passed", updated["last_event"])
+
+    def test_handle_review_passed_raises_when_docs_required_but_docs_agent_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=False)
+            self._write_plan_meta(ctx, needs_docs=True, doc_files=["README.md"])
+
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            write_state(state_path, state)
+
+            phase = get_phase(load_state(state_path))
+            with self.assertRaises(RuntimeError):
+                phase.handle_event(load_state(state_path), "review_passed", ctx)
 
     def test_handle_review_failed_moves_to_fixing_before_limit(self) -> None:
         with tempfile.TemporaryDirectory() as td:

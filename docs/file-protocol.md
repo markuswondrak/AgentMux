@@ -21,7 +21,11 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
 ## Planning (`02_planning/`)
 
 - `architect_prompt.md` / `changes_prompt.txt` — architect prompts
-- `plan.md` / `tasks.md` / `plan_meta.json` — architect planning artifacts
+- `plan.md` / `tasks.md` — architect planning artifacts
+- `plan_meta.json` — architect workflow-intent metadata:
+  - `needs_design` (`true`/`false`) — whether to run a dedicated design handoff
+  - `needs_docs` (`true`/`false`) — whether review-pass must enter docs before completion
+  - `doc_files` (`string[]`) — expected docs update targets when `needs_docs` is `true`; must be `[]` when `needs_docs` is `false`
 - `plan_*.md` — subplan files for parallel coder runs
 
 ## Research (`03_research/`)
@@ -46,6 +50,7 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
 ## Docs (`07_docs/`)
 
 - `docs_prompt.txt` / `docs_done`
+- `docs_prompt.txt` must be scoped by `02_planning/plan_meta.json` `doc_files`; no implicit `README.md`/`CLAUDE.md` targets are added
 
 ## Completion (`08_completion/`)
 
