@@ -46,6 +46,9 @@ class AgentRuntime(Protocol):
     def spawn_task(self, role: str, task_id: str, prompt_file: Path) -> None:
         ...
 
+    def hide_task(self, role: str, task_id: int | str) -> None:
+        ...
+
     def finish_task(self, role: str, task_id: str) -> None:
         ...
 
@@ -388,6 +391,14 @@ class TmuxAgentRuntime:
         )
         send_prompt(pane_id, prompt_file)
         self.parallel_panes.setdefault(role, {})[task_id] = pane_id
+        self._persist_snapshot()
+
+    def hide_task(self, role: str, task_id: int | str) -> None:
+        workers = self.parallel_panes.get(role, {})
+        pane_id = workers.get(task_id)
+        if not pane_id or len(workers) <= 1:
+            return
+        self._zone.hide(pane_id)
         self._persist_snapshot()
 
     def finish_task(self, role: str, task_id: str) -> None:

@@ -60,6 +60,7 @@ def _parse_changed_paths(status_output: str) -> list[str]:
 
 
 def _reset_implementation_progress(state: dict) -> None:
+    state["completed_subplans"] = []
     state["implementation_group_total"] = 0
     state["implementation_group_index"] = 0
     state["implementation_group_mode"] = None
@@ -524,6 +525,16 @@ class ImplementingPhase(Phase):
             all_indexes.extend(int(index) for index in list(group["marker_indexes"]))
         return max(all_indexes, default=1)
 
+    @staticmethod
+    def _completed_subplans(state: dict) -> set[int]:
+        completed: set[int] = set()
+        for value in list(state.get("completed_subplans", [])):
+            try:
+                completed.add(int(value))
+            except (TypeError, ValueError):
+                continue
+        return completed
+
     def _dispatch_active_group(
         self,
         ctx: PipelineContext,
@@ -578,6 +589,7 @@ class ImplementingPhase(Phase):
 
         schedule = self._schedule(ctx)
         state["subplan_count"] = self._total_marker_count(schedule)
+        state["completed_subplans"] = []
         active_group_index = _first_incomplete_group_index(ctx.files.implementation_dir, schedule)
         _set_implementation_progress(state, schedule, active_group_index)
         state["updated_at"] = now_iso()
@@ -616,11 +628,38 @@ class ImplementingPhase(Phase):
         if group_index <= 0:
             return None
         active_group = schedule[group_index - 1]
+        changed_done: list[int] = []
+        for marker_index in [int(index) for index in list(active_group["marker_indexes"])]:
+            if phase_input_changed(
+                ctx,
+                f"done_{marker_index}",
+                file_signature(ctx.files.implementation_dir / f"done_{marker_index}"),
+            ):
+                changed_done.append(marker_index)
         if _all_markers_complete(ctx.files.implementation_dir, active_group):
             return "implementation_group_completed"
+        if str(active_group["mode"]) != "parallel":
+            return None
+        completed = self._completed_subplans(state)
+        for marker_index in changed_done:
+            if marker_index not in completed:
+                return f"subplan_completed:{marker_index}"
         return None
 
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
+        if event.startswith("subplan_completed:"):
+            try:
+                task_id = int(event.split(":", 1)[1])
+            except ValueError:
+                return None
+            ctx.runtime.hide_task("coder", task_id)
+            completed = self._completed_subplans(state)
+            completed.add(task_id)
+            state["completed_subplans"] = sorted(completed)
+            state["updated_at"] = now_iso()
+            state["updated_by"] = "pipeline"
+            write_state(ctx.files.state, state)
+            return None
         if event not in {"implementation_group_completed", "implementation_completed"}:
             return None
         schedule = self._schedule(ctx)
@@ -629,6 +668,7 @@ class ImplementingPhase(Phase):
 
         if next_group_index is None:
             _set_implementation_progress(state, schedule, active_group_index=None)
+            state["completed_subplans"] = []
             state["updated_at"] = now_iso()
             state["updated_by"] = "pipeline"
             write_state(ctx.files.state, state)
@@ -637,6 +677,7 @@ class ImplementingPhase(Phase):
             return None
 
         _set_implementation_progress(state, schedule, active_group_index=next_group_index)
+        state["completed_subplans"] = []
         state["updated_at"] = now_iso()
         state["updated_by"] = "pipeline"
         write_state(ctx.files.state, state)
@@ -710,6 +751,10 @@ class FixingPhase(Phase):
         _ = state
         if state.get("last_event") == "review_failed":
             reset_markers(ctx.files.implementation_dir, "done_*")
+        state["completed_subplans"] = []
+        state["updated_at"] = now_iso()
+        state["updated_by"] = "pipeline"
+        write_state(ctx.files.state, state)
         ctx.runtime.kill_primary("coder")
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,

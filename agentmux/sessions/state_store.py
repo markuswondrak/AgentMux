@@ -138,6 +138,7 @@ def create_feature_files(
         "product_manager": bool(product_manager),
         "last_event": "feature_created",
         "subplan_count": 0,
+        "completed_subplans": [],
         "review_iteration": 0,
         "implementation_group_total": 0,
         "implementation_group_index": 0,

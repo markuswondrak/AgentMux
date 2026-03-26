@@ -30,6 +30,9 @@ class _FakeRuntime:
     def finish_many(self, role: str) -> None:
         self.calls.append(("finish_many", role))
 
+    def hide_task(self, role: str, task_id: int | str) -> None:
+        self.calls.append(("hide_task", role, task_id))
+
     def kill_primary(self, role: str) -> None:
         self.calls.append(("kill_primary", role))
 

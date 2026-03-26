@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 
 from agentmux.shared.models import AgentConfig
-from agentmux.workflow.phases import run_phase_cycle
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
+from agentmux.workflow.phases import get_phase, run_phase_cycle
 from agentmux.workflow.transitions import PipelineContext
 
 
@@ -28,6 +28,9 @@ class FakeRuntime:
 
     def finish_many(self, role: str) -> None:
         self.calls.append(("finish_many", role))
+
+    def hide_task(self, role: str, task_id: int | str) -> None:
+        self.calls.append(("hide_task", role, task_id))
 
     def kill_primary(self, role: str) -> None:
         self.calls.append(("kill_primary", role))
@@ -110,6 +113,43 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             self.assertEqual("parallel", updated["implementation_group_mode"])
             self.assertEqual(["plan_1", "plan_2"], updated["implementation_active_plan_ids"])
             self.assertEqual([], updated["implementation_completed_group_ids"])
+
+    def test_implementing_hides_completed_subplan_when_other_coders_remain(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            ctx, state_path = _make_ctx(tmp_path / "feature")
+            ctx.files.plan.parent.mkdir(parents=True, exist_ok=True)
+            ctx.files.plan.write_text(
+                "# Plan\n\n## Sub-plan 1: A\n\nDo A\n\n## Sub-plan 2: B\n\nDo B\n",
+                encoding="utf-8",
+            )
+            state = load_state(state_path)
+            state["phase"] = "implementing"
+            write_state(state_path, state)
+
+            run_phase_cycle(load_state(state_path), ctx)
+            phase = get_phase(load_state(state_path))
+            self.assertEqual("parallel", load_state(state_path)["implementation_group_mode"])
+
+            ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+            (ctx.files.implementation_dir / "done_1").write_text("", encoding="utf-8")
+            event = phase.detect_event(load_state(state_path), ctx)
+            self.assertEqual("subplan_completed:1", event)
+
+            result = phase.handle_event(load_state(state_path), event, ctx)
+
+            self.assertIsNone(result)
+            self.assertEqual(
+                [
+                    ("kill_primary", "coder"),
+                    ("send_many", "coder", ["coder_prompt_1.txt", "coder_prompt_2.txt"]),
+                    ("hide_task", "coder", 1),
+                ],
+                ctx.runtime.calls,
+            )
+            updated = load_state(state_path)
+            self.assertEqual([1], updated["completed_subplans"])
+            self.assertIsNone(phase.detect_event(updated, ctx))
 
     def test_enter_reviewing_builds_review_prompt_inline(self) -> None:
         with tempfile.TemporaryDirectory() as td:

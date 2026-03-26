@@ -142,6 +142,27 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual({}, snapshot["parallel"])
             self.assertEqual(["%2"], snapshot["visible"])
 
+    def test_hide_task_hides_parallel_worker_but_keeps_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            zone = FakeZone("session-x", visible=["%2", "%99"])
+            runtime = TmuxAgentRuntime(
+                feature_dir=feature_dir,
+                session_name="session-x",
+                agents=_agents(),
+                primary_panes={"architect": "%1", "coder": "%2"},
+                zone=zone,
+                parallel_panes={"coder": {1: "%2", 2: "%99"}},
+            )
+
+            runtime.hide_task("coder", 1)
+
+            self.assertEqual(["%2"], zone.hidden)
+            self.assertEqual({1: "%2", 2: "%99"}, runtime.parallel_panes["coder"])
+            snapshot = json.loads((feature_dir / "runtime_state.json").read_text(encoding="utf-8"))
+            self.assertEqual({"1": "%2", "2": "%99"}, snapshot["parallel"]["coder"])
+            self.assertEqual(["%99"], snapshot["visible"])
+
     def test_attach_imports_legacy_panes_file_and_discards_stale_parallel_workers(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
