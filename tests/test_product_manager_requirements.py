@@ -122,7 +122,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             self.assertEqual("product_management", state["phase"])
             self.assertTrue(state["product_manager"])
 
-    def test_build_product_manager_prompt_renders_paths_and_outputs(self) -> None:
+    def test_build_product_manager_prompt_renders_paths_and_design_handoff_rules(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td) / "project"
             feature_dir = Path(td) / "feature"
@@ -135,7 +135,10 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             self.assertIn(str(project_dir), prompt)
             self.assertIn("01_product_management/analysis.md", prompt)
             self.assertIn("01_product_management/done", prompt)
-            self.assertIn("04_design/design.md", prompt)
+            self.assertNotIn("04_design/design.md", prompt)
+            self.assertNotIn("/frontend-design", prompt)
+            self.assertIn("needs_design: true", prompt)
+            self.assertIn("must not create design artifacts itself", prompt)
 
     def test_product_management_phase_entry_and_completion_transition(self) -> None:
         with tempfile.TemporaryDirectory() as td:

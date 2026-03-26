@@ -8,7 +8,7 @@ dist/
 build/
 
 # Multi-agent working directory
-.multi-agent/
+.agentmux/.sessions
 .claude/
 
 # OS

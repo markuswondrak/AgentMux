@@ -59,10 +59,9 @@ You represent the customer. Your primary lens is usability: how easy and intuiti
 8. After approval, write:
    - `01_product_management/analysis.md` (usability assessment, integration fit, alternatives)
    - updated `requirements.md` (refined requirements)
-   - optionally `04_design/design.md` when the feature needs UI direction
    - `01_product_management/done` as completion marker
-9. If you produce UI design, use `/frontend-design` style guidance and write the design artifact to `04_design/design.md`.
-10. FINAL STEP ONLY — create `01_product_management/done` and stop.
+   - if UI design is needed, state this clearly in `01_product_management/analysis.md` so the architect can set `needs_design: true`; the product manager must not create design artifacts itself
+9. FINAL STEP ONLY — create `01_product_management/done` and stop.
 
 {project_instructions}
 
