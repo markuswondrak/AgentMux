@@ -568,37 +568,48 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertIn(state["interruption_resume_command"], printed)
             self.assertIn(state["interruption_log_path"], printed)
 
-    def test_run_treats_cleaned_up_feature_dir_after_attach_as_success(self) -> None:
+    def test_main_treats_cleaned_up_feature_dir_after_attach_as_success(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            app = application.PipelineApplication(project_dir)
             args = self._main_args()
             loaded = self._loaded_config()
 
-            def cleanup_completed_session(feature_dir: Path, _keep_session: bool, product_manager: bool) -> None:
+            def cleanup_completed_session(
+                _config_path: Path | None,
+                _project_dir: Path,
+                feature_dir: Path,
+                _keep_session: bool,
+                product_manager: bool = False,
+            ) -> None:
                 _ = product_manager
                 shutil.rmtree(feature_dir)
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config", return_value=loaded
+            with patch("agentmux.pipeline.parse_args", return_value=args), patch(
+                "agentmux.pipeline.ensure_dependencies", return_value=None
             ), patch(
-                "agentmux.pipeline.application.tmux_session_exists", return_value=False
+                "agentmux.pipeline.Path.cwd", return_value=project_dir
             ), patch(
-                "agentmux.integrations.github.check_gh_available", return_value=False
+                "agentmux.pipeline.load_runtime_config", return_value=loaded
             ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
+                "agentmux.pipeline.tmux_session_exists", return_value=False
             ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents", return_value=loaded.agents
+                "agentmux.pipeline.check_gh_available", return_value=False
             ), patch(
-                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
+                "agentmux.pipeline.ensure_mcp_config", return_value=None
             ), patch.object(
-                app,
-                "_start_background_orchestrator",
+                pipeline,
+                "setup_mcp",
+                return_value=loaded.agents,
+            ), patch(
+                "agentmux.pipeline.TmuxAgentRuntime.create", return_value=object()
+            ), patch.object(
+                pipeline,
+                "start_background_orchestrator",
                 side_effect=cleanup_completed_session,
             ), patch(
-                "agentmux.pipeline.application.subprocess.run", return_value=None
+                "agentmux.pipeline.subprocess.run", return_value=None
             ):
-                result = app.run(args)
+                result = pipeline.main()
 
             self.assertEqual(0, result)
 

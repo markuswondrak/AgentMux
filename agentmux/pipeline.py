@@ -674,6 +674,12 @@ def main() -> int:
         print(f"Feature directory: {feature_dir}")
         print(f"tmux session: {session_name}")
         subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
+        if not files.state.exists():
+            if not feature_dir.exists():
+                return 0
+            raise SystemExit(
+                f"Pipeline session state disappeared before completion status could be read: {files.state}"
+            )
         post_attach_state = load_state(files.state)
         if str(post_attach_state.get("phase")) == "failed":
             report = _report_from_state(post_attach_state, feature_dir, files=files)
