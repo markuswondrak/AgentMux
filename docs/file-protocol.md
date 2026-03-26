@@ -1,6 +1,6 @@
 # Shared File Protocol
 
-> Related source files: `agentmux/models.py`, `agentmux/state.py`, `agentmux/session_events.py`, `agentmux/pipeline.py`, `agentmux/phases.py`, `agentmux/handlers.py`
+> Related source files: `agentmux/models.py`, `agentmux/state.py`, `agentmux/event_bus.py`, `agentmux/session_events.py`, `agentmux/interruption_sources.py`, `agentmux/pipeline.py`, `agentmux/phases.py`, `agentmux/handlers.py`
 
 Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are grouped by phase subdirectories and created on-demand as needed, while a small set of root runtime artifacts is maintained directly by the orchestrator.
 
@@ -59,10 +59,11 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
 
 ## Key functions
 
-- `orchestrate()` in `agentmux/pipeline.py` — main file-watch loop; starts/stops the session file monitor and drives phase-cycle transitions
-- `start_session_file_monitor()` in `agentmux/session_events.py` — wires wake + created-file listeners, seeds pre-existing files, and starts the recursive watchdog observer
-- `FeatureEventHandler` / `SessionFileEventDispatcher` in `agentmux/session_events.py` — normalize watchdog events under the feature directory and fan them out to listeners
+- `orchestrate()` / `build_orchestrator_event_bus()` in `agentmux/pipeline.py` — run the phase loop on top of a shared session event bus
+- `EventBus` in `agentmux/event_bus.py` — generic dispatcher plus start/stop lifecycle for dedicated event sources
+- `FileEventSource` / `FeatureEventHandler` in `agentmux/session_events.py` — normalize watchdog activity under the feature directory and publish `file.*` events
 - `CreatedFilesLogListener` / `seed_existing_files()` in `agentmux/session_events.py` — enforce created-file logging semantics (`created_files.log`, first-seen only, bootstrap coverage)
+- `InterruptionEventSource` in `agentmux/interruption_sources.py` — publish interruption events when registered tmux panes disappear
 - `build_initial_prompts()` in `agentmux/prompts.py` — builds only the architect prompt at startup
 - `build_*_prompt()` in `agentmux/prompts.py` — loads and renders the markdown template for each phase; called lazily by handlers
 - Handler functions in `agentmux/handlers.py` — each builds and writes its prompt file just before sending to agent

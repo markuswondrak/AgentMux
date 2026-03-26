@@ -92,7 +92,9 @@ Role routing in these phases:
 ```
 pipeline.py                    — backward-compatible CLI shim (`agentmux.pipeline:main`)
 agentmux/pipeline.py           — CLI parsing, config loading, orchestrate() loop
-agentmux/session_events.py     — feature-directory watchdog integration, session file-event dispatch, created-files logging
+agentmux/event_bus.py               — shared session event bus plus source lifecycle wiring
+agentmux/session_events.py     — feature-directory watchdog integration, file-event source, created-files logging
+agentmux/interruption_sources.py    — runtime interruption source for manually closed / missing tmux panes
 agentmux/config.py                  — layered config loading, legacy compatibility, role resolution, project-dir inference from session paths
 agentmux/init.py                    — project initialization wizard (detect CLIs, role config, setup files)
 agentmux/models.py                  — AgentConfig (cli/model/args/env/trust_snippet) and RuntimeFiles dataclasses

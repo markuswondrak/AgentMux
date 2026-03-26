@@ -194,20 +194,28 @@ def get_role_states(session_name: str, runtime_state_path: Path) -> dict[str, st
 
     try:
         result_all = subprocess.run(
-            ["tmux", "list-panes", "-t", session_name, "-a", "-F", "#{pane_id}"],
+            ["tmux", "list-panes", "-t", session_name, "-a", "-F", "#{pane_id} #{pane_dead}"],
             capture_output=True,
             text=True,
             check=False,
         )
-        all_ids = {t.strip() for t in result_all.stdout.splitlines() if t.strip()}
+        all_ids = {
+            parts[0]
+            for line in result_all.stdout.splitlines()
+            if (parts := line.strip().split()) and len(parts) >= 2 and parts[1] != "1"
+        }
 
         result_pipeline = subprocess.run(
-            ["tmux", "list-panes", "-t", f"{session_name}:pipeline", "-F", "#{pane_id}"],
+            ["tmux", "list-panes", "-t", f"{session_name}:pipeline", "-F", "#{pane_id} #{pane_dead}"],
             capture_output=True,
             text=True,
             check=False,
         )
-        pipeline_ids = {t.strip() for t in result_pipeline.stdout.splitlines() if t.strip()}
+        pipeline_ids = {
+            parts[0]
+            for line in result_pipeline.stdout.splitlines()
+            if (parts := line.strip().split()) and len(parts) >= 2 and parts[1] != "1"
+        }
     except Exception:
         return {}
 

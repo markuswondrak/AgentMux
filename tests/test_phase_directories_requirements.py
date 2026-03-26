@@ -3,22 +3,43 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import ANY, patch
+from unittest.mock import patch
 
 import agentmux.pipeline as pipeline
+from agentmux.event_bus import SessionEvent
 from agentmux.handlers import load_plan_meta
 from agentmux.plan_parser import split_plan_into_subplans
 from agentmux.prompts import write_prompt_file
-from agentmux.state import create_feature_files
+from agentmux.state import create_feature_files, load_state
 from agentmux.transitions import EXIT_SUCCESS
 
 
-class _FakeSessionFileMonitor:
+class _FakeEventBus:
     def __init__(self) -> None:
+        self.registered = []
+        self.start_calls = 0
         self.stop_calls = 0
+
+    def register(self, listener) -> None:
+        self.registered.append(listener)
+
+    def start(self) -> None:
+        self.start_calls += 1
 
     def stop(self) -> None:
         self.stop_calls += 1
+
+
+class _InterruptionOnStartBus(_FakeEventBus):
+    def start(self) -> None:
+        super().start()
+        event = SessionEvent(
+            kind="interruption.pane_exited",
+            source="interruption",
+            payload={"message": "Agent pane coder 2 was closed or exited (for example via Ctrl-C)."},
+        )
+        for listener in list(self.registered):
+            listener(event)
 
 
 class _FakeRuntime:
@@ -93,19 +114,19 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
             self.assertTrue((planning_dir / "plan_1.md").exists())
             self.assertTrue((planning_dir / "plan_2.md").exists())
 
-    def test_orchestrate_starts_and_stops_session_file_monitor(self) -> None:
+    def test_orchestrate_starts_and_stops_event_bus(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "phase dirs", "session-x")
-            monitor = _FakeSessionFileMonitor()
+            bus = _FakeEventBus()
 
             with patch(
-                "agentmux.pipeline.start_session_file_monitor",
-                return_value=monitor,
-            ) as start_monitor_mock, patch(
+                "agentmux.pipeline.build_orchestrator_event_bus",
+                return_value=bus,
+            ) as build_bus_mock, patch(
                 "agentmux.pipeline.build_initial_prompts",
                 return_value={},
             ), patch(
@@ -121,12 +142,41 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
                 )
 
             self.assertEqual(0, result)
-            start_monitor_mock.assert_called_once_with(
-                files.feature_dir,
-                files.created_files_log,
-                ANY,
-            )
-            self.assertEqual(1, monitor.stop_calls)
+            build_bus_mock.assert_called_once()
+            self.assertEqual(1, bus.start_calls)
+            self.assertEqual(1, bus.stop_calls)
+
+    def test_orchestrate_cancels_run_when_event_bus_reports_pane_exit(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "phase dirs", "session-x")
+            bus = _InterruptionOnStartBus()
+
+            with patch(
+                "agentmux.pipeline.build_orchestrator_event_bus",
+                return_value=bus,
+            ), patch(
+                "agentmux.pipeline.build_initial_prompts",
+                return_value={},
+            ), patch("agentmux.pipeline.run_phase_cycle") as run_phase_cycle_mock:
+                result = pipeline.orchestrate(
+                    files=files,
+                    runtime=_FakeRuntime(),
+                    agents={},
+                    max_review_iterations=3,
+                    keep_session=False,
+                )
+
+            self.assertEqual(130, result)
+            run_phase_cycle_mock.assert_not_called()
+            state = load_state(files.state)
+            self.assertEqual("failed", state["phase"])
+            self.assertEqual("run_canceled", state["last_event"])
+            self.assertEqual("canceled", state["interruption_category"])
+            self.assertIn("coder 2", state["interruption_cause"])
 
 
 if __name__ == "__main__":

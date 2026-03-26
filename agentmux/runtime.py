@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Protocol
+from typing import Iterable, Literal, Protocol
 
 from .models import AgentConfig
 from .tmux import (
@@ -46,6 +47,15 @@ class AgentRuntime(Protocol):
 
     def shutdown(self, keep_session: bool) -> None:
         ...
+
+
+@dataclass(frozen=True)
+class RegisteredPaneRef:
+    role: str
+    pane_id: str
+    scope: Literal["primary", "parallel"]
+    task_id: int | str | None = None
+    label: str = ""
 
 
 class TmuxAgentRuntime:
@@ -206,6 +216,37 @@ class TmuxAgentRuntime:
                     panes.append(pane_id)
         return panes
 
+    def registered_panes(self) -> list[RegisteredPaneRef]:
+        panes: list[RegisteredPaneRef] = []
+        for role, pane_id in self.primary_panes.items():
+            if role == "_control" or not pane_id:
+                continue
+            panes.append(
+                RegisteredPaneRef(
+                    role=role,
+                    pane_id=pane_id,
+                    scope="primary",
+                    label=role,
+                )
+            )
+        for role, workers in sorted(self.parallel_panes.items()):
+            for task_id, pane_id in sorted(workers.items(), key=lambda item: str(item[0])):
+                if not pane_id:
+                    continue
+                panes.append(
+                    RegisteredPaneRef(
+                        role=role,
+                        pane_id=pane_id,
+                        scope="parallel",
+                        task_id=task_id,
+                        label=f"{role} {task_id}",
+                    )
+                )
+        return panes
+
+    def missing_registered_panes(self) -> list[RegisteredPaneRef]:
+        return [pane for pane in self.registered_panes() if not tmux_pane_exists(pane.pane_id)]
+
     def _rehydrate(self) -> None:
         for role, pane_id in list(self.primary_panes.items()):
             if role == "_control":
@@ -232,6 +273,8 @@ class TmuxAgentRuntime:
         pane_id = self.primary_panes.get(role)
         if pane_id and tmux_pane_exists(pane_id):
             return pane_id
+        if pane_id:
+            return None
         if role not in self.agents:
             return None
         pane_id = create_agent_pane(

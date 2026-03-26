@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .config import LoadedConfig, load_explicit_config, load_layered_config
+from .event_bus import EventBus, SessionEvent, build_wake_listener
 from .github import (
     check_gh_authenticated,
     check_gh_available,
@@ -35,8 +36,9 @@ from .mcp_config import McpServerSpec, cleanup_mcp, ensure_mcp_config, setup_mcp
 from .models import AgentConfig, GitHubConfig
 from .phases import run_phase_cycle
 from .prompts import build_initial_prompts
+from .interruption_sources import INTERRUPTION_EVENT_PANE_EXITED, InterruptionEventSource
 from .runtime import TmuxAgentRuntime
-from .session_events import ensure_watchdog_available, start_session_file_monitor
+from .session_events import CreatedFilesLogListener, FileEventSource, ensure_watchdog_available
 from .state import (
     create_feature_files,
     feature_slug_from_dir,
@@ -332,11 +334,21 @@ def orchestrate(
 ) -> int:
     _ = product_manager
     wake_event = threading.Event()
-    session_file_monitor = start_session_file_monitor(
-        files.feature_dir,
-        files.created_files_log,
-        wake_event,
-    )
+    event_bus = build_orchestrator_event_bus(files, runtime, wake_event)
+    pending_interruption: dict[str, Any] | None = None
+    interruption_lock = threading.Lock()
+
+    def _handle_interruption(event: SessionEvent) -> None:
+        nonlocal pending_interruption
+        if event.kind != INTERRUPTION_EVENT_PANE_EXITED:
+            return
+        with interruption_lock:
+            if pending_interruption is None:
+                pending_interruption = dict(event.payload)
+        wake_event.set()
+
+    event_bus.register(_handle_interruption)
+    event_bus.start()
 
     try:
         ctx = PipelineContext(
@@ -350,6 +362,17 @@ def orchestrate(
         while True:
             wake_event.wait(timeout=1.0)
             wake_event.clear()
+            with interruption_lock:
+                interruption = pending_interruption
+            if interruption is not None:
+                report = _build_report(
+                    feature_dir=files.feature_dir,
+                    category=INTERRUPTION_CATEGORY_CANCELED,
+                    cause=str(interruption.get("message", "")).strip() or "An agent pane exited unexpectedly.",
+                    files=files,
+                )
+                _persist_report(files, report)
+                return 130
             state = load_state(files.state)
             result = run_phase_cycle(state, ctx)
             if result == EXIT_SUCCESS:
@@ -358,12 +381,28 @@ def orchestrate(
                 return 1
     finally:
         try:
-            session_file_monitor.stop()
+            event_bus.stop()
         finally:
             try:
                 cleanup_mcp(files.feature_dir, files.project_dir)
             finally:
                 runtime.shutdown(keep_session)
+
+
+def build_orchestrator_event_bus(
+    files,
+    runtime: TmuxAgentRuntime,
+    wake_event: threading.Event,
+) -> EventBus:
+    bus = EventBus(
+        sources=[
+            FileEventSource(files.feature_dir),
+            InterruptionEventSource(runtime),
+        ]
+    )
+    bus.register(build_wake_listener(wake_event))
+    bus.register(CreatedFilesLogListener(files.created_files_log).handle_event)
+    return bus
 
 
 def start_background_orchestrator(

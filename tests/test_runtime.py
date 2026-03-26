@@ -227,6 +227,51 @@ class RuntimeTests(unittest.TestCase):
             self.assertIsNone(snapshot["primary"]["architect"])
             self.assertEqual([], snapshot["visible"])
 
+    def test_registered_and_missing_panes_include_primary_and_parallel_workers(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            runtime = TmuxAgentRuntime(
+                feature_dir=feature_dir,
+                session_name="session-x",
+                agents=_agents(),
+                primary_panes={"architect": "%1", "coder": "%2"},
+                zone=FakeZone("session-x"),
+                parallel_panes={"coder": {2: "%9"}},
+            )
+
+            with patch("agentmux.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id in {"%1", "%2"}):
+                registered = runtime.registered_panes()
+                missing = runtime.missing_registered_panes()
+
+            self.assertEqual(
+                [("architect", "primary", None), ("coder", "primary", None), ("coder", "parallel", 2)],
+                [(pane.role, pane.scope, pane.task_id) for pane in registered],
+            )
+            self.assertEqual([("coder 2", "%9")], [(pane.label, pane.pane_id) for pane in missing])
+
+    def test_send_does_not_recreate_registered_missing_primary_pane(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            prompt_file = feature_dir / "coder_prompt.md"
+            prompt_file.write_text("ship it", encoding="utf-8")
+            zone = FakeZone("session-x")
+
+            with patch("agentmux.runtime.tmux_pane_exists", return_value=False), patch(
+                "agentmux.runtime.create_agent_pane"
+            ) as create_mock, patch("agentmux.runtime.send_prompt") as send_prompt_mock:
+                runtime = TmuxAgentRuntime(
+                    feature_dir=feature_dir,
+                    session_name="session-x",
+                    agents=_agents(),
+                    primary_panes={"architect": "%1", "coder": "%2"},
+                    zone=zone,
+                )
+                runtime.send("coder", prompt_file)
+
+            create_mock.assert_not_called()
+            send_prompt_mock.assert_not_called()
+            self.assertEqual([], zone.shown)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from agentmux import monitor
@@ -395,6 +396,25 @@ class MonitorTests(unittest.TestCase):
             output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
 
             self.assertIn("› canceled by user", output)
+
+    def test_get_role_states_treats_dead_tmux_panes_as_inactive(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            runtime_state_path = Path(td) / "runtime_state.json"
+            runtime_state_path.write_text(
+                '{"primary": {"architect": "%1", "reviewer": "%2"}}',
+                encoding="utf-8",
+            )
+
+            results = [
+                CompletedProcess(args=[], returncode=0, stdout="%1 1\n%2 0\n", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="%1 1\n%2 0\n", stderr=""),
+            ]
+
+            with patch("agentmux.monitor.subprocess.run", side_effect=results):
+                states = monitor.get_role_states("session-x", runtime_state_path)
+
+            self.assertEqual("inactive", states["architect"])
+            self.assertEqual("working", states["reviewer"])
 
 
 if __name__ == "__main__":

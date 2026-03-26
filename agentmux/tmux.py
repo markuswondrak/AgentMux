@@ -621,10 +621,15 @@ def tmux_pane_exists(target_pane: str | None) -> bool:
     if not target_pane:
         return False
     result = run_command(
-        ["tmux", "display-message", "-p", "-t", target_pane, "#{pane_id}"],
+        ["tmux", "display-message", "-p", "-t", target_pane, "#{pane_id} #{pane_dead}"],
         check=False,
     )
-    return result.returncode == 0
+    if result.returncode != 0:
+        return False
+    parts = result.stdout.strip().split()
+    if len(parts) < 2:
+        return False
+    return parts[1] != "1"
 
 
 def send_text(target_pane: str, text: str) -> None:

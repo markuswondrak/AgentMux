@@ -17,7 +17,13 @@ from agentmux.tmux import build_agent_command
 from agentmux.transitions import EXIT_SUCCESS
 
 
-class _FakeSessionFileMonitor:
+class _FakeEventBus:
+    def register(self, listener) -> None:
+        _ = listener
+
+    def start(self) -> None:
+        return None
+
     def stop(self) -> None:
         return None
 
@@ -75,8 +81,8 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             runtime = _FakeRuntime()
 
             with patch(
-                "agentmux.pipeline.start_session_file_monitor",
-                return_value=_FakeSessionFileMonitor(),
+                "agentmux.pipeline.build_orchestrator_event_bus",
+                return_value=_FakeEventBus(),
             ), patch(
                 "agentmux.pipeline.build_initial_prompts",
                 return_value={},

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import threading
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -14,8 +12,13 @@ except ImportError:  # pragma: no cover - handled at runtime
     FileSystemEventHandler = object  # type: ignore[assignment]
     Observer = None
 
+from .event_bus import EventBus, SessionEvent
+
 FILE_EVENT_ACTIVITY = "activity"
 FILE_EVENT_CREATED = "created"
+FILE_EVENT_KIND_ACTIVITY = "file.activity"
+FILE_EVENT_KIND_CREATED = "file.created"
+FILE_EVENT_SOURCE = "file"
 CREATED_FILES_LOG_NAME = "created_files.log"
 
 
@@ -26,30 +29,23 @@ def ensure_watchdog_available() -> None:
         )
 
 
-@dataclass(frozen=True)
-class SessionFileEvent:
-    event_type: str
-    relative_path: str
+def _event_kind_for_type(event_type: str) -> str:
+    if event_type == FILE_EVENT_CREATED:
+        return FILE_EVENT_KIND_CREATED
+    return FILE_EVENT_KIND_ACTIVITY
 
 
-class SessionFileEventDispatcher:
-    def __init__(self) -> None:
-        self._listeners: list[Callable[[SessionFileEvent], None]] = []
-
-    def register(self, listener: Callable[[SessionFileEvent], None]) -> None:
-        self._listeners.append(listener)
-
-    def publish(self, event: SessionFileEvent) -> None:
-        for listener in list(self._listeners):
-            listener(event)
-
-
-def build_transition_wake_listener(wake_event: threading.Event) -> Callable[[SessionFileEvent], None]:
-    def _listener(event: SessionFileEvent) -> None:
-        _ = event
-        wake_event.set()
-
-    return _listener
+def publish_file_event(bus: EventBus, event_type: str, relative_path: str) -> None:
+    bus.publish(
+        SessionEvent(
+            kind=_event_kind_for_type(event_type),
+            source=FILE_EVENT_SOURCE,
+            payload={
+                "event_type": event_type,
+                "relative_path": relative_path,
+            },
+        )
+    )
 
 
 class CreatedFilesLogListener:
@@ -64,21 +60,22 @@ class CreatedFilesLogListener:
         self._log_relative_path = log_relative_path
         self._seen_relative_paths: set[str] = set()
 
-    def handle_event(self, event: SessionFileEvent) -> None:
-        if event.event_type != FILE_EVENT_CREATED:
+    def handle_event(self, event: SessionEvent) -> None:
+        if event.kind != FILE_EVENT_KIND_CREATED:
             return
-        if event.relative_path == self._log_relative_path:
+        relative_path = str(event.payload.get("relative_path", "")).strip()
+        if not relative_path or relative_path == self._log_relative_path:
             return
-        if event.relative_path in self._seen_relative_paths:
+        if relative_path in self._seen_relative_paths:
             return
-        self._seen_relative_paths.add(event.relative_path)
+        self._seen_relative_paths.add(relative_path)
         timestamp = self._now().strftime("%Y-%m-%d %H:%M:%S")
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         with self.log_path.open("a", encoding="utf-8") as handle:
-            handle.write(f"{timestamp}  {event.relative_path}\n")
+            handle.write(f"{timestamp}  {relative_path}\n")
 
 
-def seed_existing_files(feature_dir: Path, dispatcher: SessionFileEventDispatcher) -> None:
+def seed_existing_files(feature_dir: Path, bus: EventBus) -> None:
     feature_root = feature_dir.resolve()
     relative_paths: list[str] = []
     for candidate in feature_dir.rglob("*"):
@@ -93,19 +90,14 @@ def seed_existing_files(feature_dir: Path, dispatcher: SessionFileEventDispatche
         relative_paths.append(relative_path)
 
     for relative_path in sorted(set(relative_paths)):
-        dispatcher.publish(
-            SessionFileEvent(
-                event_type=FILE_EVENT_CREATED,
-                relative_path=relative_path,
-            )
-        )
+        publish_file_event(bus, FILE_EVENT_CREATED, relative_path)
 
 
 class FeatureEventHandler(FileSystemEventHandler):
-    def __init__(self, feature_dir: Path, dispatcher: SessionFileEventDispatcher) -> None:
+    def __init__(self, feature_dir: Path, bus: EventBus) -> None:
         super().__init__()
         self.feature_dir = feature_dir.resolve()
-        self.dispatcher = dispatcher
+        self._bus = bus
 
     def _normalize_path(self, raw_path: str | None) -> str | None:
         if not raw_path:
@@ -128,68 +120,37 @@ class FeatureEventHandler(FileSystemEventHandler):
         if event_type == "moved":
             dest_relative = self._normalize_path(getattr(event, "dest_path", None))
             if dest_relative is not None:
-                self.dispatcher.publish(
-                    SessionFileEvent(
-                        event_type=FILE_EVENT_CREATED,
-                        relative_path=dest_relative,
-                    )
-                )
-                self.dispatcher.publish(
-                    SessionFileEvent(
-                        event_type=FILE_EVENT_ACTIVITY,
-                        relative_path=dest_relative,
-                    )
-                )
+                publish_file_event(self._bus, FILE_EVENT_CREATED, dest_relative)
+                publish_file_event(self._bus, FILE_EVENT_ACTIVITY, dest_relative)
                 return
             if src_relative is not None:
-                self.dispatcher.publish(
-                    SessionFileEvent(
-                        event_type=FILE_EVENT_ACTIVITY,
-                        relative_path=src_relative,
-                    )
-                )
+                publish_file_event(self._bus, FILE_EVENT_ACTIVITY, src_relative)
             return
 
         if src_relative is None:
             return
 
         if event_type == "created":
-            self.dispatcher.publish(
-                SessionFileEvent(
-                    event_type=FILE_EVENT_CREATED,
-                    relative_path=src_relative,
-                )
-            )
-        self.dispatcher.publish(
-            SessionFileEvent(
-                event_type=FILE_EVENT_ACTIVITY,
-                relative_path=src_relative,
-            )
-        )
+            publish_file_event(self._bus, FILE_EVENT_CREATED, src_relative)
+        publish_file_event(self._bus, FILE_EVENT_ACTIVITY, src_relative)
 
 
-@dataclass
-class SessionFileMonitor:
-    observer: Any
-    dispatcher: SessionFileEventDispatcher
+class FileEventSource:
+    def __init__(self, feature_dir: Path) -> None:
+        self._feature_dir = feature_dir
+        self._observer: Any = None
+
+    def start(self, bus: EventBus) -> None:
+        ensure_watchdog_available()
+        seed_existing_files(self._feature_dir, bus)
+        observer = Observer()
+        observer.schedule(FeatureEventHandler(self._feature_dir, bus), str(self._feature_dir), recursive=True)
+        observer.start()
+        self._observer = observer
 
     def stop(self) -> None:
-        self.observer.stop()
-        self.observer.join()
-
-
-def start_session_file_monitor(
-    feature_dir: Path,
-    created_files_log: Path,
-    wake_event: threading.Event,
-) -> SessionFileMonitor:
-    ensure_watchdog_available()
-    dispatcher = SessionFileEventDispatcher()
-    dispatcher.register(build_transition_wake_listener(wake_event))
-    dispatcher.register(CreatedFilesLogListener(created_files_log).handle_event)
-    seed_existing_files(feature_dir, dispatcher)
-
-    observer = Observer()
-    observer.schedule(FeatureEventHandler(feature_dir, dispatcher), str(feature_dir), recursive=True)
-    observer.start()
-    return SessionFileMonitor(observer=observer, dispatcher=dispatcher)
+        if self._observer is None:
+            return
+        self._observer.stop()
+        self._observer.join()
+        self._observer = None

@@ -12,6 +12,7 @@ from agentmux.tmux import MONITOR_MAX_WIDTH
 from agentmux.tmux import MONITOR_MIN_WIDTH
 from agentmux.tmux import _enforce_monitor_min_width
 from agentmux.tmux import send_prompt
+from agentmux.tmux import tmux_pane_exists
 from agentmux.tmux import tmux_new_session
 
 
@@ -138,6 +139,20 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             zone.show("%1")
 
         width_mock.assert_called_once_with("session-x")
+
+    def test_tmux_pane_exists_returns_false_for_dead_pane(self) -> None:
+        with patch(
+            "agentmux.tmux.run_command",
+            return_value=CompletedProcess(args=[], returncode=0, stdout="%1 1\n", stderr=""),
+        ):
+            self.assertFalse(tmux_pane_exists("%1"))
+
+    def test_tmux_pane_exists_returns_true_for_live_pane(self) -> None:
+        with patch(
+            "agentmux.tmux.run_command",
+            return_value=CompletedProcess(args=[], returncode=0, stdout="%1 0\n", stderr=""),
+        ):
+            self.assertTrue(tmux_pane_exists("%1"))
 
 
 if __name__ == "__main__":

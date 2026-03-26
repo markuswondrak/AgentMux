@@ -1,6 +1,6 @@
 # Tmux Session Layout and Pane Management
 
-> Related source files: `agentmux/tmux.py`, `agentmux/runtime.py`
+> Related source files: `agentmux/tmux.py`, `agentmux/runtime.py`, `agentmux/interruption_sources.py`, `agentmux/pipeline.py`
 
 ## Content zone
 
@@ -44,6 +44,12 @@ The monitor/content split is only created once during session setup. Later mutat
 
 On resume, `TmuxAgentRuntime.attach()` rehydrates pane IDs, reconstructs `ContentZone` from `visible`, and reapplies the desired layout.
 
+## Missing panes
+
+`TmuxAgentRuntime` also exposes a read-only view of the registered primary and parallel panes. The background `InterruptionEventSource` polls that registry and publishes an interruption event when any registered agent pane disappears, even if it was parked in `_hidden`.
+
+That is treated as a user-visible run cancellation rather than a silent pane recreation. The orchestrator persists the interruption to `state.json`, shows the cause in the monitor, and requires `--resume` to continue.
+
 ## Prompt dispatch
 
 `send_prompt()` no longer creates or reveals panes. It only sends a concise file reference message such as:
@@ -52,7 +58,7 @@ On resume, `TmuxAgentRuntime.attach()` rehydrates pane IDs, reconstructs `Conten
 Read and follow the instructions in /path/to/prompt.md
 ```
 
-Visibility is decided in `TmuxAgentRuntime` before prompt dispatch.
+Visibility is decided in `TmuxAgentRuntime` before prompt dispatch. Primary panes are auto-created only when no pane is registered for that role; if a registered pane vanished unexpectedly, the run is canceled instead.
 
 ## Trust prompt handling
 
