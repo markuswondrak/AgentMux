@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agentmux.shared.models import AgentConfig
+from agentmux.runtime import ParallelPromptSpec
 from agentmux.runtime import TmuxAgentRuntime
 
 
@@ -84,13 +85,15 @@ class RuntimeTests(unittest.TestCase):
                 role: str,
                 agents,
                 trust_snippet: str | None,
+                *,
+                display_label: str | None = None,
             ) -> str:
-                created.append((session_name, role, tuple(sorted(agents)), trust_snippet))
+                created.append((session_name, role, tuple(sorted(agents)), trust_snippet, display_label))
                 return "%42"
 
             with patch("agentmux.runtime.create_agent_pane", side_effect=fake_create_agent_pane), patch(
                 "agentmux.runtime.send_prompt", return_value=None
-            ):
+            ), patch("agentmux.runtime.set_pane_identity", return_value=None):
                 runtime = TmuxAgentRuntime(
                     feature_dir=feature_dir,
                     session_name="session-x",
@@ -101,7 +104,7 @@ class RuntimeTests(unittest.TestCase):
                 runtime.send("coder", prompt_file)
 
             self.assertEqual(
-                [("session-x", "coder", ("architect", "coder", "docs"), None)],
+                [("session-x", "coder", ("architect", "coder", "docs"), None, None)],
                 created,
             )
             self.assertEqual(["%42"], zone.shown)
@@ -116,6 +119,10 @@ class RuntimeTests(unittest.TestCase):
             prompt_b = feature_dir / "coder_prompt_2.txt"
             prompt_a.write_text("a", encoding="utf-8")
             prompt_b.write_text("b", encoding="utf-8")
+            planning_dir = feature_dir / "02_planning"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "plan_2.md").write_text("## Sub-plan 2: API wiring\n", encoding="utf-8")
+            (planning_dir / "plan_3.md").write_text("## Sub-plan 3: UI polish\n", encoding="utf-8")
             sent: list[str] = []
             zone = FakeZone("session-x")
 
@@ -124,7 +131,7 @@ class RuntimeTests(unittest.TestCase):
             ), patch(
                 "agentmux.runtime.send_prompt",
                 side_effect=lambda pane_id, prompt_file: sent.append(f"{pane_id}:{prompt_file.name}"),
-            ):
+            ), patch("agentmux.runtime.set_pane_identity", return_value=None):
                 runtime = TmuxAgentRuntime(
                     feature_dir=feature_dir,
                     session_name="session-x",
@@ -132,7 +139,14 @@ class RuntimeTests(unittest.TestCase):
                     primary_panes={"architect": "%1", "coder": "%2"},
                     zone=zone,
                 )
-                runtime.send_many("coder", [prompt_a, prompt_b])
+                runtime.send_many(
+                    "coder",
+                    [
+                        ParallelPromptSpec(task_id=2, prompt_file=prompt_a, display_label="API wiring"),
+                        ParallelPromptSpec(task_id=3, prompt_file=prompt_b, display_label="UI polish"),
+                    ],
+                )
+                self.assertEqual({2: "%2", 3: "%99"}, runtime.parallel_panes.get("coder", {}))
                 runtime.finish_many("coder")
 
             self.assertEqual([["%2", "%99"]], zone.parallel_shows)
@@ -141,6 +155,27 @@ class RuntimeTests(unittest.TestCase):
             snapshot = json.loads((feature_dir / "runtime_state.json").read_text(encoding="utf-8"))
             self.assertEqual({}, snapshot["parallel"])
             self.assertEqual(["%2"], snapshot["visible"])
+
+    def test_hide_task_hides_parallel_worker_but_keeps_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            zone = FakeZone("session-x", visible=["%2", "%99"])
+            runtime = TmuxAgentRuntime(
+                feature_dir=feature_dir,
+                session_name="session-x",
+                agents=_agents(),
+                primary_panes={"architect": "%1", "coder": "%2"},
+                zone=zone,
+                parallel_panes={"coder": {1: "%2", 2: "%99"}},
+            )
+
+            runtime.hide_task("coder", 1)
+
+            self.assertEqual(["%2"], zone.hidden)
+            self.assertEqual({1: "%2", 2: "%99"}, runtime.parallel_panes["coder"])
+            snapshot = json.loads((feature_dir / "runtime_state.json").read_text(encoding="utf-8"))
+            self.assertEqual({"1": "%2", "2": "%99"}, snapshot["parallel"]["coder"])
+            self.assertEqual(["%99"], snapshot["visible"])
 
     def test_attach_imports_legacy_panes_file_and_discards_stale_parallel_workers(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -230,6 +265,9 @@ class RuntimeTests(unittest.TestCase):
     def test_registered_and_missing_panes_include_primary_and_parallel_workers(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
+            planning_dir = feature_dir / "02_planning"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "plan_2.md").write_text("## Sub-plan 2: UI polish\n", encoding="utf-8")
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
                 session_name="session-x",
@@ -247,7 +285,7 @@ class RuntimeTests(unittest.TestCase):
                 [("architect", "primary", None), ("coder", "primary", None), ("coder", "parallel", 2)],
                 [(pane.role, pane.scope, pane.task_id) for pane in registered],
             )
-            self.assertEqual([("coder 2", "%9")], [(pane.label, pane.pane_id) for pane in missing])
+            self.assertEqual([("[coder] UI polish", "%9")], [(pane.label, pane.pane_id) for pane in missing])
 
     def test_send_does_not_recreate_registered_missing_primary_pane(self) -> None:
         with tempfile.TemporaryDirectory() as td:

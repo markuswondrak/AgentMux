@@ -6,6 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..agent_labels import role_display_label
 from ..shared.models import SESSION_DIR_NAMES
 
 ALWAYS_VISIBLE_STATES = [
@@ -141,6 +142,26 @@ def get_role_states(session_name: str, runtime_state_path: Path) -> dict[str, st
         else:
             states[role] = "inactive"
     return states
+
+
+def get_role_labels(state_path: Path, runtime_state_path: Path) -> dict[str, str]:
+    registry = load_runtime_registry(runtime_state_path)
+    if not registry:
+        return {}
+
+    state = load_state(state_path)
+    feature_dir = runtime_state_path.parent
+    labels: dict[str, str] = {}
+    for role_key in registry:
+        if role_key.startswith("_"):
+            continue
+        role = role_key
+        task_id: int | str | None = None
+        if "_" in role_key:
+            role, suffix = role_key.split("_", 1)
+            task_id = int(suffix) if suffix.isdigit() else suffix
+        labels[role_key] = role_display_label(feature_dir, role, task_id=task_id, state=state)
+    return labels
 
 
 def load_state(state_path: Path) -> dict:

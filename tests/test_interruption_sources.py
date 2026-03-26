@@ -24,7 +24,7 @@ class InterruptionEventSourceTests(unittest.TestCase):
                         role="architect",
                         pane_id="%1",
                         scope="primary",
-                        label="architect",
+                        label="[architect] planning",
                     )
                 ]
             )
@@ -50,7 +50,7 @@ class InterruptionEventSourceTests(unittest.TestCase):
                         pane_id="%9",
                         scope="parallel",
                         task_id=2,
-                        label="coder 2",
+                        label="[coder] plan 2",
                     )
                 ]
             )
@@ -64,7 +64,30 @@ class InterruptionEventSourceTests(unittest.TestCase):
 
         self.assertEqual(1, len(seen))
         self.assertEqual(2, seen[0].payload["task_id"])
-        self.assertEqual("coder 2", seen[0].payload["label"])
+        self.assertEqual("[coder] plan 2", seen[0].payload["label"])
+
+    def test_poll_once_uses_plan_based_parallel_label_in_message(self) -> None:
+        source = InterruptionEventSource(
+            _FakeRuntime(
+                [
+                    RegisteredPaneRef(
+                        role="coder",
+                        pane_id="%9",
+                        scope="parallel",
+                        task_id=3,
+                        label="[coder] API wiring",
+                    )
+                ]
+            )
+        )
+        bus = EventBus()
+        seen = []
+        bus.register(seen.append)
+
+        source.poll_once(bus)
+
+        self.assertEqual("[coder] API wiring", seen[0].payload["label"])
+        self.assertIn("Agent pane [coder] API wiring was closed or exited", seen[0].payload["message"])
 
 
 if __name__ == "__main__":

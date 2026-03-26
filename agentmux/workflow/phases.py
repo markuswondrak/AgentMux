@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from ..agent_labels import format_agent_label, role_display_label
 from ..integrations.completion import CompletionService
-from ..sessions.state_store import feature_slug_from_dir, now_iso, write_state
+from ..runtime import ParallelPromptSpec
+from ..sessions.state_store import now_iso, write_state
+from .execution_plan import load_execution_plan
 from .handlers import load_plan_meta, reset_markers, send_to_role, write_phase
-from .plan_parser import split_plan_into_subplans
+from .plan_parser import coder_label_for_subplan, split_plan_into_subplans
 from .prompts import (
     build_architect_prompt,
     build_change_prompt,
@@ -55,6 +59,149 @@ def _parse_changed_paths(status_output: str) -> list[str]:
         if path:
             paths.append(path)
     return paths
+
+
+def _reset_implementation_progress(state: dict) -> None:
+    state["completed_subplans"] = []
+    state["implementation_group_total"] = 0
+    state["implementation_group_index"] = 0
+    state["implementation_group_mode"] = None
+    state["implementation_active_plan_ids"] = []
+    state["implementation_completed_group_ids"] = []
+
+
+def _set_implementation_progress(
+    state: dict,
+    schedule: list[dict[str, object]],
+    active_group_index: int | None,
+) -> None:
+    group_total = len(schedule)
+    state["implementation_group_total"] = group_total
+
+    if group_total == 0:
+        state["implementation_group_index"] = 0
+        state["implementation_group_mode"] = None
+        state["implementation_active_plan_ids"] = []
+        state["implementation_completed_group_ids"] = []
+        return
+
+    if active_group_index is None:
+        state["implementation_group_index"] = group_total
+        state["implementation_group_mode"] = None
+        state["implementation_active_plan_ids"] = []
+        state["implementation_completed_group_ids"] = [
+            str(group["group_id"]) for group in schedule
+        ]
+        return
+
+    state["implementation_group_index"] = active_group_index + 1
+    state["implementation_group_mode"] = str(schedule[active_group_index]["mode"])
+    state["implementation_active_plan_ids"] = list(schedule[active_group_index]["plan_ids"])
+    state["implementation_completed_group_ids"] = [
+        str(schedule[index]["group_id"]) for index in range(active_group_index)
+    ]
+
+
+def _plan_index_from_name(plan_name: str) -> int:
+    match = re.match(r"^plan_(\d+)\.md$", plan_name)
+    if match is None:
+        raise RuntimeError(
+            f"Expected numbered plan file names like `plan_1.md`, got `{plan_name}`."
+        )
+    return int(match.group(1))
+
+
+def _build_implementation_schedule(
+    *,
+    plan_path: Path,
+    planning_dir: Path,
+) -> list[dict[str, object]]:
+    execution_plan = load_execution_plan(planning_dir)
+    if execution_plan is None:
+        subplan_paths = split_plan_into_subplans(plan_path, planning_dir)
+        if len(subplan_paths) == 1:
+            return [
+                {
+                    "group_id": "group_1",
+                    "mode": "serial",
+                    "plan_paths": [plan_path],
+                    "plan_ids": ["plan_1"],
+                    "plan_names": [None],
+                    "marker_indexes": [1],
+                    "legacy_single_prompt": True,
+                }
+            ]
+        marker_indexes = list(range(1, len(subplan_paths) + 1))
+        return [
+            {
+                "group_id": "group_1",
+                "mode": "parallel",
+                "plan_paths": subplan_paths,
+                "plan_ids": [f"plan_{index}" for index in marker_indexes],
+                "plan_names": [coder_label_for_subplan(planning_dir, index) for index in marker_indexes],
+                "marker_indexes": marker_indexes,
+                "legacy_single_prompt": False,
+            }
+        ]
+
+    schedule: list[dict[str, object]] = []
+    all_indexes: list[int] = []
+    for group in execution_plan.groups:
+        group_indexes = [_plan_index_from_name(plan.file) for plan in group.plans]
+        if group.mode == "serial" and len(group_indexes) != 1:
+            raise RuntimeError(
+                f"execution_plan.json group `{group.group_id}` uses mode `serial` and must reference exactly one plan."
+            )
+        all_indexes.extend(group_indexes)
+        plan_paths = [planning_dir / plan.file for plan in group.plans]
+        schedule.append(
+            {
+                "group_id": group.group_id,
+                "mode": group.mode,
+                "plan_paths": plan_paths,
+                "plan_ids": [Path(plan.file).stem for plan in group.plans],
+                "plan_names": [plan.name or coder_label_for_subplan(planning_dir, index) for plan, index in zip(group.plans, group_indexes)],
+                "marker_indexes": group_indexes,
+                "legacy_single_prompt": False,
+            }
+        )
+
+    if len(all_indexes) != len(set(all_indexes)):
+        raise RuntimeError("execution_plan.json must not reuse plan files across groups.")
+    if all_indexes:
+        max_index = max(all_indexes)
+        missing_indexes = sorted(set(range(1, max_index + 1)) - set(all_indexes))
+        if missing_indexes:
+            missing_csv = ", ".join(str(index) for index in missing_indexes)
+            raise RuntimeError(
+                f"execution_plan.json plan indexes must be contiguous from 1..{max_index}; missing: {missing_csv}."
+            )
+    return schedule
+
+
+def _group_marker_paths(
+    implementation_dir: Path,
+    group: dict[str, object],
+) -> list[Path]:
+    marker_indexes = [int(index) for index in list(group["marker_indexes"])]
+    return [implementation_dir / f"done_{index}" for index in marker_indexes]
+
+
+def _all_markers_complete(
+    implementation_dir: Path,
+    group: dict[str, object],
+) -> bool:
+    return all(path.exists() for path in _group_marker_paths(implementation_dir, group))
+
+
+def _first_incomplete_group_index(
+    implementation_dir: Path,
+    schedule: list[dict[str, object]],
+) -> int | None:
+    for index, group in enumerate(schedule):
+        if not _all_markers_complete(implementation_dir, group):
+            return index
+    return None
 
 
 class Phase(ABC):
@@ -318,6 +465,7 @@ class PlanningPhase(_ResearchDispatchMixin, Phase):
 
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
         if event == "plan_written":
+            load_execution_plan(ctx.files.planning_dir)
             meta = load_plan_meta(ctx.files.planning_dir)
             needs_design = bool(meta.get("needs_design")) and "designer" in ctx.agents
             if ctx.files.changes.exists():
@@ -339,13 +487,17 @@ class DesigningPhase(Phase):
     name = "designing"
 
     def on_enter(self, state: dict, ctx: PipelineContext) -> None:
-        _ = state
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
             ctx.files.relative_path(ctx.files.design_dir / "designer_prompt.md"),
             build_designer_prompt(ctx.files),
         )
-        send_to_role(ctx, "designer", prompt_file)
+        send_to_role(
+            ctx,
+            "designer",
+            prompt_file,
+            display_label=role_display_label(ctx.files.feature_dir, "designer", state=state),
+        )
 
     def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
         _ = state
@@ -368,81 +520,202 @@ class DesigningPhase(Phase):
 class ImplementingPhase(Phase):
     name = "implementing"
 
-    def on_enter(self, state: dict, ctx: PipelineContext) -> None:
-        reset_markers(ctx.files.implementation_dir, "done_*")
-        ctx.runtime.kill_primary("coder")
+    @staticmethod
+    def _schedule(ctx: PipelineContext) -> list[dict[str, object]]:
+        return _build_implementation_schedule(
+            plan_path=ctx.files.plan,
+            planning_dir=ctx.files.planning_dir,
+        )
 
-        subplan_paths = split_plan_into_subplans(ctx.files.plan, ctx.files.planning_dir)
-        subplan_count = len(subplan_paths)
-        state["subplan_count"] = subplan_count
-        state["updated_at"] = now_iso()
-        state["updated_by"] = "pipeline"
-        write_state(ctx.files.state, state)
+    @staticmethod
+    def _total_marker_count(schedule: list[dict[str, object]]) -> int:
+        all_indexes: list[int] = []
+        for group in schedule:
+            all_indexes.extend(int(index) for index in list(group["marker_indexes"]))
+        return max(all_indexes, default=1)
 
-        if subplan_count == 1:
+    @staticmethod
+    def _completed_subplans(state: dict) -> set[int]:
+        completed: set[int] = set()
+        for value in list(state.get("completed_subplans", [])):
+            try:
+                completed.add(int(value))
+            except (TypeError, ValueError):
+                continue
+        return completed
+
+    def _dispatch_active_group(
+        self,
+        ctx: PipelineContext,
+        schedule: list[dict[str, object]],
+        active_group_index: int,
+    ) -> None:
+        group = schedule[active_group_index]
+        marker_indexes = [int(index) for index in list(group["marker_indexes"])]
+        plan_paths = [Path(path) for path in list(group["plan_paths"])]
+        plan_names = [None if name is None else str(name) for name in list(group.get("plan_names", []))]
+        pending: list[tuple[int, Path, str | None]] = [
+            (index, path, plan_name)
+            for index, path, plan_name in zip(marker_indexes, plan_paths, plan_names)
+            if not (ctx.files.implementation_dir / f"done_{index}").exists()
+        ]
+        if not pending:
+            return
+
+        if bool(group["legacy_single_prompt"]):
             prompt_file = write_prompt_file(
                 ctx.files.feature_dir,
                 ctx.files.relative_path(ctx.files.implementation_dir / "coder_prompt.md"),
                 build_coder_prompt(ctx.files),
             )
-            send_to_role(ctx, "coder", prompt_file)
+            send_to_role(
+                ctx,
+                "coder",
+                prompt_file,
+                display_label=role_display_label(ctx.files.feature_dir, "coder"),
+            )
             return
 
-        prompt_files: list[Path] = []
-        for subplan_index, subplan_path in enumerate(subplan_paths, start=1):
-            prompt_files.append(
-                write_prompt_file(
-                    ctx.files.feature_dir,
-                    ctx.files.relative_path(
-                        ctx.files.implementation_dir / f"coder_prompt_{subplan_index}.txt"
+        prompt_specs: list[ParallelPromptSpec] = []
+        for marker_index, subplan_path, plan_name in pending:
+            prompt_specs.append(
+                ParallelPromptSpec(
+                    task_id=marker_index,
+                    prompt_file=write_prompt_file(
+                        ctx.files.feature_dir,
+                        ctx.files.relative_path(
+                            ctx.files.implementation_dir / f"coder_prompt_{marker_index}.txt"
+                        ),
+                        build_coder_subplan_prompt(
+                            ctx.files,
+                            subplan_path=subplan_path,
+                            subplan_index=marker_index,
+                        ),
                     ),
-                    build_coder_subplan_prompt(
-                        ctx.files,
-                        subplan_path=subplan_path,
-                        subplan_index=subplan_index,
+                    display_label=format_agent_label(
+                        "coder",
+                        plan_name or coder_label_for_subplan(ctx.files.planning_dir, marker_index),
                     ),
                 )
             )
 
-        ctx.runtime.send_many("coder", prompt_files)
+        if str(group["mode"]) == "parallel" and len(prompt_specs) > 1:
+            ctx.runtime.send_many("coder", prompt_specs)
+            return
+        send_to_role(
+            ctx,
+            "coder",
+            prompt_specs[0].prompt_file,
+            display_label=prompt_specs[0].display_label,
+        )
+
+    def on_enter(self, state: dict, ctx: PipelineContext) -> None:
+        if state.get("last_event") in {"plan_written", "design_written", "changes_requested"}:
+            reset_markers(ctx.files.implementation_dir, "done_*")
+        ctx.runtime.kill_primary("coder")
+
+        schedule = self._schedule(ctx)
+        state["subplan_count"] = self._total_marker_count(schedule)
+        state["completed_subplans"] = []
+        active_group_index = _first_incomplete_group_index(ctx.files.implementation_dir, schedule)
+        _set_implementation_progress(state, schedule, active_group_index)
+        state["updated_at"] = now_iso()
+        state["updated_by"] = "pipeline"
+        write_state(ctx.files.state, state)
+
+        if active_group_index is None:
+            return
+        self._dispatch_active_group(ctx, schedule, active_group_index)
 
     def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
-        count = max(1, int(state.get("subplan_count", 1)))
+        schedule = self._schedule(ctx)
+        if not schedule:
+            return {}
+        group_total = len(schedule)
+        group_index = int(state.get("implementation_group_index", 0))
+        if group_index <= 0:
+            active_group = schedule[0]
+        elif group_index > group_total:
+            active_group = schedule[-1]
+        else:
+            active_group = schedule[group_index - 1]
+        marker_indexes = [int(index) for index in list(active_group["marker_indexes"])]
         return {
-            f"done_{idx}": file_signature(ctx.files.implementation_dir / f"done_{idx}")
-            for idx in range(1, count + 1)
+            f"done_{index}": file_signature(ctx.files.implementation_dir / f"done_{index}")
+            for index in marker_indexes
         }
 
     def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
-        count = max(1, int(state.get("subplan_count", 1)))
-        if count <= 0:
-            return None
-        done = [
-            phase_input_changed(
-                ctx,
-                f"done_{idx}",
-                file_signature(ctx.files.implementation_dir / f"done_{idx}"),
-            )
-            for idx in range(1, count + 1)
-        ]
-        if all(done):
+        schedule = self._schedule(ctx)
+        if not schedule:
             return "implementation_completed"
+        group_index = int(state.get("implementation_group_index", 0))
+        if group_index >= len(schedule) and not state.get("implementation_active_plan_ids"):
+            return "implementation_completed"
+        if group_index <= 0:
+            return None
+        active_group = schedule[group_index - 1]
+        changed_done: list[int] = []
+        for marker_index in [int(index) for index in list(active_group["marker_indexes"])]:
+            if phase_input_changed(
+                ctx,
+                f"done_{marker_index}",
+                file_signature(ctx.files.implementation_dir / f"done_{marker_index}"),
+            ):
+                changed_done.append(marker_index)
+        if _all_markers_complete(ctx.files.implementation_dir, active_group):
+            return "implementation_group_completed"
+        if str(active_group["mode"]) != "parallel":
+            return None
+        completed = self._completed_subplans(state)
+        for marker_index in changed_done:
+            if marker_index not in completed:
+                return f"subplan_completed:{marker_index}"
         return None
 
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
-        if event != "implementation_completed":
+        if event.startswith("subplan_completed:"):
+            try:
+                task_id = int(event.split(":", 1)[1])
+            except ValueError:
+                return None
+            ctx.runtime.hide_task("coder", task_id)
+            completed = self._completed_subplans(state)
+            completed.add(task_id)
+            state["completed_subplans"] = sorted(completed)
+            state["updated_at"] = now_iso()
+            state["updated_by"] = "pipeline"
+            write_state(ctx.files.state, state)
             return None
+        if event not in {"implementation_group_completed", "implementation_completed"}:
+            return None
+        schedule = self._schedule(ctx)
+        next_group_index = _first_incomplete_group_index(ctx.files.implementation_dir, schedule)
         ctx.runtime.finish_many("coder")
-        ctx.runtime.deactivate("coder")
-        write_phase(ctx, state, "reviewing", "implementation_completed")
-        return None
 
+        if next_group_index is None:
+            _set_implementation_progress(state, schedule, active_group_index=None)
+            state["completed_subplans"] = []
+            state["updated_at"] = now_iso()
+            state["updated_by"] = "pipeline"
+            write_state(ctx.files.state, state)
+            ctx.runtime.deactivate("coder")
+            write_phase(ctx, state, "reviewing", "implementation_completed")
+            return None
+
+        _set_implementation_progress(state, schedule, active_group_index=next_group_index)
+        state["completed_subplans"] = []
+        state["updated_at"] = now_iso()
+        state["updated_by"] = "pipeline"
+        write_state(ctx.files.state, state)
+        self._dispatch_active_group(ctx, schedule, next_group_index)
+        ctx.phase_baseline = self.snapshot_inputs(state, ctx)
+        return None
 
 class ReviewingPhase(Phase):
     name = "reviewing"
 
     def on_enter(self, state: dict, ctx: PipelineContext) -> None:
-        _ = state
         if ctx.files.review.exists():
             ctx.files.review.unlink()
         prompt_file = write_prompt_file(
@@ -450,7 +723,12 @@ class ReviewingPhase(Phase):
             ctx.files.relative_path(ctx.files.review_dir / "review_prompt.md"),
             build_reviewer_prompt(ctx.files, is_review=True),
         )
-        send_to_role(ctx, "reviewer", prompt_file)
+        send_to_role(
+            ctx,
+            "reviewer",
+            prompt_file,
+            display_label=role_display_label(ctx.files.feature_dir, "reviewer", state=state),
+        )
 
     def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
         _ = state
@@ -501,36 +779,34 @@ class FixingPhase(Phase):
     name = "fixing"
 
     def on_enter(self, state: dict, ctx: PipelineContext) -> None:
-        _ = state
-        reset_markers(ctx.files.implementation_dir, "done_*")
+        if state.get("last_event") == "review_failed":
+            reset_markers(ctx.files.implementation_dir, "done_*")
+        state["completed_subplans"] = []
+        state["updated_at"] = now_iso()
+        state["updated_by"] = "pipeline"
+        write_state(ctx.files.state, state)
         ctx.runtime.kill_primary("coder")
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
             ctx.files.relative_path(ctx.files.review_dir / "fix_prompt.txt"),
             build_fix_prompt(ctx.files),
         )
-        send_to_role(ctx, "coder", prompt_file)
+        send_to_role(
+            ctx,
+            "coder",
+            prompt_file,
+            display_label=role_display_label(ctx.files.feature_dir, "coder", state=state),
+        )
 
     def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
-        count = max(1, int(state.get("subplan_count", 1)))
+        _ = state
         return {
-            f"done_{idx}": file_signature(ctx.files.implementation_dir / f"done_{idx}")
-            for idx in range(1, count + 1)
+            "done_1": file_signature(ctx.files.implementation_dir / "done_1"),
         }
 
     def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
-        count = max(1, int(state.get("subplan_count", 1)))
-        if count <= 0:
-            return None
-        done = [
-            phase_input_changed(
-                ctx,
-                f"done_{idx}",
-                file_signature(ctx.files.implementation_dir / f"done_{idx}"),
-            )
-            for idx in range(1, count + 1)
-        ]
-        if all(done):
+        _ = state
+        if (ctx.files.implementation_dir / "done_1").exists():
             return "implementation_completed"
         return None
 
@@ -589,7 +865,12 @@ class CompletingPhase(Phase):
             ctx.files.relative_path(ctx.files.completion_dir / "confirmation_prompt.md"),
             build_confirmation_prompt(ctx.files),
         )
-        send_to_role(ctx, "reviewer", prompt_file)
+        send_to_role(
+            ctx,
+            "reviewer",
+            prompt_file,
+            display_label=role_display_label(ctx.files.feature_dir, "reviewer", state=state),
+        )
 
     def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
         _ = state
@@ -648,6 +929,7 @@ class CompletingPhase(Phase):
         ctx.runtime.finish_many("coder")
         state["subplan_count"] = 0
         state["review_iteration"] = 0
+        _reset_implementation_progress(state)
         write_phase(ctx, state, "planning", "changes_requested")
         return None
 

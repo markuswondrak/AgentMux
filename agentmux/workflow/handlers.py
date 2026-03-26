@@ -7,8 +7,14 @@ from ..sessions.state_store import now_iso, write_state
 from .transitions import PipelineContext
 
 
-def send_to_role(ctx: PipelineContext, role: str, prompt_file: Path) -> None:
-    ctx.runtime.send(role, prompt_file)
+def send_to_role(
+    ctx: PipelineContext,
+    role: str,
+    prompt_file: Path,
+    *,
+    display_label: str | None = None,
+) -> None:
+    ctx.runtime.send(role, prompt_file, display_label=display_label)
 
 
 def write_phase(

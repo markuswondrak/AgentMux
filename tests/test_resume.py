@@ -136,9 +136,20 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
             (feature_dir / REVIEW_DIR / "fix_request.md").write_text("fix this", encoding="utf-8")
-            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
             state = {"phase": "failed", "review_iteration": 1, "subplan_count": 2}
             self.assertEqual("fixing", infer_resume_phase(feature_dir, state))
+
+    def test_failed_fix_iteration_with_done_1_resumes_reviewing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
+            (feature_dir / REVIEW_DIR / "fix_request.md").write_text("fix this", encoding="utf-8")
+            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
+            state = {"phase": "failed", "review_iteration": 1, "subplan_count": 2}
+            self.assertEqual("reviewing", infer_resume_phase(feature_dir, state))
 
     def test_failed_with_incomplete_done_markers_resumes_implementing(self) -> None:
         with tempfile.TemporaryDirectory() as td:

@@ -58,9 +58,37 @@ Behavior contract:
 - Uses feature-relative paths (for example `03_research/code-auth/summary.md`)
 - Omits the entire handoff section when no completed research topics are available
 
+## Staged planning contract
+
+Planning and replanning prompts share one contract for implementation scheduling artifacts:
+
+- `02_planning/plan.md` is the human-readable overview
+- `02_planning/plan_<N>.md` files are executable implementation units
+- `02_planning/execution_plan.json` is the scheduling source of truth (ordered execution groups, each marked as `serial` or `parallel`, with explicit named plan references)
+- `02_planning/tasks.md` remains the implementation checklist mapped to the same work
+- `02_planning/plan_meta.json` remains workflow intent metadata (`needs_design`, `needs_docs`, `doc_files`)
+
+Architect output requirements for parallel work include:
+
+- A Phase 1 / Phase 2 / Phase 3 breakdown where Phase 1 defines interfaces/contracts and Phase 2 uses those contracts for parallel implementation
+- Per parallel sub-plan sections for `Scope`, `Dependencies`, and `Isolation`
+- Explicit conflict mapping by touched files; empty file-set intersection should be treated as parallelizable unless a precise technical conflict is documented
+- A callout for any enabling refactor needed to preserve boundaries, plus explicit technical debt rationale when refactor work is deferred
+
+Compatibility requirement:
+
+- Keep `## Sub-plan <N>: <title>` headers in `plan.md` so legacy split-based workflows and tooling remain operable during migration.
+
 Current split:
 - `build_architect_prompt()` renders planning prompts only
-- planning/replanning prompt contracts require `02_planning/plan_meta.json` with `needs_design`, `needs_docs`, and `doc_files` (empty list when `needs_docs` is `false`)
+- `build_change_prompt()` applies the same staged planning artifact contract in replanning mode
+- planning/replanning prompt contracts require:
+  - `02_planning/plan.md` as the human-readable overview
+  - `02_planning/plan_<N>.md` executable sub-plan files
+  - `02_planning/execution_plan.json` as machine-readable schedule metadata (`version`, ordered `groups`, `group_id`, `mode`, `plans`)
+  - new plans must write `groups[].plans[]` entries as `{ "file": "plan_<N>.md", "name": "<sub-plan title>" }`
+  - `02_planning/plan_meta.json` with `needs_design`, `needs_docs`, and `doc_files` (empty list when `needs_docs` is `false`)
+  - compatibility behavior where legacy flat `plan.md` parsing is only a fallback when `execution_plan.json` is absent
 - `build_product_manager_prompt()` renders the PM analysis prompt
 - `build_coder_prompt()` / `build_coder_subplan_prompt()` render coder implementation prompts with completion marker instructions and optional research handoff references
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt

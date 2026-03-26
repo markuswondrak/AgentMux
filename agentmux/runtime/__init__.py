@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Literal, Protocol
 
+from ..agent_labels import role_display_label
 from ..shared.models import AgentConfig
 from .tmux_control import (
     ContentZone,
@@ -12,6 +13,7 @@ from .tmux_control import (
     create_agent_pane,
     send_text,
     send_prompt,
+    set_pane_identity,
     tmux_kill_session,
     tmux_new_session,
     tmux_pane_exists,
@@ -22,10 +24,10 @@ LEGACY_PANES_FILE = "panes.json"
 
 
 class AgentRuntime(Protocol):
-    def send(self, role: str, prompt_file: Path) -> None:
+    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
         ...
 
-    def send_many(self, role: str, prompt_files: list[Path]) -> None:
+    def send_many(self, role: str, prompt_specs: list["ParallelPromptSpec" | Path]) -> None:
         ...
 
     def deactivate(self, role: str) -> None:
@@ -46,6 +48,9 @@ class AgentRuntime(Protocol):
     def spawn_task(self, role: str, task_id: str, prompt_file: Path) -> None:
         ...
 
+    def hide_task(self, role: str, task_id: int | str) -> None:
+        ...
+
     def finish_task(self, role: str, task_id: str) -> None:
         ...
 
@@ -60,6 +65,13 @@ class RegisteredPaneRef:
     scope: Literal["primary", "parallel"]
     task_id: int | str | None = None
     label: str = ""
+
+
+@dataclass(frozen=True)
+class ParallelPromptSpec:
+    task_id: int | str
+    prompt_file: Path
+    display_label: str | None = None
 
 
 class TmuxAgentRuntime:
@@ -220,6 +232,23 @@ class TmuxAgentRuntime:
                     panes.append(pane_id)
         return panes
 
+    def _load_state(self) -> dict:
+        state_path = self.feature_dir / "state.json"
+        try:
+            text = state_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            return {}
+        if not text:
+            return {}
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError:
+            return {}
+        return raw if isinstance(raw, dict) else {}
+
+    def _display_label_for_task(self, role: str, task_id: int | str | None) -> str:
+        return role_display_label(self.feature_dir, role, task_id=task_id, state=self._load_state())
+
     def registered_panes(self) -> list[RegisteredPaneRef]:
         panes: list[RegisteredPaneRef] = []
         for role, pane_id in self.primary_panes.items():
@@ -230,7 +259,7 @@ class TmuxAgentRuntime:
                     role=role,
                     pane_id=pane_id,
                     scope="primary",
-                    label=role,
+                    label=self._display_label_for_task(role, None),
                 )
             )
         for role, workers in sorted(self.parallel_panes.items()):
@@ -243,7 +272,7 @@ class TmuxAgentRuntime:
                         pane_id=pane_id,
                         scope="parallel",
                         task_id=task_id,
-                        label=f"{role} {task_id}",
+                        label=self._display_label_for_task(role, task_id),
                     )
                 )
         return panes
@@ -291,37 +320,55 @@ class TmuxAgentRuntime:
         self._persist_snapshot()
         return pane_id
 
-    def send(self, role: str, prompt_file: Path) -> None:
+    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
         pane_id = self._ensure_primary_pane(role)
         if not pane_id:
             return
+        set_pane_identity(
+            pane_id,
+            role=role,
+            display_label=display_label or self._display_label_for_task(role, None),
+        )
         self._zone.show(pane_id)
         send_prompt(pane_id, prompt_file)
         self._persist_snapshot()
 
-    def send_many(self, role: str, prompt_files: list[Path]) -> None:
-        if not prompt_files:
+    def send_many(self, role: str, prompt_specs: list[ParallelPromptSpec | Path]) -> None:
+        if not prompt_specs:
             return
         primary = self._ensure_primary_pane(role)
         if not primary:
             return
 
-        workers: dict[int, str] = {}
-        for idx in range(1, len(prompt_files) + 1):
+        normalized_specs: list[ParallelPromptSpec] = []
+        for index, spec in enumerate(prompt_specs, start=1):
+            if isinstance(spec, ParallelPromptSpec):
+                normalized_specs.append(spec)
+            else:
+                normalized_specs.append(ParallelPromptSpec(task_id=index, prompt_file=spec))
+
+        workers: dict[int | str, str] = {}
+        ordered_task_ids: list[int | str] = []
+        for idx, spec in enumerate(normalized_specs, start=1):
+            task_id = spec.task_id
+            ordered_task_ids.append(task_id)
+            display_label = spec.display_label or self._display_label_for_task(role, task_id)
             if idx == 1:
                 pane_id = primary
+                set_pane_identity(pane_id, role=role, display_label=display_label)
             else:
                 pane_id = create_agent_pane(
                     self.session_name,
                     role,
                     self.agents,
                     self.agents[role].trust_snippet,
+                    display_label=display_label,
                 )
-            workers[idx] = pane_id
+            workers[task_id] = pane_id
 
-        self._zone.show_parallel(list(workers.values()))
-        for idx, prompt_file in enumerate(prompt_files, start=1):
-            send_prompt(workers[idx], prompt_file)
+        self._zone.show_parallel([workers[task_id] for task_id in ordered_task_ids])
+        for spec in normalized_specs:
+            send_prompt(workers[spec.task_id], spec.prompt_file)
 
         self.parallel_panes[role] = workers
         self._persist_snapshot()
@@ -385,9 +432,18 @@ class TmuxAgentRuntime:
             role,
             self.agents,
             self.agents[role].trust_snippet,
+            display_label=self._display_label_for_task(role, task_id),
         )
         send_prompt(pane_id, prompt_file)
         self.parallel_panes.setdefault(role, {})[task_id] = pane_id
+        self._persist_snapshot()
+
+    def hide_task(self, role: str, task_id: int | str) -> None:
+        workers = self.parallel_panes.get(role, {})
+        pane_id = workers.get(task_id)
+        if not pane_id or len(workers) <= 1:
+            return
+        self._zone.hide(pane_id)
         self._persist_snapshot()
 
     def finish_task(self, role: str, task_id: str) -> None:

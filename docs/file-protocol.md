@@ -21,12 +21,26 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
 ## Planning (`02_planning/`)
 
 - `architect_prompt.md` / `changes_prompt.txt` — architect prompts
-- `plan.md` / `tasks.md` — architect planning artifacts
+- `plan.md` — human-readable planning overview
+- `plan_<N>.md` — executable per-unit implementation plans referenced by scheduler metadata
+- `execution_plan.json` — machine-readable schedule of ordered execution groups
+  - Each group has a unique `group_id` and an execution mode (`serial` or `parallel`)
+  - `serial` groups must reference exactly one named `plan_<N>.md` entry
+  - `parallel` groups reference one or more named `plan_<N>.md` entries
+  - Canonical plan-entry shape is `{ "file": "plan_<N>.md", "name": "Human title" }`
+  - Plan references must be unique across groups
+  - Group ordering defines implementation wave order
+- `tasks.md` — architect implementation checklist derived from the same staged plan
 - `plan_meta.json` — architect workflow-intent metadata:
   - `needs_design` (`true`/`false`) — whether to run a dedicated design handoff
   - `needs_docs` (`true`/`false`) — whether review-pass must enter docs before completion
   - `doc_files` (`string[]`) — expected docs update targets when `needs_docs` is `true`; must be `[]` when `needs_docs` is `false`
-- `plan_*.md` — subplan files for parallel coder runs
+
+Compatibility behavior:
+
+- Legacy flat plans without `execution_plan.json` still rely on `plan.md` `## Sub-plan <N>: ...` splitting into generated `plan_*.md` files.
+- Legacy execution plans with `plans: ["plan_1.md"]` remain readable, but new architect output must use named plan objects.
+- Staged execution should be preferred for new plans; legacy splitting is retained for backward compatibility.
 
 ## Research (`03_research/`)
 
@@ -40,7 +54,14 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
 ## Implementation (`05_implementation/`)
 
 - `coder_prompt.md` / `coder_prompt_*.txt`
-- `done_*` — coder completion markers for single or parallel implementation/fixing runs
+- `done_*` — coder completion markers for implementing-phase scheduled plan units (`done_<N>` maps to `plan_<N>.md`)
+- `done_1` — fixing-phase completion marker after a review-requested fix run
+- `state.json` includes implementing-phase progress metadata so monitor/orchestrator can track:
+  - `implementation_group_total` — total scheduled execution groups
+  - `implementation_group_index` — current 1-based active group index (or total when implementation is complete)
+  - `implementation_group_mode` — active group mode (`serial`/`parallel`)
+  - `implementation_active_plan_ids` — active `plan_<N>` ids for the current group
+  - `implementation_completed_group_ids` — ordered list of completed `group_id` values
 
 ## Review (`06_review/`)
 

@@ -6,10 +6,17 @@
 
 The tmux layout is split into two zones:
 
-- **Monitor zone** on the left, fixed to 15 columns
+- **Monitor zone** on the left, fixed to 40 columns
 - **Content zone** on the right, managed exclusively by `ContentZone`
 
 `ContentZone` owns the right-hand pane state. Its `_visible` list is the single source of truth for which agent panes are currently mounted in the main window. The placeholder pane is internal and never part of `_visible`.
+
+Pane identity and pane display are separate:
+
+- `@role` remains the stable logical role used for pane lookup and resume (`coder`, `architect`, etc.)
+- `@pane_label` is optional display metadata used for pane borders and visible pane titles
+- Pane borders and titles render only the already-formatted display label, with no session or feature suffix appended
+- Coder panes use the structured plan name or fix iteration, reviewer panes use review iteration, and designer panes use the feature being designed
 
 ## Invariant
 
@@ -22,9 +29,10 @@ This avoids reconstructing visibility from ad-hoc tmux queries and keeps placeho
 ## Pane lifecycle
 
 - **Exclusive display**: `ContentZone.show(pane_id)` swaps a single agent into the content zone and parks any other visible agents
-- **Parallel display**: `ContentZone.show_parallel(pane_ids)` shows the first pane exclusively, then stacks the rest vertically with `join-pane -v`
+- **Parallel display**: `ContentZone.show_parallel(pane_ids)` shows the first pane exclusively, stacks the rest vertically with `join-pane -v`, then rebalances the visible content panes with `select-layout -E`
+- **Completed parallel coders**: while the implementation phase is still waiting on other `done_N` markers, finished coder panes are parked in `_hidden` so remaining active coders get the full visible content area
 - **Parking**: hidden agents are moved to the `_hidden` window with `break-pane -d`
-- **Removal**: `ContentZone.remove(pane_id)` hides a visible pane if needed, then kills it
+- **Removal**: `ContentZone.remove(pane_id)` hides a visible pane if needed, kills it, and preserves an even split for any remaining visible content panes
 
 The monitor/content split is only created once during session setup. Later mutations use swaps, vertical joins, and breaks so the horizontal divider stays stable.
 

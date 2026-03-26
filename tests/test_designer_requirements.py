@@ -23,11 +23,11 @@ class FakeRuntime:
     def __init__(self) -> None:
         self.calls: list[tuple[str, object]] = []
 
-    def send(self, role: str, prompt_file: Path) -> None:
-        self.calls.append(("send", role, prompt_file.name))
+    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
+        self.calls.append(("send", role, prompt_file.name, display_label))
 
-    def send_many(self, role: str, prompt_files: list[Path]) -> None:
-        self.calls.append(("send_many", role, [path.name for path in prompt_files]))
+    def send_many(self, role: str, prompt_specs: list[object]) -> None:
+        self.calls.append(("send_many", role, [Path(getattr(item, "prompt_file", item)).name for item in prompt_specs]))
 
     def deactivate(self, role: str) -> None:
         self.calls.append(("deactivate", role))
@@ -167,7 +167,7 @@ class DesignerRequirementsTests(unittest.TestCase):
 
             run_phase_cycle(load_state(state_path), ctx)
 
-            self.assertEqual([("send", "designer", "designer_prompt.md")], ctx.runtime.calls)
+            self.assertEqual([("send", "designer", "designer_prompt.md", "[designer] feature")], ctx.runtime.calls)
             self.assertTrue((feature_dir / DESIGN_DIR / "designer_prompt.md").exists())
 
     def test_design_written_hands_off_to_implementing(self) -> None:

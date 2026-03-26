@@ -18,11 +18,11 @@ class FakeRuntime:
     def __init__(self) -> None:
         self.calls: list[tuple[str, object]] = []
 
-    def send(self, role: str, prompt_file: Path) -> None:
-        self.calls.append(("send", role, prompt_file.name))
+    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
+        self.calls.append(("send", role, prompt_file.name, display_label))
 
-    def send_many(self, role: str, prompt_files: list[Path]) -> None:
-        self.calls.append(("send_many", role, [path.name for path in prompt_files]))
+    def send_many(self, role: str, prompt_specs: list[object]) -> None:
+        self.calls.append(("send_many", role, [Path(getattr(item, "prompt_file", item)).name for item in prompt_specs]))
 
     def deactivate(self, role: str) -> None:
         self.calls.append(("deactivate", role))
@@ -106,7 +106,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             phase = get_phase(load_state(state_path))
             phase.on_enter(load_state(state_path), ctx)
 
-            self.assertIn(("send", "reviewer", "review_prompt.md"), ctx.runtime.calls)
+            self.assertIn(("send", "reviewer", "review_prompt.md", "[reviewer] iteration 1"), ctx.runtime.calls)
             self.assertFalse(ctx.files.review.exists())
 
     def test_reviewing_phase_is_registered(self) -> None:

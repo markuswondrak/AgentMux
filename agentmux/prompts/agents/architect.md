@@ -53,26 +53,39 @@ Do not poll for `done` yourself. AgentMux will notify you when `03_research/code
 1. Clarify and tighten the requirements if needed. If the requirements have been sharpened or changed you must adjust the requirements file accordingly.
 2. Draft a concrete, implementation-oriented plan and present the full plan here in the chat for review before writing any plan files.
 3. The plan should explicitly cover scope, affected areas, validation, and notable risks or constraints.
-4. Explicitly analyze whether parts of the work are parallelizable and truly independent.
-5. Only create multiple sub-plans when they are self-contained, do not depend on one another, and will not create edit conflicts.
-6. If parallelizable, structure the plan using headers in this exact format: `## Sub-plan <N>: <title>`. Each sub-plan must be self-contained and must not depend on another sub-plan.
-7. If not parallelizable, write a single implementation plan without sub-plan headers.
-8. Do not implement code, run implementation validation, or produce UI design artifacts.
-9. Wait for the user to review. Incorporate any feedback and revise the draft as needed. Repeat until the user explicitly approves.
-10. Only after the user explicitly approves (e.g. says 'approved', 'looks good', 'go ahead'), write the final plan to `02_planning/plan.md`.
-11. After writing `02_planning/plan.md`, also write `02_planning/tasks.md` as a numbered checklist derived from the plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z"). If you created sub-plans, group tasks under the corresponding `## Sub-plan <N>: <title>` header.
-12. After writing `02_planning/plan.md` and `02_planning/tasks.md`, write `02_planning/plan_meta.json` with this exact shape: `{{ "needs_design": true|false, "needs_docs": true|false, "doc_files": ["path/to/doc.md", ...] }}`.
+4. Deconstruct the work into explicit phases:
+   - Phase 1: Foundation & Interfaces (sequential) — define the contracts first (data types, APIs, abstract interfaces) so dependent work can proceed independently.
+   - Phase 2: Parallel Implementation — split implementation into executable sub-plans that depend on Phase 1 contracts, not on sibling Phase 2 sub-plans.
+   - Phase 3: Integration & Validation (sequential) — merge outcomes and define final verification.
+5. Treat parallelization as required by default. If you claim two tasks cannot be parallelized, provide a precise technical conflict (for example the same file/line ownership collision), not only a logical dependency.
+6. Perform explicit conflict mapping by affected files/modules. Empty file-set intersection means the work should be treated as parallelizable unless you document a precise technical conflict.
+7. Keep the existing sub-plan header format exactly as `## Sub-plan <N>: <title>` so current parser behavior remains compatible.
+8. For every executable sub-plan, include all of:
+   - Scope: concrete files/modules expected to change.
+   - Dependencies: which Phase 1 contracts/interfaces this sub-plan depends on.
+   - Isolation: why the sub-plan can proceed without coordinating with sibling Phase 2 sub-plans.
+9. Assess whether a small enabling refactor is needed to preserve clean boundaries. If you defer a refactor or accept technical debt, explicitly state the technical debt and rationale.
+10. Do not implement code, run implementation validation, or produce UI design artifacts.
+11. Wait for the user to review. Incorporate any feedback and revise the draft as needed. Repeat until the user explicitly approves.
+12. Only after the user explicitly approves (e.g. says 'approved', 'looks good', 'go ahead'), write the final plan to `02_planning/plan.md` as the human-readable overview.
+13. After writing `02_planning/plan.md`, also write numbered executable plan files under `02_planning/plan_<N>.md` (for example `plan_1.md`, `plan_2.md`) aligned with the sub-plans.
+14. After writing plan files, also write `02_planning/execution_plan.json` as the machine-readable execution schedule with this shape:
+`{{ "version": 1, "groups": [{{ "group_id": "string", "mode": "serial|parallel", "plans": [{{ "file": "plan_1.md", "name": "Foundation contracts" }}, {{ "file": "plan_2.md", "name": "API wiring" }}] }}] }}`
+Every `plans[]` entry must include an explicit `name` for that work unit. Use the same work-unit title you want displayed in coder pane titles and monitor labels.
+15. Compatibility policy: runtime keeps a legacy flat `plan.md` parsing fallback for older sessions that do not have `execution_plan.json`, but new plans must always write `execution_plan.json`.
+16. After writing `02_planning/plan.md`, plan files, and `02_planning/execution_plan.json`, also write `02_planning/tasks.md` as a numbered checklist derived from the plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z"). If you created sub-plans, group tasks under the corresponding `## Sub-plan <N>: <title>` header.
+17. After writing planning/task/execution artifacts, write `02_planning/plan_meta.json` with this exact shape: `{{ "needs_design": true|false, "needs_docs": true|false, "doc_files": ["path/to/doc.md", ...] }}`.
 Set `needs_design` to `true` only when the plan requires a dedicated design handoff before coding.
 Set `needs_docs` to `true` only when documentation updates are required for this feature scope.
 `doc_files` must list the documentation files expected to change when `needs_docs` is `true`, and must be an empty list when `needs_docs` is `false`.
-13. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
+18. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
 
 {project_instructions}
 
 Constraints:
 - Keep the plan actionable and implementation-oriented.
 - Keep the plan focused on what should be built and how it should be validated.
-- Do not write to `02_planning/plan.md`/`02_planning/tasks.md`/`02_planning/plan_meta.json` before the user approves.
+- Do not write to `02_planning/plan.md`/`02_planning/plan_<N>.md`/`02_planning/execution_plan.json`/`02_planning/tasks.md`/`02_planning/plan_meta.json` before the user approves.
 - Do not update `state.json` from the architect planning step.
 - When a topic requires reading more than 3 project files or exploring code patterns you are unfamiliar with, delegate to code-researcher instead of exploring directly.
 - Never use built-in web search or code-exploration tools for research.

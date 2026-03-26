@@ -22,11 +22,11 @@ class FakeRuntime:
         self.calls: list[tuple[str, object]] = []
         self.primary_panes = {"architect": "%1"}
 
-    def send(self, role: str, prompt_file: Path) -> None:
+    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
         self.calls.append(("send", role, prompt_file.name))
 
-    def send_many(self, role: str, prompt_files: list[Path]) -> None:
-        self.calls.append(("send_many", role, [path.name for path in prompt_files]))
+    def send_many(self, role: str, prompt_specs: list[object]) -> None:
+        self.calls.append(("send_many", role, [Path(getattr(item, "prompt_file", item)).name for item in prompt_specs]))
 
     def spawn_task(self, role: str, task_id: str, prompt_file: Path) -> None:
         self.calls.append(("spawn_task", role, task_id, prompt_file.name))

@@ -120,6 +120,21 @@ def _set_placeholder_id(session_name: str, pane_id: str) -> None:
     )
 
 
+def set_pane_identity(
+    pane_id: str,
+    *,
+    role: str,
+    display_label: str | None = None,
+) -> None:
+    visible_label = (display_label or role).strip()
+    run_command(["tmux", "select-pane", "-t", pane_id, "-T", visible_label], check=False)
+    run_command(["tmux", "set-option", "-p", "-t", pane_id, "@role", role], check=False)
+    run_command(
+        ["tmux", "set-option", "-p", "-t", pane_id, "@pane_label", (display_label or "").strip()],
+        check=False,
+    )
+
+
 def _find_pane_by_title(session_name: str, title: str) -> str | None:
     """Find any pane in the session (all windows) with the given @role."""
     for window in [MAIN_WINDOW, "_hidden"]:
@@ -327,6 +342,7 @@ class ContentZone:
 
         self._visible = visible
         self._enforce_invariant()
+        self._rebalance_visible_panes()
         _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
@@ -345,6 +361,7 @@ class ContentZone:
             self._visible = [current for current in self._visible if current != pane_id]
 
         self._enforce_invariant()
+        self._rebalance_visible_panes()
         _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
@@ -421,6 +438,18 @@ class ContentZone:
         else:
             self._ensure_placeholder_visible()
 
+    def _rebalance_visible_panes(self) -> None:
+        if len(self._visible) < 2:
+            return
+        for pane_id in self._visible:
+            if tmux_pane_exists(pane_id) and _pane_in_window(pane_id, MAIN_WINDOW):
+                _log(f"ContentZone: select-layout -E -t {pane_id}")
+                run_command(
+                    ["tmux", "select-layout", "-E", "-t", pane_id],
+                    check=False,
+                )
+                return
+
 
 # ---------------------------------------------------------------------------
 # Session and pane creation
@@ -463,7 +492,6 @@ def tmux_new_session(
         ]
     )
     control_pane = result.stdout.strip()
-    feature_slug = feature_dir.name
     run_command(["tmux", "set-option", "-t", session_name, "pane-border-status", "top"])
     run_command(
         [
@@ -472,14 +500,19 @@ def tmux_new_session(
             "-t",
             session_name,
             "pane-border-format",
-            f"#{{?#{'{'}@role{'}'},"
-            f" #[bold]#{{@role}}#[nobold]"
-            f" #[dim]· {feature_slug}#[default],}}",
+            (
+                "#{?#{@pane_label},"
+                " #[bold]#{@pane_label}#[default],"
+                "#{?#{@role},"
+                " #[bold]#{@role}#[default],"
+                "}}"
+            ),
         ]
     )
     run_command(["tmux", "set-option", "-t", session_name, "allow-rename", "off"])
     run_command(["tmux", "select-pane", "-t", control_pane, "-T", ""])
     run_command(["tmux", "set-option", "-p", "-t", control_pane, "@role", ""])
+    run_command(["tmux", "set-option", "-p", "-t", control_pane, "@pane_label", ""])
     run_command(["tmux", "set-environment", "-t", session_name, "CONTROL_PANE", control_pane])
 
     # Create primary pane (right side)
@@ -499,8 +532,7 @@ def tmux_new_session(
         ]
     )
     primary_pane = result.stdout.strip()
-    run_command(["tmux", "select-pane", "-t", primary_pane, "-T", primary_role])
-    run_command(["tmux", "set-option", "-p", "-t", primary_pane, "@role", primary_role])
+    set_pane_identity(primary_pane, role=primary_role)
 
     # Create placeholder pane to keep the right zone permanently occupied.
     # It lives in _hidden and is swapped in whenever all agents are parked.
@@ -520,6 +552,7 @@ def tmux_new_session(
     placeholder_pane = result.stdout.strip()
     run_command(["tmux", "select-pane", "-t", placeholder_pane, "-T", "placeholder"])
     run_command(["tmux", "set-option", "-p", "-t", placeholder_pane, "@role", ""])
+    run_command(["tmux", "set-option", "-p", "-t", placeholder_pane, "@pane_label", ""])
     run_command(
         ["tmux", "break-pane", "-d", "-s", placeholder_pane, "-n", "_hidden"],
         check=False,
@@ -553,6 +586,8 @@ def create_agent_pane(
     agent_name: str,
     agents: dict[str, AgentConfig],
     trust_snippet: str | None,
+    *,
+    display_label: str | None = None,
 ) -> str:
     """Create a new agent pane and leave it parked in the hidden window."""
     agent = agents[agent_name]
@@ -578,8 +613,7 @@ def create_agent_pane(
         ]
     )
     pane_id = result.stdout.strip()
-    run_command(["tmux", "select-pane", "-t", pane_id, "-T", agent.role])
-    run_command(["tmux", "set-option", "-p", "-t", pane_id, "@role", agent.role])
+    set_pane_identity(pane_id, role=agent.role, display_label=display_label)
     if _pane_in_window(pane_id, MAIN_WINDOW):
         run_command(["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False)
 

@@ -9,7 +9,7 @@ from agentmux.runtime.event_bus import SessionEvent
 from agentmux.workflow.handlers import load_plan_meta
 from agentmux.workflow.interruptions import InterruptionService
 from agentmux.workflow.orchestrator import PipelineOrchestrator
-from agentmux.workflow.plan_parser import split_plan_into_subplans
+from agentmux.workflow.plan_parser import coder_label_for_subplan, read_subplan_title, split_plan_into_subplans
 from agentmux.workflow.prompts import write_prompt_file
 from agentmux.sessions.state_store import create_feature_files, load_state
 from agentmux.workflow.transitions import EXIT_SUCCESS, PipelineContext
@@ -75,10 +75,27 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
             self.assertFalse(files.completion_dir.exists())
             self.assertEqual(feature_dir / "02_planning" / "plan.md", files.plan)
             self.assertEqual(feature_dir / "02_planning" / "tasks.md", files.tasks)
+            self.assertEqual(feature_dir / "02_planning" / "execution_plan.json", files.execution_plan)
             self.assertEqual(feature_dir / "04_design" / "design.md", files.design)
             self.assertEqual(feature_dir / "06_review" / "review.md", files.review)
             self.assertEqual(feature_dir / "06_review" / "fix_request.md", files.fix_request)
             self.assertEqual(feature_dir / "08_completion" / "changes.md", files.changes)
+
+    def test_create_feature_files_initializes_staged_execution_state_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+
+            files = create_feature_files(project_dir, feature_dir, "phase dirs", "session-x")
+            state = load_state(files.state)
+
+            self.assertEqual(0, state["implementation_group_total"])
+            self.assertEqual(0, state["implementation_group_index"])
+            self.assertEqual([], state["implementation_active_plan_ids"])
+            self.assertEqual([], state["implementation_completed_group_ids"])
+            self.assertIsNone(state["implementation_group_mode"])
 
     def test_write_prompt_file_creates_parent_directories(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -114,6 +131,20 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
             self.assertEqual([planning_dir / "plan_1.md", planning_dir / "plan_2.md"], subplans)
             self.assertTrue((planning_dir / "plan_1.md").exists())
             self.assertTrue((planning_dir / "plan_2.md").exists())
+
+    def test_read_subplan_title_extracts_header_title(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            subplan_path = Path(td) / "plan_2.md"
+            subplan_path.write_text("# Plan\n\n## Sub-plan 2: API wiring\n\nDo it\n", encoding="utf-8")
+
+            self.assertEqual("API wiring", read_subplan_title(subplan_path))
+
+    def test_coder_label_for_subplan_falls_back_when_header_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            planning_dir = Path(td)
+            (planning_dir / "plan_4.md").write_text("# Plan\n\nNo subplan header here\n", encoding="utf-8")
+
+            self.assertEqual("plan 4", coder_label_for_subplan(planning_dir, 4))
 
     def test_orchestrate_starts_and_stops_event_bus(self) -> None:
         with tempfile.TemporaryDirectory() as td:

@@ -88,6 +88,7 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         requirements=feature_dir / "requirements.md",
         plan=planning_dir / "plan.md",
         tasks=planning_dir / "tasks.md",
+        execution_plan=planning_dir / "execution_plan.json",
         design=design_dir / "design.md",
         review=review_dir / "review.md",
         fix_request=review_dir / "fix_request.md",
@@ -137,7 +138,13 @@ def create_feature_files(
         "product_manager": bool(product_manager),
         "last_event": "feature_created",
         "subplan_count": 0,
+        "completed_subplans": [],
         "review_iteration": 0,
+        "implementation_group_total": 0,
+        "implementation_group_index": 0,
+        "implementation_group_mode": None,
+        "implementation_active_plan_ids": [],
+        "implementation_completed_group_ids": [],
         "updated_at": now_iso(),
         "updated_by": "pipeline",
     }
@@ -207,17 +214,15 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
     if subplan_count < 0:
         subplan_count = 0
 
-    if subplan_count > 0:
+    fixing_iteration = (review_dir / "fix_request.md").exists() and int(state.get("review_iteration", 0)) > 0
+    if fixing_iteration:
+        done_complete = (implementation_dir / "done_1").exists()
+        if not done_complete:
+            return "fixing"
+    elif subplan_count > 0:
         done_complete = all((implementation_dir / f"done_{index}").exists() for index in range(1, subplan_count + 1))
     else:
         done_complete = any(implementation_dir.glob("done_*"))
-
-    if (
-        (review_dir / "fix_request.md").exists()
-        and int(state.get("review_iteration", 0)) > 0
-        and not done_complete
-    ):
-        return "fixing"
 
     if not done_complete:
         return "implementing"

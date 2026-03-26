@@ -50,6 +50,7 @@ class RuntimeFiles:
     requirements: Path
     plan: Path
     tasks: Path
+    execution_plan: Path
     design: Path
     review: Path
     fix_request: Path
