@@ -25,6 +25,16 @@ class McpServerSpec:
     env: dict[str, str]
 
 
+DEFAULT_RESEARCH_ROLES = ("architect", "product-manager")
+DEFAULT_RESEARCH_SERVERS = (
+    McpServerSpec(
+        name="agentmux-research",
+        module="agentmux.mcp_research_server",
+        env={},
+    ),
+)
+
+
 class PersistentMcpConfigurator(ABC):
     provider: str
 
@@ -157,6 +167,32 @@ def _default_confirm(message: str, default: bool = True) -> bool:
     if not answer:
         return default
     return answer in {"y", "yes"}
+
+
+class McpAgentPreparer:
+    def __init__(self, project_dir: Path, *, interactive: bool, output: TextIO) -> None:
+        self.project_dir = project_dir
+        self.interactive = interactive
+        self.output = output
+
+    def ensure_project_config(self, agents: dict[str, AgentConfig]) -> None:
+        ensure_mcp_config(
+            agents,
+            list(DEFAULT_RESEARCH_SERVERS),
+            DEFAULT_RESEARCH_ROLES,
+            self.project_dir,
+            interactive=self.interactive,
+            output=self.output,
+        )
+
+    def prepare_feature_agents(self, agents: dict[str, AgentConfig], feature_dir: Path) -> dict[str, AgentConfig]:
+        return setup_mcp(
+            agents,
+            list(DEFAULT_RESEARCH_SERVERS),
+            DEFAULT_RESEARCH_ROLES,
+            feature_dir,
+            self.project_dir,
+        )
 
 
 class JsonMcpConfigurator(PersistentMcpConfigurator):

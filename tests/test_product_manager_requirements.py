@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import agentmux.pipeline as pipeline
 from agentmux import monitor
+from agentmux.config import load_explicit_config
 from agentmux.models import AgentConfig, SESSION_DIR_NAMES
 from agentmux.phases import PHASES, ProductManagementPhase
 from agentmux.prompts import build_product_manager_prompt
@@ -98,7 +99,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             cfg_path = Path(td) / "pipeline_config.json"
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
-            _, agents, _ = pipeline.load_config(cfg_path)
+            agents = load_explicit_config(cfg_path).agents
 
             self.assertIn("product-manager", agents)
             self.assertEqual("claude", agents["product-manager"].cli)

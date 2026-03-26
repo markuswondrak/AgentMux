@@ -392,3 +392,35 @@ class TmuxAgentRuntime:
     def shutdown(self, keep_session: bool) -> None:
         if not keep_session:
             tmux_kill_session(self.session_name)
+
+
+class TmuxRuntimeFactory:
+    def create(
+        self,
+        *,
+        feature_dir: Path,
+        session_name: str,
+        agents: dict[str, AgentConfig],
+        config_path: Path | None,
+        initial_role: str = "architect",
+    ) -> TmuxAgentRuntime:
+        return TmuxAgentRuntime.create(
+            feature_dir=feature_dir,
+            session_name=session_name,
+            agents=agents,
+            config_path=config_path,
+            initial_role=initial_role,
+        )
+
+    def attach(
+        self,
+        *,
+        feature_dir: Path,
+        session_name: str,
+        agents: dict[str, AgentConfig],
+    ) -> TmuxAgentRuntime:
+        return TmuxAgentRuntime.attach(
+            feature_dir=feature_dir,
+            session_name=session_name,
+            agents=agents,
+        )

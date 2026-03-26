@@ -5,13 +5,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import agentmux.pipeline as pipeline
 from agentmux.event_bus import SessionEvent
 from agentmux.handlers import load_plan_meta
+from agentmux.interruption_reports import InterruptionService
+from agentmux.orchestrator import PipelineOrchestrator
 from agentmux.plan_parser import split_plan_into_subplans
 from agentmux.prompts import write_prompt_file
 from agentmux.state import create_feature_files, load_state
-from agentmux.transitions import EXIT_SUCCESS
+from agentmux.transitions import EXIT_SUCCESS, PipelineContext
 
 
 class _FakeEventBus:
@@ -122,24 +123,23 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "phase dirs", "session-x")
             bus = _FakeEventBus()
+            orchestrator = PipelineOrchestrator(InterruptionService())
+            ctx = PipelineContext(
+                files=files,
+                runtime=_FakeRuntime(),
+                agents={},
+                max_review_iterations=3,
+                prompts={},
+            )
 
             with patch(
-                "agentmux.pipeline.build_orchestrator_event_bus",
+                "agentmux.orchestrator.PipelineOrchestrator.build_event_bus",
                 return_value=bus,
             ) as build_bus_mock, patch(
-                "agentmux.pipeline.build_initial_prompts",
-                return_value={},
-            ), patch(
-                "agentmux.pipeline.run_phase_cycle",
+                "agentmux.orchestrator.run_phase_cycle",
                 return_value=EXIT_SUCCESS,
             ):
-                result = pipeline.orchestrate(
-                    files=files,
-                    runtime=_FakeRuntime(),
-                    agents={},
-                    max_review_iterations=3,
-                    keep_session=False,
-                )
+                result = orchestrator.run(ctx, keep_session=False)
 
             self.assertEqual(0, result)
             build_bus_mock.assert_called_once()
@@ -154,21 +154,20 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "phase dirs", "session-x")
             bus = _InterruptionOnStartBus()
+            orchestrator = PipelineOrchestrator(InterruptionService())
+            ctx = PipelineContext(
+                files=files,
+                runtime=_FakeRuntime(),
+                agents={},
+                max_review_iterations=3,
+                prompts={},
+            )
 
             with patch(
-                "agentmux.pipeline.build_orchestrator_event_bus",
+                "agentmux.orchestrator.PipelineOrchestrator.build_event_bus",
                 return_value=bus,
-            ), patch(
-                "agentmux.pipeline.build_initial_prompts",
-                return_value={},
-            ), patch("agentmux.pipeline.run_phase_cycle") as run_phase_cycle_mock:
-                result = pipeline.orchestrate(
-                    files=files,
-                    runtime=_FakeRuntime(),
-                    agents={},
-                    max_review_iterations=3,
-                    keep_session=False,
-                )
+            ), patch("agentmux.orchestrator.run_phase_cycle") as run_phase_cycle_mock:
+                result = orchestrator.run(ctx, keep_session=False)
 
             self.assertEqual(130, result)
             run_phase_cycle_mock.assert_not_called()

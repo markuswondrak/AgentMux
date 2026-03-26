@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urlparse
 
 from .models import GitHubConfig
@@ -69,6 +71,66 @@ def extract_issue_number(issue_ref: str) -> str:
             return segments[-1]
 
     raise ValueError(f"Invalid issue reference: {issue_ref}. Expected an issue number or GitHub issue URL.")
+
+
+@dataclass(frozen=True)
+class IssueBootstrap:
+    prompt_text: str
+    slug_source: str
+    issue_number: str
+    gh_available: bool = True
+
+
+class GitHubBootstrapper:
+    def __init__(
+        self,
+        project_dir: Path,
+        github_config: GitHubConfig,
+        *,
+        output: Callable[[str], None] = print,
+    ) -> None:
+        self.project_dir = project_dir
+        self.github_config = github_config
+        self.output = output
+
+    def detect_pr_availability(self) -> bool:
+        gh_available = check_gh_available() and check_gh_authenticated()
+        if not gh_available:
+            self.output("Warning: gh CLI not available or not authenticated. PR creation will be skipped.")
+        return gh_available
+
+    def resolve_issue(self, issue_ref: str) -> IssueBootstrap:
+        if not check_gh_available():
+            raise SystemExit("gh CLI is required for --issue. Install: https://cli.github.com")
+        if not check_gh_authenticated():
+            raise SystemExit("gh is not authenticated. Run: gh auth login")
+        try:
+            issue_number = extract_issue_number(issue_ref)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        try:
+            payload = fetch_issue(issue_ref)
+        except RuntimeError as exc:
+            raise SystemExit(str(exc)) from exc
+
+        try:
+            subprocess.run(
+                ["git", "pull", "origin", self.github_config.base_branch],
+                cwd=self.project_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.output(f"Pulled latest from origin/{self.github_config.base_branch}.")
+        except subprocess.CalledProcessError as exc:
+            stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
+            self.output(f"Warning: could not pull origin/{self.github_config.base_branch}: {stderr}")
+
+        return IssueBootstrap(
+            prompt_text=payload["body"].strip() or payload["title"],
+            slug_source=payload["title"],
+            issue_number=issue_number,
+        )
 
 
 def _read_text(path: Path) -> str:

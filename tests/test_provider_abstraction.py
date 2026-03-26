@@ -6,8 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import agentmux.pipeline as pipeline
-from agentmux.config import load_layered_config
+from agentmux.config import load_explicit_config, load_layered_config
 from agentmux.providers import PROVIDERS, get_provider, resolve_agent
 from agentmux.models import AgentConfig
 from agentmux.tmux import build_agent_command
@@ -44,7 +43,10 @@ class ProviderAbstractionTests(unittest.TestCase):
             }
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
-            session_name, agents, max_review_iterations = pipeline.load_config(cfg_path)
+            loaded = load_explicit_config(cfg_path)
+            session_name = loaded.session_name
+            agents = loaded.agents
+            max_review_iterations = loaded.max_review_iterations
 
             self.assertEqual("s", session_name)
             self.assertEqual(3, max_review_iterations)

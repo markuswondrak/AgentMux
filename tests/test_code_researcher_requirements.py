@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import agentmux.pipeline as pipeline
+from agentmux.config import load_explicit_config
 from agentmux.models import AgentConfig, SESSION_DIR_NAMES
 from agentmux.phases import PlanningPhase
 from agentmux.prompts import build_code_researcher_prompt
@@ -114,7 +114,7 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             cfg_path = tmp_path / "pipeline_config.json"
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
-            _, agents, _ = pipeline.load_config(cfg_path)
+            agents = load_explicit_config(cfg_path).agents
 
             self.assertIn("code-researcher", agents)
             self.assertEqual("claude", agents["code-researcher"].cli)
