@@ -362,6 +362,40 @@ class MonitorTests(unittest.TestCase):
             self.assertIn(" LOG", output)
             self.assertIn("11:20 + 06_review/review.md", output)
 
+    def test_render_failed_state_shows_clean_failure_classification_and_cause(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            state_path.write_text(
+                (
+                    '{"phase":"failed","last_event":"run_failed",'
+                    '"interruption_cause":"Background orchestrator exited unexpectedly."}'
+                ),
+                encoding="utf-8",
+            )
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+
+            output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
+
+            self.assertIn("› run failed unexpectedly", output)
+            self.assertIn("› cause: Background orchestrator exited unexpectedly.", output)
+
+    def test_render_legacy_interruption_event_uses_shared_label(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            state_path.write_text(
+                '{"phase":"failed","last_event":"keyboard_interrupt"}',
+                encoding="utf-8",
+            )
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+
+            output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
+
+            self.assertIn("› canceled by user", output)
+
 
 if __name__ == "__main__":
     unittest.main()

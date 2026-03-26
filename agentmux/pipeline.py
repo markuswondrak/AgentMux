@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import subprocess
 import sys
 import threading
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Literal
 
 from .config import LoadedConfig, load_explicit_config, load_layered_config
 from .github import (
@@ -16,6 +19,17 @@ from .github import (
     create_branch,
     extract_issue_number,
     fetch_issue,
+)
+from .interruption_events import (
+    INTERRUPTION_CATEGORY_CANCELED,
+    INTERRUPTION_CATEGORY_FAILED,
+    canonical_event_for_category,
+    canonical_interruption_event,
+    fallback_cause_for_category,
+    fallback_cause_from_event,
+    interruption_category_from_event,
+    interruption_title_for_category,
+    normalize_interruption_category,
 )
 from .mcp_config import McpServerSpec, cleanup_mcp, ensure_mcp_config, setup_mcp
 from .models import AgentConfig, GitHubConfig
@@ -38,6 +52,127 @@ from .transitions import EXIT_FAILURE, EXIT_SUCCESS, PipelineContext
 
 DEFAULT_CONFIG_HINT = ".agentmux/config.yaml"
 MCP_RESEARCH_ROLES = ("architect", "product-manager")
+
+
+@dataclass(frozen=True)
+class InterruptionReport:
+    category: Literal["canceled", "failed"]
+    cause: str
+    resume_command: str
+    log_path: str | None
+    last_event: str
+
+
+def _resume_command(feature_dir: Path) -> str:
+    return f"agentmux --resume {shlex.quote(str(feature_dir))}"
+
+
+def _log_path_if_available(files) -> str | None:
+    log_path = files.orchestrator_log
+    if log_path.exists():
+        return str(log_path)
+    return None
+
+
+def _coalesce_text(value: Any) -> str:
+    return " ".join(str(value).split()).strip()
+
+
+def _report_from_state(state: dict[str, Any], feature_dir: Path, *, files=None) -> InterruptionReport | None:
+    raw_category = normalize_interruption_category(state.get("interruption_category"))
+    raw_cause = _coalesce_text(state.get("interruption_cause", ""))
+    raw_resume = str(state.get("interruption_resume_command", "")).strip()
+    raw_log_value = state.get("interruption_log_path")
+    raw_log = None
+    if isinstance(raw_log_value, str):
+        raw_log = raw_log_value.strip() or None
+    last_event = str(state.get("last_event", "")).strip()
+
+    category: Literal["canceled", "failed"] | None = None
+    if raw_category is not None:
+        category = raw_category
+    else:
+        category = interruption_category_from_event(last_event)
+    if category is None and state.get("phase") == "failed":
+        category = INTERRUPTION_CATEGORY_FAILED
+
+    if category is None:
+        return None
+
+    if not raw_cause:
+        raw_cause = fallback_cause_from_event(last_event) if last_event else fallback_cause_for_category(category)
+    if not raw_resume:
+        raw_resume = _resume_command(feature_dir)
+    if raw_log is None and files is not None:
+        raw_log = _log_path_if_available(files)
+
+    canonical_event = canonical_interruption_event(last_event) or canonical_event_for_category(category)
+    return InterruptionReport(
+        category=category,
+        cause=raw_cause,
+        resume_command=raw_resume,
+        log_path=raw_log,
+        last_event=canonical_event,
+    )
+
+
+def _build_report(
+    *,
+    feature_dir: Path,
+    category: Literal["canceled", "failed"],
+    cause: str,
+    files=None,
+) -> InterruptionReport:
+    normalized_cause = _coalesce_text(cause) or fallback_cause_for_category(category)
+    return InterruptionReport(
+        category=category,
+        cause=normalized_cause,
+        resume_command=_resume_command(feature_dir),
+        log_path=_log_path_if_available(files) if files is not None else None,
+        last_event=canonical_event_for_category(category),
+    )
+
+
+def _persist_report(files, report: InterruptionReport) -> None:
+    update_phase(
+        files.state,
+        "failed",
+        updated_by="pipeline",
+        last_event=report.last_event,
+        interruption_category=report.category,
+        interruption_cause=report.cause,
+        interruption_resume_command=report.resume_command,
+        interruption_log_path=report.log_path,
+    )
+
+
+def _format_report(report: InterruptionReport) -> str:
+    title = interruption_title_for_category(report.category)
+    lines = [
+        title,
+        f"Cause: {report.cause}",
+        f"Resume: {report.resume_command}",
+    ]
+    if report.log_path:
+        lines.append(f"Diagnostics log: {report.log_path}")
+    return "\n".join(lines)
+
+
+def _summarize_subprocess_error(exc: subprocess.CalledProcessError) -> str:
+    command = exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]
+    command_text = " ".join(str(part) for part in command if str(part).strip())
+    stderr = _coalesce_text(exc.stderr or "")
+    message = f"Command `{command_text}` failed with exit code {exc.returncode}."
+    if stderr:
+        message = f"{message} {stderr}"
+    return message
+
+
+def _summarize_exception(exc: Exception, *, context: str = "The pipeline crashed unexpectedly.") -> str:
+    detail = _coalesce_text(str(exc))
+    if detail:
+        return f"{context} {exc.__class__.__name__}: {detail}"
+    return f"{context} {exc.__class__.__name__}."
 
 
 def parse_init_args(argv: list[str]) -> argparse.Namespace:
@@ -298,15 +433,36 @@ def main() -> int:
             session_name=loaded.session_name,
             agents=agents,
         )
-        return orchestrate(
-            files,
-            runtime,
-            agents,
-            loaded.max_review_iterations,
-            args.keep_session,
-            args.product_manager,
-            github_config=loaded.github,
-        )
+        try:
+            return orchestrate(
+                files,
+                runtime,
+                agents,
+                loaded.max_review_iterations,
+                args.keep_session,
+                args.product_manager,
+                github_config=loaded.github,
+            )
+        except KeyboardInterrupt:
+            report = _build_report(
+                feature_dir=feature_dir,
+                category=INTERRUPTION_CATEGORY_CANCELED,
+                cause="The background orchestrator received Ctrl-C.",
+                files=files,
+            )
+            _persist_report(files, report)
+            print(_format_report(report))
+            return 130
+        except Exception as exc:
+            report = _build_report(
+                feature_dir=feature_dir,
+                category=INTERRUPTION_CATEGORY_FAILED,
+                cause=_summarize_exception(exc, context="The background orchestrator crashed unexpectedly."),
+                files=files,
+            )
+            _persist_report(files, report)
+            print(_format_report(report))
+            return 1
 
     project_dir = Path.cwd().resolve()
     loaded = load_runtime_config(project_dir, config_path)
@@ -396,6 +552,13 @@ def main() -> int:
         state["last_event"] = "resumed"
         state["updated_at"] = now_iso()
         state["updated_by"] = "pipeline"
+        for key in (
+            "interruption_category",
+            "interruption_cause",
+            "interruption_resume_command",
+            "interruption_log_path",
+        ):
+            state.pop(key, None)
         write_state(state_path, state)
     else:
         if issue_payload is not None:
@@ -472,20 +635,61 @@ def main() -> int:
         print(f"Feature directory: {feature_dir}")
         print(f"tmux session: {session_name}")
         subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
+        post_attach_state = load_state(files.state)
+        if str(post_attach_state.get("phase")) == "failed":
+            report = _report_from_state(post_attach_state, feature_dir, files=files)
+            if report is None:
+                report = _build_report(
+                    feature_dir=feature_dir,
+                    category=INTERRUPTION_CATEGORY_FAILED,
+                    cause="The pipeline ended in a failed state while the tmux session was active.",
+                    files=files,
+                )
+                _persist_report(files, report)
+            print(_format_report(report))
+            return 130 if report.category == INTERRUPTION_CATEGORY_CANCELED else 1
         return 0
     except KeyboardInterrupt:
-        update_phase(files.state, "failed", updated_by="pipeline", last_event="keyboard_interrupt")
+        report = _build_report(
+            feature_dir=feature_dir,
+            category=INTERRUPTION_CATEGORY_CANCELED,
+            cause="The pipeline launcher received Ctrl-C.",
+            files=files,
+        )
+        _persist_report(files, report)
+        print(_format_report(report))
         return 130
     except subprocess.CalledProcessError as exc:
-        if runtime is not None:
-            update_phase(files.state, "failed", updated_by="pipeline", last_event="subprocess_error")
-        stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
-        command = exc.cmd if isinstance(exc.cmd, list) else str(exc.cmd)
-        raise SystemExit(f"Command failed: {command}\n{stderr}") from exc
-    except Exception:
-        if runtime is not None and files.state.exists():
-            update_phase(files.state, "failed", updated_by="pipeline", last_event="pipeline_exception")
-        raise
+        if files is None or not files.state.exists():
+            stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
+            command = exc.cmd if isinstance(exc.cmd, list) else str(exc.cmd)
+            raise SystemExit(f"Command failed: {command}\n{stderr}") from exc
+
+        state = load_state(files.state)
+        report = _report_from_state(state, feature_dir, files=files)
+        if report is None:
+            report = _build_report(
+                feature_dir=feature_dir,
+                category=INTERRUPTION_CATEGORY_FAILED,
+                cause=_summarize_subprocess_error(exc),
+                files=files,
+            )
+        _persist_report(files, report)
+        print(_format_report(report))
+        return 130 if report.category == INTERRUPTION_CATEGORY_CANCELED else 1
+    except Exception as exc:
+        if files is None or not files.state.exists():
+            raise
+
+        report = _build_report(
+            feature_dir=feature_dir,
+            category=INTERRUPTION_CATEGORY_FAILED,
+            cause=_summarize_exception(exc),
+            files=files,
+        )
+        _persist_report(files, report)
+        print(_format_report(report))
+        return 1
 
 
 if __name__ == "__main__":
