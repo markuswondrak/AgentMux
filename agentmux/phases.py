@@ -370,6 +370,16 @@ class DesigningPhase(Phase):
 class ImplementingPhase(Phase):
     name = "implementing"
 
+    @staticmethod
+    def _completed_subplans(state: dict) -> set[int]:
+        completed: set[int] = set()
+        for value in list(state.get("completed_subplans", [])):
+            try:
+                completed.add(int(value))
+            except (TypeError, ValueError):
+                continue
+        return completed
+
     def on_enter(self, state: dict, ctx: PipelineContext) -> None:
         reset_markers(ctx.files.implementation_dir, "done_*")
         ctx.runtime.kill_primary("coder")
@@ -377,6 +387,7 @@ class ImplementingPhase(Phase):
         subplan_paths = split_plan_into_subplans(ctx.files.plan, ctx.files.planning_dir)
         subplan_count = len(subplan_paths)
         state["subplan_count"] = subplan_count
+        state["completed_subplans"] = []
         state["updated_at"] = now_iso()
         state["updated_by"] = "pipeline"
         write_state(ctx.files.state, state)
@@ -419,19 +430,37 @@ class ImplementingPhase(Phase):
         count = max(1, int(state.get("subplan_count", 1)))
         if count <= 0:
             return None
-        done = [
-            phase_input_changed(
+        changed_done: list[int] = []
+        for idx in range(1, count + 1):
+            if phase_input_changed(
                 ctx,
                 f"done_{idx}",
                 file_signature(ctx.files.implementation_dir / f"done_{idx}"),
-            )
-            for idx in range(1, count + 1)
-        ]
-        if all(done):
+            ):
+                changed_done.append(idx)
+        if len(changed_done) == count:
             return "implementation_completed"
+        completed = self._completed_subplans(state)
+        for idx in changed_done:
+            if idx not in completed:
+                return f"subplan_completed:{idx}"
         return None
 
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
+        if event.startswith("subplan_completed:"):
+            try:
+                task_id = int(event.split(":", 1)[1])
+            except ValueError:
+                return None
+            if int(state.get("subplan_count", 1)) > 1:
+                ctx.runtime.hide_task("coder", task_id)
+            completed = self._completed_subplans(state)
+            completed.add(task_id)
+            state["completed_subplans"] = sorted(completed)
+            state["updated_at"] = now_iso()
+            state["updated_by"] = "pipeline"
+            write_state(ctx.files.state, state)
+            return None
         if event != "implementation_completed":
             return None
         ctx.runtime.finish_many("coder")
@@ -505,6 +534,10 @@ class FixingPhase(Phase):
     def on_enter(self, state: dict, ctx: PipelineContext) -> None:
         _ = state
         reset_markers(ctx.files.implementation_dir, "done_*")
+        state["completed_subplans"] = []
+        state["updated_at"] = now_iso()
+        state["updated_by"] = "pipeline"
+        write_state(ctx.files.state, state)
         ctx.runtime.kill_primary("coder")
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,

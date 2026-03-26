@@ -140,6 +140,64 @@ class TmuxPromptReferencesTests(unittest.TestCase):
 
         width_mock.assert_called_once_with("session-x")
 
+    def test_content_zone_show_parallel_rebalances_visible_content_panes(self) -> None:
+        commands: list[list[str]] = []
+
+        def fake_run_command(args, cwd=None, check=True):
+            _ = (cwd, check)
+            commands.append(list(args))
+            return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+        with patch("agentmux.tmux.tmux_pane_exists", return_value=True):
+            zone = ContentZone("session-x", visible=["%1"], placeholder="%9")
+
+        with patch("agentmux.tmux.tmux_pane_exists", return_value=True), patch(
+            "agentmux.tmux._pane_in_window",
+            side_effect=lambda pane_id, window_name: window_name == "pipeline" and pane_id != "%9",
+        ), patch("agentmux.tmux.run_command", side_effect=fake_run_command), patch(
+            "agentmux.tmux._enforce_monitor_min_width"
+        ) as width_mock, patch("agentmux.tmux._log_layout", return_value=None):
+            zone.show_parallel(["%1", "%2", "%3"])
+
+        self.assertEqual(
+            [
+                ["tmux", "join-pane", "-v", "-s", "%2", "-t", "%1"],
+                ["tmux", "join-pane", "-v", "-s", "%3", "-t", "%1"],
+                ["tmux", "select-layout", "-E", "-t", "%1"],
+            ],
+            [cmd for cmd in commands if cmd[:2] in (["tmux", "join-pane"], ["tmux", "select-layout"])],
+        )
+        width_mock.assert_called_once_with("session-x")
+
+    def test_content_zone_hide_rebalances_remaining_visible_panes(self) -> None:
+        commands: list[list[str]] = []
+
+        def fake_run_command(args, cwd=None, check=True):
+            _ = (cwd, check)
+            commands.append(list(args))
+            return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+        with patch("agentmux.tmux.tmux_pane_exists", return_value=True):
+            zone = ContentZone("session-x", visible=["%1", "%2", "%3"], placeholder="%9")
+
+        with patch("agentmux.tmux.tmux_pane_exists", return_value=True), patch(
+            "agentmux.tmux._pane_in_window",
+            side_effect=lambda pane_id, window_name: window_name == "pipeline" and pane_id != "%9",
+        ), patch("agentmux.tmux.run_command", side_effect=fake_run_command), patch(
+            "agentmux.tmux._enforce_monitor_min_width"
+        ) as width_mock, patch("agentmux.tmux._log_layout", return_value=None):
+            zone.hide("%2")
+
+        self.assertEqual(["%1", "%3"], zone.visible)
+        self.assertEqual(
+            [
+                ["tmux", "break-pane", "-d", "-s", "%2", "-n", "_hidden"],
+                ["tmux", "select-layout", "-E", "-t", "%1"],
+            ],
+            [cmd for cmd in commands if cmd[:2] in (["tmux", "break-pane"], ["tmux", "select-layout"])],
+        )
+        width_mock.assert_called_once_with("session-x")
+
     def test_tmux_pane_exists_returns_false_for_dead_pane(self) -> None:
         with patch(
             "agentmux.tmux.run_command",

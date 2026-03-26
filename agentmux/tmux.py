@@ -329,6 +329,7 @@ class ContentZone:
 
         self._visible = visible
         self._enforce_invariant()
+        self._rebalance_visible_panes()
         _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
@@ -347,6 +348,7 @@ class ContentZone:
             self._visible = [current for current in self._visible if current != pane_id]
 
         self._enforce_invariant()
+        self._rebalance_visible_panes()
         _enforce_monitor_min_width(self._session)
         _log_layout(self._session)
 
@@ -422,6 +424,18 @@ class ContentZone:
             self._ensure_placeholder_hidden()
         else:
             self._ensure_placeholder_visible()
+
+    def _rebalance_visible_panes(self) -> None:
+        if len(self._visible) < 2:
+            return
+        for pane_id in self._visible:
+            if tmux_pane_exists(pane_id) and _pane_in_window(pane_id, MAIN_WINDOW):
+                _log(f"ContentZone: select-layout -E -t {pane_id}")
+                run_command(
+                    ["tmux", "select-layout", "-E", "-t", pane_id],
+                    check=False,
+                )
+                return
 
 
 # ---------------------------------------------------------------------------
