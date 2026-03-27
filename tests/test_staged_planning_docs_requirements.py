@@ -22,6 +22,27 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         self.assertIn("enabling refactor", text.lower())
         self.assertIn("technical debt", text.lower())
 
+    def test_prompts_doc_covers_two_stage_template_rendering(self) -> None:
+        text = self._read_doc("docs/prompts.md")
+        self.assertIn("[[shared:", text)
+        self.assertIn("[[placeholder:", text)
+        self.assertIn("two-stage", text.lower())
+        self.assertIn("template loading", text.lower())
+        self.assertIn("render", text.lower())
+
+    def test_prompts_doc_covers_coder_tdd_phase_and_atomic_contract(self) -> None:
+        text = self._read_doc("docs/prompts.md")
+        self.assertIn("TDD protocol", text)
+        self.assertIn("Red", text)
+        self.assertIn("Green", text)
+        self.assertIn("phase order", text.lower())
+        self.assertIn("one task from `02_planning/tasks.md` at a time", text)
+
+    def test_prompts_doc_describes_legacy_placeholder_compatibility(self) -> None:
+        text = self._read_doc("docs/prompts.md")
+        self.assertIn("legacy", text.lower())
+        self.assertIn("{project_instructions}", text)
+
     def test_file_protocol_doc_covers_execution_groups_and_compatibility(self) -> None:
         text = self._read_doc("docs/file-protocol.md")
         self.assertIn("execution_plan.json", text)

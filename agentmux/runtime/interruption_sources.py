@@ -41,6 +41,8 @@ class InterruptionEventSource:
 
     def poll_once(self, bus: EventBus) -> None:
         for pane in self._runtime.missing_registered_panes():
+            if self._runtime.is_expected_missing_pane(pane.pane_id):
+                continue
             event_key = self._event_key(pane)
             if event_key in self._reported:
                 continue

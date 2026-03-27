@@ -8,11 +8,15 @@ from agentmux.runtime import RegisteredPaneRef
 
 
 class _FakeRuntime:
-    def __init__(self, missing: list[RegisteredPaneRef]) -> None:
+    def __init__(self, missing: list[RegisteredPaneRef], *, expected: set[str] | None = None) -> None:
         self._missing = list(missing)
+        self._expected = set(expected or set())
 
     def missing_registered_panes(self) -> list[RegisteredPaneRef]:
         return list(self._missing)
+
+    def is_expected_missing_pane(self, pane_id: str | None) -> bool:
+        return bool(pane_id) and pane_id in self._expected
 
 
 class InterruptionEventSourceTests(unittest.TestCase):
@@ -65,6 +69,28 @@ class InterruptionEventSourceTests(unittest.TestCase):
         self.assertEqual(1, len(seen))
         self.assertEqual(2, seen[0].payload["task_id"])
         self.assertEqual("[coder] plan 2", seen[0].payload["label"])
+
+    def test_poll_once_ignores_expected_missing_pane(self) -> None:
+        source = InterruptionEventSource(
+            _FakeRuntime(
+                [
+                    RegisteredPaneRef(
+                        role="architect",
+                        pane_id="%1",
+                        scope="primary",
+                        label="[architect] planning",
+                    )
+                ],
+                expected={"%1"},
+            )
+        )
+        bus = EventBus()
+        seen = []
+        bus.register(seen.append)
+
+        source.poll_once(bus)
+
+        self.assertEqual([], seen)
 
     def test_poll_once_uses_plan_based_parallel_label_in_message(self) -> None:
         source = InterruptionEventSource(

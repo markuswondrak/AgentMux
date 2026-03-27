@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 from dataclasses import dataclass
 from pathlib import Path
+import threading
 from typing import Iterable, Literal, Protocol
 
 from ..agent_labels import role_display_label
@@ -91,6 +93,8 @@ class TmuxAgentRuntime:
         self.primary_panes = primary_panes
         self._zone = zone
         self.parallel_panes = parallel_panes or {}
+        self._expected_missing_panes: set[str] = set()
+        self._pane_tracking_lock = threading.Lock()
         self._normalize_primary_panes()
 
     @classmethod
@@ -249,6 +253,27 @@ class TmuxAgentRuntime:
     def _display_label_for_task(self, role: str, task_id: int | str | None) -> str:
         return role_display_label(self.feature_dir, role, task_id=task_id, state=self._load_state())
 
+    @contextmanager
+    def _expect_missing_panes(self, pane_ids: Iterable[str | None]):
+        expected = tuple(dict.fromkeys(pane_id for pane_id in pane_ids if pane_id))
+        if not expected:
+            yield
+            return
+        with self._pane_tracking_lock:
+            self._expected_missing_panes.update(expected)
+        try:
+            yield
+        finally:
+            with self._pane_tracking_lock:
+                for pane_id in expected:
+                    self._expected_missing_panes.discard(pane_id)
+
+    def is_expected_missing_pane(self, pane_id: str | None) -> bool:
+        if not pane_id:
+            return False
+        with self._pane_tracking_lock:
+            return pane_id in self._expected_missing_panes
+
     def registered_panes(self) -> list[RegisteredPaneRef]:
         panes: list[RegisteredPaneRef] = []
         for role, pane_id in self.primary_panes.items():
@@ -390,31 +415,33 @@ class TmuxAgentRuntime:
 
     def kill_primary(self, role: str) -> None:
         pane_id = self.primary_panes.get(role)
-        if pane_id:
-            self._zone.remove(pane_id)
-        self.primary_panes[role] = None
-        workers = self.parallel_panes.get(role)
-        if workers:
-            remaining = {
-                worker: worker_pane
-                for worker, worker_pane in workers.items()
-                if worker_pane != pane_id
-            }
-            if remaining:
-                self.parallel_panes[role] = remaining
-            else:
-                self.parallel_panes.pop(role, None)
-        self._persist_snapshot()
+        with self._expect_missing_panes([pane_id]):
+            if pane_id:
+                self._zone.remove(pane_id)
+            self.primary_panes[role] = None
+            workers = self.parallel_panes.get(role)
+            if workers:
+                remaining = {
+                    worker: worker_pane
+                    for worker, worker_pane in workers.items()
+                    if worker_pane != pane_id
+                }
+                if remaining:
+                    self.parallel_panes[role] = remaining
+                else:
+                    self.parallel_panes.pop(role, None)
+            self._persist_snapshot()
 
     def finish_many(self, role: str) -> None:
         workers = self.parallel_panes.get(role, {})
         primary = self.primary_panes.get(role)
-        for pane_id in dict.fromkeys(workers.values()):
-            if pane_id != primary:
+        removed = [pane_id for pane_id in dict.fromkeys(workers.values()) if pane_id != primary]
+        with self._expect_missing_panes(removed):
+            for pane_id in removed:
                 self._zone.remove(pane_id)
-        if role in self.parallel_panes:
-            self.parallel_panes.pop(role, None)
-            self._persist_snapshot()
+            if role in self.parallel_panes:
+                self.parallel_panes.pop(role, None)
+                self._persist_snapshot()
 
     def notify(self, role: str, text: str) -> None:
         pane_id = self.primary_panes.get(role)
@@ -449,13 +476,14 @@ class TmuxAgentRuntime:
     def finish_task(self, role: str, task_id: str) -> None:
         workers = self.parallel_panes.get(role, {})
         pane_id = workers.get(task_id)
-        if pane_id:
-            self._zone.remove(pane_id)
-        if task_id in workers:
-            workers.pop(task_id, None)
-        if not workers:
-            self.parallel_panes.pop(role, None)
-        self._persist_snapshot()
+        with self._expect_missing_panes([pane_id]):
+            if pane_id:
+                self._zone.remove(pane_id)
+            if task_id in workers:
+                workers.pop(task_id, None)
+            if not workers:
+                self.parallel_panes.pop(role, None)
+            self._persist_snapshot()
 
     def shutdown(self, keep_session: bool) -> None:
         if not keep_session:

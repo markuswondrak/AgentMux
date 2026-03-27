@@ -71,6 +71,17 @@ class FakeZone:
         self.visible = [pane_id for pane_id in self.visible if pane_id in set(known_panes)]
 
 
+class ObservedRemoveZone(FakeZone):
+    def __init__(self, session_name: str, visible: list[str] | None = None) -> None:
+        super().__init__(session_name, visible)
+        self.on_remove = None
+
+    def remove(self, pane_id: str) -> None:
+        if self.on_remove is not None:
+            self.on_remove(pane_id)
+        super().remove(pane_id)
+
+
 class RuntimeTests(unittest.TestCase):
     def test_send_creates_primary_pane_and_persists_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -261,6 +272,125 @@ class RuntimeTests(unittest.TestCase):
             snapshot = json.loads((feature_dir / "runtime_state.json").read_text(encoding="utf-8"))
             self.assertIsNone(snapshot["primary"]["architect"])
             self.assertEqual([], snapshot["visible"])
+
+    def test_kill_primary_marks_removed_pane_as_expected_missing_during_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            existing = {"%1", "%2"}
+            zone = ObservedRemoveZone("session-x", visible=["%1"])
+            runtime = TmuxAgentRuntime(
+                feature_dir=feature_dir,
+                session_name="session-x",
+                agents=_agents(),
+                primary_panes={"architect": "%1", "coder": "%2"},
+                zone=zone,
+            )
+            observed: list[tuple[bool, list[tuple[str, str, int | str | None, str]]]] = []
+
+            def _observe(pane_id: str) -> None:
+                existing.discard(pane_id)
+                observed.append(
+                    (
+                        runtime.is_expected_missing_pane(pane_id),
+                        [
+                            (pane.role, pane.scope, pane.task_id, pane.pane_id)
+                            for pane in runtime.missing_registered_panes()
+                        ],
+                    )
+                )
+
+            zone.on_remove = _observe
+
+            with patch("agentmux.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id in existing):
+                runtime.kill_primary("architect")
+
+            self.assertEqual(
+                [(True, [("architect", "primary", None, "%1")])],
+                observed,
+            )
+            self.assertFalse(runtime.is_expected_missing_pane("%1"))
+
+    def test_finish_many_marks_parallel_cleanup_as_expected_missing_during_removal(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            planning_dir = feature_dir / "02_planning"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "plan_2.md").write_text("## Sub-plan 2: UI polish\n", encoding="utf-8")
+            existing = {"%1", "%2", "%9"}
+            zone = ObservedRemoveZone("session-x", visible=["%2", "%9"])
+            runtime = TmuxAgentRuntime(
+                feature_dir=feature_dir,
+                session_name="session-x",
+                agents=_agents(),
+                primary_panes={"architect": "%1", "coder": "%2"},
+                zone=zone,
+                parallel_panes={"coder": {1: "%2", 2: "%9"}},
+            )
+            observed: list[tuple[bool, list[tuple[str, str, int | str | None, str]]]] = []
+
+            def _observe(pane_id: str) -> None:
+                existing.discard(pane_id)
+                observed.append(
+                    (
+                        runtime.is_expected_missing_pane(pane_id),
+                        [
+                            (pane.role, pane.scope, pane.task_id, pane.pane_id)
+                            for pane in runtime.missing_registered_panes()
+                        ],
+                    )
+                )
+
+            zone.on_remove = _observe
+
+            with patch("agentmux.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id in existing):
+                runtime.finish_many("coder")
+
+            self.assertEqual(
+                [(True, [("coder", "parallel", 2, "%9")])],
+                observed,
+            )
+            self.assertFalse(runtime.is_expected_missing_pane("%9"))
+
+    def test_finish_task_marks_removed_worker_as_expected_missing_during_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            planning_dir = feature_dir / "02_planning"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "plan_2.md").write_text("## Sub-plan 2: UI polish\n", encoding="utf-8")
+            existing = {"%1", "%2", "%9"}
+            zone = ObservedRemoveZone("session-x", visible=["%2", "%9"])
+            runtime = TmuxAgentRuntime(
+                feature_dir=feature_dir,
+                session_name="session-x",
+                agents=_agents(),
+                primary_panes={"architect": "%1", "coder": "%2"},
+                zone=zone,
+                parallel_panes={"coder": {2: "%9"}},
+            )
+            observed: list[tuple[bool, list[tuple[str, str, int | str | None, str]]]] = []
+
+            def _observe(pane_id: str) -> None:
+                existing.discard(pane_id)
+                observed.append(
+                    (
+                        runtime.is_expected_missing_pane(pane_id),
+                        [
+                            (pane.role, pane.scope, pane.task_id, pane.pane_id)
+                            for pane in runtime.missing_registered_panes()
+                        ],
+                    )
+                )
+
+            zone.on_remove = _observe
+
+            with patch("agentmux.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id in existing):
+                runtime.finish_task("coder", 2)
+
+            self.assertEqual(
+                [(True, [("coder", "parallel", 2, "%9")])],
+                observed,
+            )
+            self.assertFalse(runtime.is_expected_missing_pane("%9"))
 
     def test_registered_and_missing_panes_include_primary_and_parallel_workers(self) -> None:
         with tempfile.TemporaryDirectory() as td:

@@ -9,11 +9,19 @@
 
 ## Placeholder syntax
 
-Placeholders use `{name}` syntax, rendered via `str.format_map`.
+Built-in prompt templates use `[[placeholder:name]]` value placeholders.
 
-Every template receives `{feature_dir}` as the session directory and references workflow files with phase subpaths (for example `02_planning/plan.md`, `06_review/review.md`, `state.json`).
-Templates that need project-level context (for example product manager and coder) also receive `{project_dir}`.
-All built-in agent and command templates also include a `{project_instructions}` injection point.
+Render model is two-stage:
+
+1. Template loading stage:
+   - Expand shared fragments using `[[shared:fragment-name]]`.
+   - Inject project extension text into `[[placeholder:project_instructions]]`.
+2. Render stage:
+   - Resolve `[[placeholder:name]]` values from the active prompt builder context.
+   - Keep temporary compatibility for legacy `{name}` placeholders while migration completes.
+
+Every prompt builder provides `feature_dir` as the session directory and references workflow files with phase subpaths (for example `02_planning/plan.md`, `06_review/review.md`, `state.json`).
+Builders that need project-level context (for example product manager and coder) also provide `project_dir`.
 
 ## Project-specific prompt extensions
 
@@ -22,11 +30,15 @@ Projects can extend built-in prompt templates with plain markdown files in:
 - `.agentmux/prompts/agents/<role>.md`
 - `.agentmux/prompts/commands/<command>.md`
 
-The prompt loader merges project content into the matching built-in template via `{project_instructions}`.
-If a project file does not exist, `{project_instructions}` resolves to an empty string and behavior stays unchanged.
+The prompt loader merges project content into the matching built-in template via `[[placeholder:project_instructions]]`.
+If a project file does not exist, `[[placeholder:project_instructions]]` resolves to an empty string and behavior stays unchanged.
 
 Project extension files are plain markdown. They do not need template placeholder syntax.
-Curly braces in project content are automatically escaped before `format_map()` runs, so text like `{example}` is preserved literally and cannot trigger placeholder errors.
+Curly braces in project content are automatically escaped before legacy formatting runs, so text like `{example}` is preserved literally and cannot trigger placeholder errors.
+
+Compatibility note:
+- Built-in templates have migrated to `[[placeholder:...]]`.
+- The loader still supports legacy `{project_instructions}` replacement for compatibility, but new built-in templates should use `[[placeholder:project_instructions]]`.
 
 `agentmux/prompts/context.md` is pipeline-controlled and is not project-extendable.
 
@@ -78,7 +90,7 @@ Prompt files are built lazily by handlers just before injection, not pre-generat
 
 ## Coder research handoff
 
-Coder prompt rendering injects a `Research handoff` block into `agentmux/prompts/agents/coder.md` via the `{research_handoff}` placeholder.
+Coder prompt rendering injects a `Research handoff` block into `agentmux/prompts/agents/coder.md` via `[[placeholder:research_handoff]]`.
 
 Behavior contract:
 
@@ -89,6 +101,15 @@ Behavior contract:
 - Adds `detail.md` as an additional reference only when present
 - Uses feature-relative paths (for example `03_research/code-auth/summary.md`)
 - Omits the entire handoff section when no completed research topics are available
+
+## Coder workflow contract
+
+The coder prompt contract now requires:
+
+- TDD protocol: write tests first, run them, verify they fail (Red), then implement until tests pass (Green).
+- Strict phase order discipline: follow the active plan/sub-plan phase order and do not move to later-phase logic early.
+- Atomic execution from tasks: complete one task from `02_planning/tasks.md` at a time, validate it, and check it off before starting the next task.
+- Completion marker flow remains unchanged: finish all required validation first, then create the phase completion marker as the final action.
 
 ## Staged planning contract
 

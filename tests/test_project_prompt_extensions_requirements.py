@@ -101,6 +101,118 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
 
             self.assertIn("Role: coder", loaded)
 
+    def test_builders_render_bracketed_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            prompts_dir = tmp_path / "prompts"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "bracket placeholders", "session")
+
+            self._write_builtin_template(
+                prompts_dir,
+                "agents",
+                "architect",
+                (
+                    "Feature dir: [[placeholder:feature_dir]]\n"
+                    "Project dir: [[placeholder:project_dir]]\n"
+                    "{project_instructions}\n"
+                    "Constraints:\n"
+                ),
+            )
+
+            with patch.object(prompts_module, "PROMPTS_DIR", prompts_dir):
+                prompt = build_architect_prompt(files)
+
+            self.assertIn(f"Feature dir: {feature_dir}", prompt)
+            self.assertIn(f"Project dir: {project_dir}", prompt)
+            self.assertNotIn("[[placeholder:feature_dir]]", prompt)
+            self.assertNotIn("[[placeholder:project_dir]]", prompt)
+
+    def test_shared_fragments_can_provide_bracketed_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            prompts_dir = tmp_path / "prompts"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "shared bracket placeholders", "session")
+
+            self._write_builtin_template(
+                prompts_dir,
+                "agents",
+                "architect",
+                "Top\n[[shared:scope]]\n{project_instructions}\nConstraints:\n",
+            )
+            self._write_shared_fragment(
+                prompts_dir,
+                "scope",
+                "Scope feature: [[placeholder:feature_dir]]\n",
+            )
+
+            with patch.object(prompts_module, "PROMPTS_DIR", prompts_dir):
+                prompt = build_architect_prompt(files)
+
+            self.assertIn(f"Scope feature: {feature_dir}", prompt)
+            self.assertNotIn("[[placeholder:feature_dir]]", prompt)
+
+    def test_bracketed_placeholders_coexist_with_legacy_format_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            prompts_dir = tmp_path / "prompts"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "placeholder compatibility", "session")
+
+            self._write_builtin_template(
+                prompts_dir,
+                "agents",
+                "architect",
+                (
+                    "Feature bracketed: [[placeholder:feature_dir]]\n"
+                    "Project legacy: {project_dir}\n"
+                    "{project_instructions}\n"
+                    "Constraints:\n"
+                ),
+            )
+
+            with patch.object(prompts_module, "PROMPTS_DIR", prompts_dir):
+                prompt = build_architect_prompt(files)
+
+            self.assertIn(f"Feature bracketed: {feature_dir}", prompt)
+            self.assertIn(f"Project legacy: {project_dir}", prompt)
+            self.assertNotIn("[[placeholder:feature_dir]]", prompt)
+
+    def test_project_prompt_curly_braces_remain_literal_with_bracketed_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            prompts_dir = tmp_path / "prompts"
+            project_dir.mkdir()
+            files = create_feature_files(project_dir, feature_dir, "project prompt safety", "session")
+
+            self._write_builtin_template(
+                prompts_dir,
+                "agents",
+                "architect",
+                (
+                    "Feature dir: [[placeholder:feature_dir]]\n"
+                    "{project_instructions}\n"
+                    "Constraints:\n"
+                ),
+            )
+            injected = "Literal project braces: {do_not_expand}\n"
+            self._write_project_prompt(project_dir, "agents", "architect", injected)
+
+            with patch.object(prompts_module, "PROMPTS_DIR", prompts_dir):
+                prompt = build_architect_prompt(files)
+
+            self.assertIn(f"Feature dir: {feature_dir}", prompt)
+            self.assertIn(injected, prompt)
+
     def test_shared_fragments_preserve_project_instruction_curly_brace_safety(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
@@ -156,9 +268,12 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
         for template_path in template_paths:
             with self.subTest(template=str(template_path)):
                 template = template_path.read_text(encoding="utf-8")
-                self.assertIn("{project_instructions}", template)
+                self.assertIn("[[placeholder:project_instructions]]", template)
                 self.assertIn("Constraints:", template)
-                self.assertLess(template.index("{project_instructions}"), template.index("Constraints:"))
+                self.assertLess(
+                    template.index("[[placeholder:project_instructions]]"),
+                    template.index("Constraints:"),
+                )
 
     def test_builders_inject_project_prompt_extensions_before_constraints(self) -> None:
         with tempfile.TemporaryDirectory() as td:
