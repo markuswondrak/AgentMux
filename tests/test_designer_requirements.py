@@ -128,6 +128,8 @@ class DesignerRequirementsTests(unittest.TestCase):
             self.assertIn("done_1", coder_prompt)
             self.assertIn("frontend-design", designer_prompt)
             self.assertIn("04_design/design.md", designer_prompt)
+            self.assertNotIn("[[placeholder:", coder_prompt)
+            self.assertNotIn("[[placeholder:", designer_prompt)
             self.assertEqual(["architect"], list(initial_prompts.keys()))
             self.assertEqual("architect_prompt.md", initial_prompts["architect"].name)
             self.assertFalse((feature_dir / IMPLEMENTATION_DIR / "coder_prompt.md").exists())

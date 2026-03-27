@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,12 +9,25 @@ from agentmux.workflow.prompts import (
     build_architect_prompt,
     build_change_prompt,
     build_coder_prompt,
+    build_coder_subplan_prompt,
     build_reviewer_prompt,
 )
 from agentmux.sessions.state_store import create_feature_files, load_runtime_files
 
 
 class TasksRequirementsTests(unittest.TestCase):
+    def test_built_in_prompt_templates_use_bracketed_value_placeholders(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        template_paths = sorted(
+            [*(repo_root / "agentmux/prompts/agents").glob("*.md"), *(repo_root / "agentmux/prompts/commands").glob("*.md")]
+        )
+        legacy_placeholder_pattern = re.compile(r"\{[a-z_][a-z0-9_]*\}")
+
+        for template_path in template_paths:
+            with self.subTest(template=str(template_path)):
+                template = template_path.read_text(encoding="utf-8")
+                self.assertNotRegex(template, legacy_placeholder_pattern)
+
     def test_runtime_files_include_tasks_and_placeholders_not_created(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
@@ -66,6 +80,32 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("legacy flat `plan.md` parsing fallback", architect_prompt)
             self.assertIn("05_implementation/done_1", coder_prompt)
             self.assertIn("Do not update state.json", coder_prompt)
+            self.assertIn("TDD protocol", coder_prompt)
+            self.assertIn("fail before implementation (Red)", coder_prompt)
+            self.assertIn("until the tests pass (Green)", coder_prompt)
+            self.assertIn("Follow the phase order from the active plan strictly", coder_prompt)
+            self.assertIn("Complete one task from `02_planning/tasks.md` at a time", coder_prompt)
+            self.assertIn("check off that task before moving to the next one", coder_prompt)
+
+    def test_coder_subplan_prompt_keeps_contract_and_subplan_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+
+            files = create_feature_files(project_dir, feature_dir, "subplan coder contract", "session")
+
+            prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_2.md", 2)
+
+            self.assertIn("02_planning/plan_2.md", prompt)
+            self.assertIn("05_implementation/done_2", prompt)
+            self.assertIn("TDD protocol", prompt)
+            self.assertIn("fail before implementation (Red)", prompt)
+            self.assertIn("until the tests pass (Green)", prompt)
+            self.assertIn("Follow the phase order from the active plan strictly", prompt)
+            self.assertIn("Complete one task from `02_planning/tasks.md` at a time", prompt)
+            self.assertIn("check off that task before moving to the next one", prompt)
 
     def test_change_prompt_references_files_instead_of_embedding_text(self) -> None:
         with tempfile.TemporaryDirectory() as td:

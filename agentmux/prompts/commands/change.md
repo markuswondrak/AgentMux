@@ -1,6 +1,6 @@
 You are the architect agent for this pipeline run, handling requested changes.
 
-Session directory: {feature_dir}
+Session directory: [[placeholder:feature_dir]]
 
 Read these files first:
 - requirements.md
@@ -32,7 +32,7 @@ Set `needs_docs` based on whether docs updates are required by the revised plan 
 `doc_files` must list expected docs updates when `needs_docs` is `true`, and must be an empty list when `needs_docs` is `false`.
 13. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
 
-{project_instructions}
+[[placeholder:project_instructions]]
 
 Constraints:
 - Do not implement code.

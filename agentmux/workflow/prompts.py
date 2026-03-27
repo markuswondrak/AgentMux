@@ -9,7 +9,10 @@ from ..shared.models import RuntimeFiles
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _SHARED_FRAGMENT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
+_VALUE_PLACEHOLDER_PATTERN = re.compile(r"\[\[placeholder:([a-z0-9][a-z0-9_-]*)\]\]")
 _MAX_SHARED_FRAGMENT_EXPANSION_DEPTH = 8
+_PROJECT_INSTRUCTIONS_PLACEHOLDER = "[[placeholder:project_instructions]]"
+_PROJECT_INSTRUCTIONS_PLACEHOLDER_LEGACY = "{project_instructions}"
 
 _CHANGED_FILES_FALLBACK = "_Unable to read changed files from git status._"
 
@@ -49,7 +52,23 @@ def _load_template(subdir: str, name: str, project_dir: Path | None = None) -> s
         if project_prompt.is_file():
             project_instructions = project_prompt.read_text(encoding="utf-8")
             project_instructions = project_instructions.replace("{", "{{").replace("}", "}}")
-    return template.replace("{project_instructions}", project_instructions)
+    return (
+        template
+        .replace(_PROJECT_INSTRUCTIONS_PLACEHOLDER, project_instructions)
+        .replace(_PROJECT_INSTRUCTIONS_PLACEHOLDER_LEGACY, project_instructions)
+    )
+
+
+def _render_template(template: str, values: dict[str, object]) -> str:
+    rendered = template.format_map(values)
+
+    def _replace(match: re.Match[str]) -> str:
+        key = match.group(1)
+        if key not in values:
+            raise KeyError(key)
+        return str(values[key])
+
+    return _VALUE_PLACEHOLDER_PATTERN.sub(_replace, rendered)
 
 
 def write_prompt_file(feature_dir: Path, name: str, content: str) -> Path:
@@ -114,11 +133,12 @@ def _load_docs_scope(files: RuntimeFiles) -> list[str]:
 
 
 def build_architect_prompt(files: RuntimeFiles) -> str:
-    return _load_template(
+    return _render_template(
+        _load_template(
         "agents",
         "architect",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "architect_preference_proposal_file": files.relative_path(files.architect_preference_proposal),
@@ -126,11 +146,12 @@ def build_architect_prompt(files: RuntimeFiles) -> str:
 
 
 def build_product_manager_prompt(files: RuntimeFiles) -> str:
-    return _load_template(
+    return _render_template(
+        _load_template(
         "agents",
         "product-manager",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "pm_preference_proposal_file": files.relative_path(files.pm_preference_proposal),
@@ -139,16 +160,18 @@ def build_product_manager_prompt(files: RuntimeFiles) -> str:
 
 def build_reviewer_prompt(files: RuntimeFiles, is_review: bool = False) -> str:
     if is_review:
-        return _load_template(
+        return _render_template(
+            _load_template(
             "commands",
             "review",
             project_dir=files.project_dir,
-        ).format_map({"feature_dir": files.feature_dir})
-    return _load_template(
+        ), {"feature_dir": files.feature_dir})
+    return _render_template(
+        _load_template(
         "agents",
         "reviewer",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "reviewer_preference_proposal_file": files.relative_path(files.reviewer_preference_proposal),
@@ -166,11 +189,12 @@ def build_coder_prompt(files: RuntimeFiles) -> str:
         "- Do not update state.json from the coder step.",
         "- Do not write anything to the marker file; create it as an empty file.",
     ])
-    return _load_template(
+    return _render_template(
+        _load_template(
         "agents",
         "coder",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "plan_file": files.relative_path(files.plan),
@@ -189,11 +213,12 @@ def build_designer_prompt(files: RuntimeFiles) -> str:
         "- Do not update state.json from the designer step.",
         "- `design.md` is the completion signal for this phase.",
     ])
-    return _load_template(
+    return _render_template(
+        _load_template(
         "agents",
         "designer",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "completion_instruction": completion_instruction,
@@ -217,11 +242,12 @@ def build_coder_subplan_prompt(
         "- Do not update state.json in parallel coder mode.",
         "- Do not write anything to the marker file; create it as an empty file.",
     ])
-    return _load_template(
+    return _render_template(
+        _load_template(
         "agents",
         "coder",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "plan_file": files.relative_path(subplan_path),
@@ -232,11 +258,12 @@ def build_coder_subplan_prompt(
 
 
 def build_fix_prompt(files: RuntimeFiles) -> str:
-    return _load_template(
+    return _render_template(
+        _load_template(
         "commands",
         "fix",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
     })
@@ -246,11 +273,12 @@ def build_docs_prompt(files: RuntimeFiles) -> str:
     doc_files = _load_docs_scope(files)
     doc_targets = [str(files.project_dir / rel_path) for rel_path in doc_files]
     doc_targets_block = "\n".join(f"- {target}" for target in doc_targets)
-    return _load_template(
+    return _render_template(
+        _load_template(
         "commands",
         "docs",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "doc_targets_block": doc_targets_block,
@@ -272,11 +300,12 @@ def build_confirmation_prompt(files: RuntimeFiles) -> str:
         stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
         changed_files = f"{_CHANGED_FILES_FALLBACK}\nError: {stderr}"
 
-    return _load_template(
+    return _render_template(
+        _load_template(
         "commands",
         "confirmation",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "changed_files": changed_files,
@@ -285,11 +314,12 @@ def build_confirmation_prompt(files: RuntimeFiles) -> str:
 
 
 def build_code_researcher_prompt(topic: str, files: RuntimeFiles) -> str:
-    return _load_template(
+    return _render_template(
+        _load_template(
         "agents",
         "code-researcher",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "topic": topic,
@@ -297,11 +327,12 @@ def build_code_researcher_prompt(topic: str, files: RuntimeFiles) -> str:
 
 
 def build_web_researcher_prompt(topic: str, files: RuntimeFiles) -> str:
-    return _load_template(
+    return _render_template(
+        _load_template(
         "agents",
         "web-researcher",
         project_dir=files.project_dir,
-    ).format_map({
+    ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "topic": topic,
@@ -320,8 +351,9 @@ def build_initial_prompts(files: RuntimeFiles) -> dict[str, Path]:
 
 
 def build_change_prompt(files: RuntimeFiles) -> str:
-    return _load_template(
+    return _render_template(
+        _load_template(
         "commands",
         "change",
         project_dir=files.project_dir,
-    ).format_map({"feature_dir": files.feature_dir})
+    ), {"feature_dir": files.feature_dir})
