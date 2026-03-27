@@ -139,6 +139,13 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _read_first_available(paths: list[Path]) -> str:
+    for path in paths:
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    return ""
+
+
 def _extract_initial_request(requirements_text: str) -> str:
     match = re.search(
         r"(?ims)^##\s+Initial Request\s*$\n+(.*?)(?=^##\s+|\Z)",
@@ -174,8 +181,18 @@ def _extract_review_verdict(review_text: str) -> str:
 
 def assemble_pr_body(feature_dir: Path, issue_number: str | None) -> str:
     requirements_text = _read_text(feature_dir / "requirements.md")
-    plan_text = _read_text(feature_dir / "planning" / "plan.md")
-    review_text = _read_text(feature_dir / "review" / "review.md")
+    plan_text = _read_first_available(
+        [
+            feature_dir / "02_planning" / "plan.md",
+            feature_dir / "planning" / "plan.md",
+        ]
+    )
+    review_text = _read_first_available(
+        [
+            feature_dir / "06_review" / "review.md",
+            feature_dir / "review" / "review.md",
+        ]
+    )
 
     initial_request = _extract_initial_request(requirements_text) or "(not available)"
     plan_summary = _extract_first_plan_section(plan_text) or "(not available)"

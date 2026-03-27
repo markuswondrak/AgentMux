@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from ..shared.models import AgentConfig, GitHubConfig
+from ..shared.models import AgentConfig, CompletionSettings, GitHubConfig, WorkflowSettings
 
 ROLES = (
     "architect",
@@ -38,6 +38,7 @@ class LoadedConfig:
     github: GitHubConfig
     raw: dict[str, Any]
     sources: tuple[Path, ...]
+    workflow_settings: WorkflowSettings
 
 
 def load_builtin_catalog() -> dict[str, Any]:
@@ -131,7 +132,7 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
     defaults = dict(raw.get("defaults", {})) if isinstance(raw.get("defaults"), dict) else {}
-    for key in ("session_name", "provider", "profile", "max_review_iterations"):
+    for key in ("session_name", "provider", "profile", "max_review_iterations", "skip_final_approval"):
         if key in raw:
             defaults[key] = raw[key]
     if "tier" in raw and "profile" not in defaults:
@@ -174,6 +175,11 @@ def _normalize_defaults(raw: dict[str, Any]) -> dict[str, Any]:
         defaults["profile"] = str(profile)
     if "max_review_iterations" in raw:
         defaults["max_review_iterations"] = int(raw["max_review_iterations"])
+    if "skip_final_approval" in raw:
+        defaults["skip_final_approval"] = _coerce_bool(
+            raw["skip_final_approval"],
+            "defaults.skip_final_approval",
+        )
     return defaults
 
 
@@ -305,6 +311,14 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
         draft=_coerce_bool(github_raw.get("draft", True), "github.draft"),
         branch_prefix=str(github_raw.get("branch_prefix", "feature/")),
     )
+    workflow_settings = WorkflowSettings(
+        completion=CompletionSettings(
+            skip_final_approval=_coerce_bool(
+                defaults.get("skip_final_approval", False),
+                "defaults.skip_final_approval",
+            ),
+        ),
+    )
 
     agents: dict[str, AgentConfig] = {}
     for role in ROLES:
@@ -356,6 +370,7 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
         max_review_iterations=max_review_iterations,
         agents=agents,
         github=github,
+        workflow_settings=workflow_settings,
         raw=raw,
         sources=sources,
     )

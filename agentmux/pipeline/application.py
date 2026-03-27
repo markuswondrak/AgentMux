@@ -12,6 +12,7 @@ from ..runtime.file_events import ensure_watchdog_available
 from ..runtime.tmux_control import tmux_session_exists
 from ..sessions import PreparedSession, PromptInput, SessionCreateRequest, SessionService
 from ..sessions.state_store import feature_slug_from_dir, load_runtime_files, load_state
+from ..shared.models import WorkflowSettings
 from ..terminal_ui.console import ConsoleUI
 from ..workflow.interruptions import InterruptionService
 from ..workflow.orchestrator import PipelineOrchestrator
@@ -52,7 +53,14 @@ class PipelineApplication:
             session_name=loaded.session_name,
             agents=agents,
         )
-        ctx = self.orchestrator.create_context(files, runtime, agents, loaded.max_review_iterations, loaded.github)
+        ctx = self.orchestrator.create_context(
+            files,
+            runtime,
+            agents,
+            loaded.max_review_iterations,
+            loaded.github,
+            workflow_settings=getattr(loaded, "workflow_settings", WorkflowSettings()),
+        )
         try:
             return self.orchestrator.run(ctx, args.keep_session)
         except KeyboardInterrupt:

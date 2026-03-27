@@ -11,7 +11,7 @@ import yaml
 
 import agentmux.pipeline.application as application
 from agentmux.workflow.interruptions import InterruptionService
-from agentmux.shared.models import AgentConfig, GitHubConfig
+from agentmux.shared.models import AgentConfig, CompletionSettings, GitHubConfig, WorkflowSettings
 from agentmux.workflow.orchestrator import PipelineOrchestrator
 from agentmux.workflow.prompts import build_architect_prompt, build_product_manager_prompt
 from agentmux.sessions.state_store import create_feature_files
@@ -121,6 +121,9 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 max_review_iterations=3,
                 github=GitHubConfig(),
                 agents=base_agents,
+                workflow_settings=WorkflowSettings(
+                    completion=CompletionSettings(skip_final_approval=True),
+                ),
             )
             args = argparse.Namespace(
                 prompt="ship mcp",
@@ -182,6 +185,9 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 max_review_iterations=3,
                 github=GitHubConfig(),
                 agents=base_agents,
+                workflow_settings=WorkflowSettings(
+                    completion=CompletionSettings(skip_final_approval=True),
+                ),
             )
             args = argparse.Namespace(
                 prompt=None,
@@ -211,7 +217,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             ) as attach_mock, patch(
                 "agentmux.pipeline.application.PipelineOrchestrator.create_context",
                 return_value=object(),
-            ), patch(
+            ) as create_context_mock, patch(
                 "agentmux.pipeline.application.PipelineOrchestrator.run",
                 return_value=0,
             ) as orchestrate_mock:
@@ -220,6 +226,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             self.assertEqual(0, result)
             setup_mock.assert_called_once()
             self.assertEqual(injected_agents, attach_mock.call_args.kwargs["agents"])
+            self.assertIs(loaded.workflow_settings, create_context_mock.call_args.kwargs["workflow_settings"])
             self.assertEqual(False, orchestrate_mock.call_args.args[1])
 
     def test_defaults_allow_mcp_research_tools_for_claude_architect_and_pm(self) -> None:

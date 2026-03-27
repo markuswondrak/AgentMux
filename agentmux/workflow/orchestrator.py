@@ -7,7 +7,7 @@ from ..runtime.event_bus import EventBus, SessionEvent, build_wake_listener
 from ..runtime.file_events import CreatedFilesLogListener, FileEventSource
 from ..runtime.interruption_sources import INTERRUPTION_EVENT_PANE_EXITED, InterruptionEventSource
 from ..sessions.state_store import load_state
-from ..shared.models import GitHubConfig
+from ..shared.models import GitHubConfig, WorkflowSettings
 from .interruptions import InterruptionService
 from .prompts import build_initial_prompts
 from .transitions import EXIT_FAILURE, EXIT_SUCCESS, PipelineContext
@@ -18,7 +18,15 @@ class PipelineOrchestrator:
     def __init__(self, interruptions: InterruptionService | None = None) -> None:
         self.interruptions = interruptions or InterruptionService()
 
-    def create_context(self, files, runtime, agents, max_review_iterations: int, github_config: GitHubConfig) -> PipelineContext:
+    def create_context(
+        self,
+        files,
+        runtime,
+        agents,
+        max_review_iterations: int,
+        github_config: GitHubConfig,
+        workflow_settings: WorkflowSettings | None = None,
+    ) -> PipelineContext:
         return PipelineContext(
             files=files,
             runtime=runtime,
@@ -26,6 +34,7 @@ class PipelineOrchestrator:
             max_review_iterations=max_review_iterations,
             prompts=build_initial_prompts(files),
             github_config=github_config,
+            workflow_settings=workflow_settings or WorkflowSettings(),
         )
 
     def build_event_bus(self, files, runtime, wake_event: threading.Event) -> EventBus:

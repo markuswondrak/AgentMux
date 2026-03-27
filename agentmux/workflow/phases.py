@@ -834,6 +834,13 @@ class CompletingPhase(Phase):
         approval_path = ctx.files.completion_dir / "approval.json"
         if approval_path.exists():
             approval_path.unlink()
+        if ctx.workflow_settings.completion.skip_final_approval:
+            approval_path.parent.mkdir(parents=True, exist_ok=True)
+            approval_path.write_text(
+                json.dumps({"action": "approve", "exclude_files": []}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            return
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
             ctx.files.relative_path(ctx.files.completion_dir / "confirmation_prompt.md"),
@@ -856,6 +863,12 @@ class CompletingPhase(Phase):
     def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
         _ = state
         approval_path = ctx.files.completion_dir / "approval.json"
+        if ctx.workflow_settings.completion.skip_final_approval and approval_path.exists():
+            raw = approval_path.read_text(encoding="utf-8").strip()
+            if raw:
+                payload = json.loads(raw)
+                if payload.get("action") == "approve":
+                    return "approval_received"
         if phase_input_changed(ctx, "approval", file_signature(approval_path)):
             raw = approval_path.read_text(encoding="utf-8").strip()
             if not raw:
@@ -878,12 +891,17 @@ class CompletingPhase(Phase):
                 for path in payload.get("exclude_files", [])
                 if str(path).strip()
             }
+            issue_number = str(state.get("issue_number")) if state.get("issue_number") is not None else None
+            commit_message = COMPLETION_SERVICE.draft_commit_message(
+                files=ctx.files,
+                issue_number=issue_number,
+            )
             result = COMPLETION_SERVICE.finalize_approval(
                 files=ctx.files,
                 github_config=ctx.github_config,
                 gh_available=bool(state.get("gh_available")),
-                issue_number=str(state.get("issue_number")) if state.get("issue_number") is not None else None,
-                commit_message=str(payload.get("commit_message", "")).strip(),
+                issue_number=issue_number,
+                commit_message=commit_message,
                 changed_paths=[path for path in changed_paths if path not in exclude_files],
             )
             if result.commit_hash is not None:

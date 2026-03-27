@@ -600,7 +600,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 prompt = build_confirmation_prompt(files)
 
             self.assertIn(status_output.strip(), prompt)
-            self.assertIn('{"action": "approve", "commit_message": "...", "exclude_files": ["relative/path"]}', prompt)
+            self.assertIn('{"action": "approve", "exclude_files": ["relative/path"]}', prompt)
             self.assertIn("exclude_files` is optional and defaults to `[]`", prompt)
             self.assertIn("Ask for exclusions only. Do not ask the user to enumerate all commit files.", prompt)
             self.assertIn("Approved proposals are later applied by the orchestrator", prompt)
