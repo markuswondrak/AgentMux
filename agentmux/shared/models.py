@@ -55,10 +55,18 @@ class GitHubConfig:
 class CompletionSettings:
     skip_final_approval: bool = False
 
+    @property
+    def require_final_approval(self) -> bool:
+        return not self.skip_final_approval
+
 
 @dataclass(frozen=True)
 class WorkflowSettings:
     completion: CompletionSettings = field(default_factory=CompletionSettings)
+
+    @property
+    def completion_settings(self) -> CompletionSettings:
+        return self.completion
 
 
 @dataclass(frozen=True)

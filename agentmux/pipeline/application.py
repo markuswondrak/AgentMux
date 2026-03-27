@@ -12,7 +12,7 @@ from ..runtime.file_events import ensure_watchdog_available
 from ..runtime.tmux_control import tmux_session_exists
 from ..sessions import PreparedSession, PromptInput, SessionCreateRequest, SessionService
 from ..sessions.state_store import feature_slug_from_dir, load_runtime_files, load_state
-from ..shared.models import WorkflowSettings
+from ..shared.models import CompletionSettings, WorkflowSettings
 from ..terminal_ui.console import ConsoleUI
 from ..workflow.interruptions import InterruptionService
 from ..workflow.orchestrator import PipelineOrchestrator
@@ -59,7 +59,7 @@ class PipelineApplication:
             agents,
             loaded.max_review_iterations,
             loaded.github,
-            workflow_settings=getattr(loaded, "workflow_settings", WorkflowSettings()),
+            workflow_settings=self._resolve_workflow_settings(loaded),
         )
         try:
             return self.orchestrator.run(ctx, args.keep_session)
@@ -84,6 +84,18 @@ class PipelineApplication:
             self.interruptions.persist(files, report)
             self.ui.print(self.interruptions.render(report))
             return 1
+
+    def _resolve_workflow_settings(self, loaded) -> WorkflowSettings:
+        candidate = getattr(loaded, "workflow_settings", None)
+        if isinstance(candidate, WorkflowSettings):
+            return WorkflowSettings(completion=candidate.completion_settings)
+        completion_settings = getattr(candidate, "completion_settings", None)
+        if isinstance(completion_settings, CompletionSettings):
+            return WorkflowSettings(completion=completion_settings)
+        completion_settings = getattr(candidate, "completion", None)
+        if isinstance(completion_settings, CompletionSettings):
+            return WorkflowSettings(completion=completion_settings)
+        return WorkflowSettings()
 
     def _run_launcher(self, args, loaded) -> int:
         if args.resume and getattr(args, "issue", None):

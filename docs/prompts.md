@@ -135,6 +135,7 @@ Architect output requirements for parallel work include:
 Compatibility requirement:
 
 - Keep `## Sub-plan <N>: <title>` headers in `plan.md` so legacy split-based workflows and tooling remain operable during migration.
+- Single-plan fallback dispatch now follows the same numbered coder prompt convention (`coder_prompt_1.txt`) instead of a separate legacy `coder_prompt.md` path.
 
 Current split:
 - `build_architect_prompt()` renders planning prompts only
@@ -147,6 +148,7 @@ Current split:
   - `02_planning/plan_meta.json` with `needs_design`, `needs_docs`, and `doc_files` (empty list when `needs_docs` is `false`)
   - compatibility behavior where legacy flat `plan.md` parsing is only a fallback when `execution_plan.json` is absent
 - `build_product_manager_prompt()` renders the PM analysis prompt
-- `build_coder_prompt()` / `build_coder_subplan_prompt()` render coder implementation prompts with completion marker instructions and optional research handoff references
+- `build_coder_subplan_prompt()` renders implementing prompts for numbered `coder_prompt_<N>.txt` dispatch, including completion marker instructions and optional research handoff references
+- `build_coder_prompt()` remains a compatibility/template helper for non-dispatch contexts
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
-- `build_confirmation_prompt()` renders the confirmation command prompt used in completion
+- `build_confirmation_prompt()` renders the confirmation command prompt used in completion, including optional `commit_message` approval payload support

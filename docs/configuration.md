@@ -45,7 +45,8 @@ defaults:
   provider: claude
   profile: standard
   max_review_iterations: 3
-  skip_final_approval: false
+  completion:
+    require_final_approval: true
 
 github:
   base_branch: main
@@ -68,7 +69,8 @@ roles:
 - `defaults.provider` — default provider/launcher name for roles that do not override it
 - `defaults.profile` — default profile name, usually `max`, `standard`, or `low`
 - `defaults.max_review_iterations` — caps automatic reviewer→coder fix loops
-- `defaults.skip_final_approval` — skips reviewer confirmation in the completing phase and finalizes automatically (default: `false`); completing still owns commit/cleanup/PR steps
+- `defaults.completion.skip_final_approval` — when `true`, skips reviewer confirmation in `completing` and auto-prepares approval (default: `false`)
+- `defaults.completion.require_final_approval` — inverse of `skip_final_approval`; when `true`, reviewer confirmation is required (default: `true`)
 - `github.base_branch` — default PR base branch (default: `main`)
 - `github.draft` — whether PRs created at completion are draft PRs by default (default: `true`)
 - `github.branch_prefix` — prefix for completion branches created before opening a PR (default: `feature/`)
@@ -84,6 +86,14 @@ Built-in and user-level configs may additionally define:
 - `launchers.<name>.role_args.<role>` — default CLI args for a role
 - `profiles.<provider>.<profile>.model` — concrete model name
 - `profiles.<provider>.<profile>.args` — optional extra args appended after launcher role args
+
+## Completion settings boundary
+
+There is one runtime completion-settings owner: `workflow_settings.completion`.
+
+- Config input normalizes into `defaults.completion.*`
+- Runtime reads `workflow_settings.completion.skip_final_approval`
+- `workflow_settings.completion_settings` is a compatibility alias for callers that still use the older accessor name
 
 ## Project vs user scope
 
@@ -135,7 +145,9 @@ Compatibility rules:
 - top-level `provider` maps to `defaults.provider`
 - top-level `session_name` maps to `defaults.session_name`
 - top-level `max_review_iterations` maps to `defaults.max_review_iterations`
-- top-level `skip_final_approval` maps to `defaults.skip_final_approval`
+- top-level `skip_final_approval` maps to `defaults.completion.skip_final_approval`
+- top-level `require_final_approval` maps to `defaults.completion.require_final_approval`
+- `defaults.skip_final_approval` and `defaults.require_final_approval` remain accepted as compatibility aliases
 - per-role `tier` is accepted as an alias for `profile`
 
 ## Built-in profiles

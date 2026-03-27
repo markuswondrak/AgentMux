@@ -41,6 +41,7 @@ Compatibility behavior:
 
 - Legacy flat plans without `execution_plan.json` still rely on `plan.md` `## Sub-plan <N>: ...` splitting into generated `plan_*.md` files.
 - Legacy execution plans with `plans: ["plan_1.md"]` remain readable, but new architect output must use named plan objects.
+- Legacy single-prompt implementing dispatch (`coder_prompt.md`) is removed; fallback scheduling now uses numbered prompt files (`coder_prompt_1.txt`) with the same `done_1` marker semantics.
 - Staged execution should be preferred for new plans; legacy splitting is retained for backward compatibility.
 
 ## Research (`03_research/`)
@@ -54,7 +55,7 @@ Compatibility behavior:
 
 ## Implementation (`05_implementation/`)
 
-- `coder_prompt.md` / `coder_prompt_*.txt`
+- `coder_prompt_<N>.txt` — implementing-phase prompts mapped to scheduled plan units (`plan_<N>.md`)
 - `done_*` — coder completion markers for implementing-phase scheduled plan units (`done_<N>` maps to `plan_<N>.md`)
 - `done_1` — fixing-phase completion marker after a review-requested fix run
 - `state.json` includes implementing-phase progress metadata so monitor/orchestrator can track:

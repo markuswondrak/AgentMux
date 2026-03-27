@@ -120,6 +120,17 @@ roles:
 
             self.assertFalse(loaded.workflow_settings.completion.skip_final_approval)
 
+    def test_load_layered_config_exposes_completion_settings_vocabulary(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td) / "project"
+            project_dir.mkdir()
+
+            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+                loaded = load_layered_config(project_dir)
+
+            self.assertFalse(loaded.workflow_settings.completion_settings.skip_final_approval)
+            self.assertTrue(loaded.workflow_settings.completion_settings.require_final_approval)
+
     def test_project_config_can_enable_skip_final_approval(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td) / "project"
@@ -139,6 +150,76 @@ defaults:
                 loaded = load_layered_config(project_dir)
 
             self.assertTrue(loaded.workflow_settings.completion.skip_final_approval)
+
+    def test_project_config_can_set_completion_settings_nested_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td) / "project"
+            project_dir.mkdir()
+            project_cfg = project_dir / ".agentmux"
+            project_cfg.mkdir()
+            (project_cfg / "config.yaml").write_text(
+                """
+defaults:
+  completion:
+    skip_final_approval: true
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+                loaded = load_layered_config(project_dir)
+
+            self.assertTrue(loaded.workflow_settings.completion_settings.skip_final_approval)
+            self.assertFalse(loaded.workflow_settings.completion_settings.require_final_approval)
+
+    def test_project_config_completion_require_final_approval_maps_to_skip_toggle(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td) / "project"
+            project_dir.mkdir()
+            project_cfg = project_dir / ".agentmux"
+            project_cfg.mkdir()
+            (project_cfg / "config.yaml").write_text(
+                """
+defaults:
+  completion:
+    require_final_approval: false
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+                loaded = load_layered_config(project_dir)
+
+            self.assertTrue(loaded.workflow_settings.completion_settings.skip_final_approval)
+            self.assertFalse(loaded.workflow_settings.completion_settings.require_final_approval)
+
+    def test_invalid_completion_settings_conflicting_booleans_fail_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td) / "project"
+            project_dir.mkdir()
+            project_cfg = project_dir / ".agentmux"
+            project_cfg.mkdir()
+            (project_cfg / "config.yaml").write_text(
+                """
+defaults:
+  completion:
+    skip_final_approval: true
+    require_final_approval: true
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+                with self.assertRaises(ValueError) as exc:
+                    load_layered_config(project_dir)
+
+            self.assertIn(
+                "defaults.completion.skip_final_approval and defaults.completion.require_final_approval must be opposites.",
+                str(exc.exception),
+            )
 
     def test_invalid_skip_final_approval_value_fails_validation(self) -> None:
         with tempfile.TemporaryDirectory() as td:

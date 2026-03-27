@@ -22,7 +22,6 @@ from .prompts import (
     build_architect_prompt,
     build_change_prompt,
     build_code_researcher_prompt,
-    build_coder_prompt,
     build_coder_subplan_prompt,
     build_confirmation_prompt,
     build_designer_prompt,
@@ -138,9 +137,8 @@ def _build_implementation_schedule(
                     "mode": "serial",
                     "plan_paths": [plan_path],
                     "plan_ids": ["plan_1"],
-                    "plan_names": [None],
+                    "plan_names": ["implementation"],
                     "marker_indexes": [1],
-                    "legacy_single_prompt": True,
                 }
             ]
         marker_indexes = list(range(1, len(subplan_paths) + 1))
@@ -152,7 +150,6 @@ def _build_implementation_schedule(
                 "plan_ids": [f"plan_{index}" for index in marker_indexes],
                 "plan_names": [coder_label_for_subplan(planning_dir, index) for index in marker_indexes],
                 "marker_indexes": marker_indexes,
-                "legacy_single_prompt": False,
             }
         ]
 
@@ -174,7 +171,6 @@ def _build_implementation_schedule(
                 "plan_ids": [Path(plan.file).stem for plan in group.plans],
                 "plan_names": [plan.name or coder_label_for_subplan(planning_dir, index) for plan, index in zip(group.plans, group_indexes)],
                 "marker_indexes": group_indexes,
-                "legacy_single_prompt": False,
             }
         )
 
@@ -576,20 +572,6 @@ class ImplementingPhase(Phase):
         if not pending:
             return
 
-        if bool(group["legacy_single_prompt"]):
-            prompt_file = write_prompt_file(
-                ctx.files.feature_dir,
-                ctx.files.relative_path(ctx.files.implementation_dir / "coder_prompt.md"),
-                build_coder_prompt(ctx.files),
-            )
-            send_to_role(
-                ctx,
-                "coder",
-                prompt_file,
-                display_label=role_display_label(ctx.files.feature_dir, "coder"),
-            )
-            return
-
         prompt_specs: list[ParallelPromptSpec] = []
         for marker_index, subplan_path, plan_name in pending:
             prompt_specs.append(
@@ -892,7 +874,8 @@ class CompletingPhase(Phase):
                 if str(path).strip()
             }
             issue_number = str(state.get("issue_number")) if state.get("issue_number") is not None else None
-            commit_message = COMPLETION_SERVICE.draft_commit_message(
+            commit_message = COMPLETION_SERVICE.resolve_commit_message(
+                payload_commit_message=payload.get("commit_message"),
                 files=ctx.files,
                 issue_number=issue_number,
             )

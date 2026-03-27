@@ -132,7 +132,15 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
     defaults = dict(raw.get("defaults", {})) if isinstance(raw.get("defaults"), dict) else {}
-    for key in ("session_name", "provider", "profile", "max_review_iterations", "skip_final_approval"):
+    for key in (
+        "session_name",
+        "provider",
+        "profile",
+        "max_review_iterations",
+        "skip_final_approval",
+        "require_final_approval",
+        "completion",
+    ):
         if key in raw:
             defaults[key] = raw[key]
     if "tier" in raw and "profile" not in defaults:
@@ -175,12 +183,70 @@ def _normalize_defaults(raw: dict[str, Any]) -> dict[str, Any]:
         defaults["profile"] = str(profile)
     if "max_review_iterations" in raw:
         defaults["max_review_iterations"] = int(raw["max_review_iterations"])
+    completion = _normalize_completion_defaults(raw.get("completion"), "defaults.completion")
     if "skip_final_approval" in raw:
-        defaults["skip_final_approval"] = _coerce_bool(
-            raw["skip_final_approval"],
-            "defaults.skip_final_approval",
-        )
+        legacy_skip = _coerce_bool(raw["skip_final_approval"], "defaults.skip_final_approval")
+        if "skip_final_approval" in completion and completion["skip_final_approval"] != legacy_skip:
+            raise ValueError(
+                "defaults.skip_final_approval conflicts with defaults.completion.skip_final_approval."
+            )
+        completion.setdefault("skip_final_approval", legacy_skip)
+    if "require_final_approval" in raw:
+        legacy_require = _coerce_bool(raw["require_final_approval"], "defaults.require_final_approval")
+        if "require_final_approval" in completion and completion["require_final_approval"] != legacy_require:
+            raise ValueError(
+                "defaults.require_final_approval conflicts with defaults.completion.require_final_approval."
+            )
+        completion.setdefault("require_final_approval", legacy_require)
+    completion = _resolve_completion_toggles(completion, "defaults.completion")
+    if completion:
+        defaults["completion"] = completion
+        # Compatibility for callers still reading the legacy flat key.
+        defaults["skip_final_approval"] = completion["skip_final_approval"]
     return defaults
+
+
+def _normalize_completion_defaults(raw: Any, label: str) -> dict[str, bool]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{label} must be a mapping.")
+    completion: dict[str, bool] = {}
+    if "skip_final_approval" in raw:
+        completion["skip_final_approval"] = _coerce_bool(
+            raw["skip_final_approval"],
+            f"{label}.skip_final_approval",
+        )
+    if "require_final_approval" in raw:
+        completion["require_final_approval"] = _coerce_bool(
+            raw["require_final_approval"],
+            f"{label}.require_final_approval",
+        )
+    return _resolve_completion_toggles(completion, label)
+
+
+def _resolve_completion_toggles(raw: dict[str, bool], label: str) -> dict[str, bool]:
+    if not raw:
+        return {}
+    completion = dict(raw)
+    skip = completion.get("skip_final_approval")
+    require = completion.get("require_final_approval")
+    if skip is None and require is None:
+        return {}
+    if skip is None:
+        skip = not require
+        completion["skip_final_approval"] = skip
+    if require is None:
+        require = not skip
+        completion["require_final_approval"] = require
+    if skip == require:
+        raise ValueError(
+            f"{label}.skip_final_approval and {label}.require_final_approval must be opposites."
+        )
+    return {
+        "skip_final_approval": bool(skip),
+        "require_final_approval": bool(require),
+    }
 
 
 def _normalize_launcher(name: str, raw: Any) -> dict[str, Any]:
@@ -311,12 +377,20 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
         draft=_coerce_bool(github_raw.get("draft", True), "github.draft"),
         branch_prefix=str(github_raw.get("branch_prefix", "feature/")),
     )
+    completion_defaults = _normalize_completion_defaults(defaults.get("completion"), "defaults.completion")
+    if not completion_defaults:
+        completion_defaults = _resolve_completion_toggles(
+            {
+                "skip_final_approval": _coerce_bool(
+                    defaults.get("skip_final_approval", False),
+                    "defaults.skip_final_approval",
+                )
+            },
+            "defaults.completion",
+        )
     workflow_settings = WorkflowSettings(
         completion=CompletionSettings(
-            skip_final_approval=_coerce_bool(
-                defaults.get("skip_final_approval", False),
-                "defaults.skip_final_approval",
-            ),
+            skip_final_approval=completion_defaults["skip_final_approval"],
         ),
     )
 

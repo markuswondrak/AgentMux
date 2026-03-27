@@ -7,9 +7,9 @@ Documentation updates are expected to be delivered during implementation and ver
 
 ## Flow
 
-1. **Completion entry mode is selected** — The phase checks `workflow_settings.completion.skip_final_approval`.
+1. **Completion entry mode is selected** — The phase checks `workflow_settings.completion.skip_final_approval` (inverse: `workflow_settings.completion.require_final_approval`).
    - `false` (default): reviewer confirmation is requested in `08_completion/confirmation_prompt.md`.
-   - `true`: reviewer confirmation is skipped and completion auto-prepares approval inside `08_completion/approval.json`.
+   - `true`: reviewer confirmation is skipped and completion auto-prepares approval inside `08_completion/approval.json` with `{"action": "approve", "exclude_files": []}`.
    In both modes, the workflow still enters `completing`, and `completing` remains the owner of commit, cleanup, and PR finalization.
 
 2. **Interactive confirmation prompt displays changed files** — In reviewer-confirmation mode, the prompt shows all files detected by `git status --porcelain` from the project directory.
@@ -20,13 +20,19 @@ Documentation updates are expected to be delivered during implementation and ver
    ```json
    {
      "action": "approve",
-     "exclude_files": []
+     "exclude_files": [],
+     "commit_message": "optional reviewer summary"
    }
    ```
+   - `commit_message` is optional.
+   - When present, completion uses it verbatim as the final commit message (trimmed).
+   - When omitted or blank, completion drafts a deterministic fallback from session artifacts.
 
 5. **Apply reviewer-approved preferences before commit file selection** — On `approval_received`, `CompletingPhase.handle_event()` first applies `08_completion/approved_preferences.json` (if present). This can append bullets to `.agentmux/prompts/agents/<role>.md`.
 
-6. **Auto-detection and filtering** — The phase reads git status after applying preferences, removes any files listed in `exclude_files`, drafts the commit message from session artifacts via `CompletionService.draft_commit_message(...)`, and passes both into `CompletionService.finalize_approval(...)`.
+6. **Auto-detection and filtering** — The phase reads git status after applying preferences, removes any files listed in `exclude_files`, resolves the commit message via `CompletionService.resolve_commit_message(...)`, and passes the resulting message into `CompletionService.finalize_approval(...)`.
+   - In manual confirmation mode, reviewer-provided `commit_message` in `approval.json` takes precedence.
+   - In auto-approval mode, the generated approval artifact usually omits `commit_message`, so completion uses the same deterministic draft fallback path.
 
 7. **Branch + PR creation (best effort)** — If startup state indicates GitHub is available (`gh_available: true`), `CompletionService` creates a branch (`<github.branch_prefix><feature-slug>`), pushes it, and runs `gh pr create` against `github.base_branch`. PRs default to draft (`github.draft: true`). The PR body is assembled from `requirements.md`, `02_planning/plan.md`, and `06_review/review.md`, and includes `Closes #<N>` when the run started with `--issue`.
 

@@ -14,6 +14,29 @@ _PROJECT_INSTRUCTIONS_PLACEHOLDER = "[[placeholder:project_instructions]]"
 _PROJECT_INSTRUCTIONS_PLACEHOLDER_LEGACY = "{project_instructions}"
 
 _CHANGED_FILES_FALLBACK = "_Unable to read changed files from git status._"
+_CONFIRMATION_APPROVAL_FIELDS: tuple[str, ...] = (
+    "action",
+    "exclude_files",
+    "commit_message",
+)
+
+
+def confirmation_approval_payload_fields() -> tuple[str, ...]:
+    return _CONFIRMATION_APPROVAL_FIELDS
+
+
+def _append_confirmation_commit_message_contract(prompt: str) -> str:
+    if "commit_message" in prompt:
+        return prompt
+    return "\n".join(
+        [
+            prompt.rstrip(),
+            "",
+            "Approval payload contract extension:",
+            '- `commit_message` is optional and may contain a reviewer-authored summary for the final commit.',
+            "",
+        ]
+    )
 
 
 def _load_shared_fragment(name: str) -> str:
@@ -254,7 +277,7 @@ def build_confirmation_prompt(files: RuntimeFiles) -> str:
         stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
         changed_files = f"{_CHANGED_FILES_FALLBACK}\nError: {stderr}"
 
-    return _render_template(
+    prompt = _render_template(
         _load_template(
         "commands",
         "confirmation",
@@ -265,6 +288,7 @@ def build_confirmation_prompt(files: RuntimeFiles) -> str:
         "changed_files": changed_files,
         "reviewer_preference_proposal_file": files.relative_path(files.reviewer_preference_proposal),
     })
+    return _append_confirmation_commit_message_contract(prompt)
 
 
 def build_code_researcher_prompt(topic: str, files: RuntimeFiles) -> str:

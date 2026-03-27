@@ -226,8 +226,66 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             self.assertEqual(0, result)
             setup_mock.assert_called_once()
             self.assertEqual(injected_agents, attach_mock.call_args.kwargs["agents"])
-            self.assertIs(loaded.workflow_settings, create_context_mock.call_args.kwargs["workflow_settings"])
+            settings = create_context_mock.call_args.kwargs["workflow_settings"]
+            self.assertIsInstance(settings, WorkflowSettings)
+            self.assertTrue(settings.completion_settings.skip_final_approval)
             self.assertEqual(False, orchestrate_mock.call_args.args[1])
+
+    def test_orchestrate_mode_normalizes_completion_settings_boundary_before_context_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+            create_feature_files(project_dir, feature_dir, "resume", "session-x")
+
+            base_agents = {
+                "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
+            }
+            loaded = SimpleNamespace(
+                session_name="session-x",
+                max_review_iterations=3,
+                github=GitHubConfig(),
+                agents=base_agents,
+                workflow_settings=SimpleNamespace(
+                    completion_settings=CompletionSettings(skip_final_approval=True),
+                ),
+            )
+            args = argparse.Namespace(
+                prompt=None,
+                name=None,
+                config=None,
+                keep_session=False,
+                product_manager=False,
+                orchestrate=str(feature_dir),
+                resume=None,
+                issue=None,
+            )
+
+            app = application.PipelineApplication(project_dir)
+
+            with patch.object(app, "ensure_dependencies", return_value=None), patch(
+                "agentmux.pipeline.application.load_layered_config",
+                return_value=loaded,
+            ), patch(
+                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                return_value=base_agents,
+            ), patch(
+                "agentmux.pipeline.application.TmuxRuntimeFactory.attach",
+                return_value=object(),
+            ), patch(
+                "agentmux.pipeline.application.PipelineOrchestrator.create_context",
+                return_value=object(),
+            ) as create_context_mock, patch(
+                "agentmux.pipeline.application.PipelineOrchestrator.run",
+                return_value=0,
+            ):
+                result = app.run(args)
+
+            self.assertEqual(0, result)
+            settings = create_context_mock.call_args.kwargs["workflow_settings"]
+            self.assertIsInstance(settings, WorkflowSettings)
+            self.assertTrue(settings.completion_settings.skip_final_approval)
 
     def test_defaults_allow_mcp_research_tools_for_claude_architect_and_pm(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

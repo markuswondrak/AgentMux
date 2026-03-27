@@ -81,7 +81,7 @@ def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
 
 
 class OnDemandPromptHandlerTests(unittest.TestCase):
-    def test_enter_implementing_builds_coder_prompt_inline(self) -> None:
+    def test_enter_implementing_builds_numbered_coder_prompt_for_single_plan_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = _make_ctx(tmp_path / "feature")
@@ -94,9 +94,9 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             run_phase_cycle(load_state(state_path), ctx)
             updated = load_state(state_path)
 
-            self.assertTrue((ctx.files.implementation_dir / "coder_prompt.md").exists())
+            self.assertTrue((ctx.files.implementation_dir / "coder_prompt_1.txt").exists())
             self.assertEqual(
-                [("kill_primary", "coder"), ("send", "coder", "coder_prompt.md", "[coder] implementation")],
+                [("kill_primary", "coder"), ("send", "coder", "coder_prompt_1.txt", "[coder] implementation")],
                 ctx.runtime.calls,
             )
             self.assertEqual(1, updated["implementation_group_total"])

@@ -13,7 +13,7 @@ Your job:
 3. The first line of `06_review/review.md` must be exactly one of:
    - `verdict: pass`
    - `verdict: fail`
-4. On pass, keep the body brief and summarize what was validated.
+4. On pass, keep the body brief and summarize what was validated. Include an optional line `commit_message: <summary>` when you can provide a reviewer-authored commit summary for completion.
 5. On fail, include concrete findings, regressions, gaps, or residual risks.
 6. Verify documentation tasks listed in `02_planning/tasks.md` are complete when they are part of the approved scope.
 7. FINAL STEP ONLY — once `06_review/review.md` is fully written and nothing else remains, stop. Do not update `state.json` or any workflow status from review.

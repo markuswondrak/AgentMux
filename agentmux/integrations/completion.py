@@ -39,6 +39,19 @@ class CompletionService:
             summary = f"{summary[: max_summary_len - 3].rstrip()}..."
         return f"{prefix}{summary}{suffix}"
 
+    def resolve_commit_message(
+        self,
+        *,
+        payload_commit_message: object,
+        files: RuntimeFiles,
+        issue_number: str | None,
+    ) -> str:
+        if isinstance(payload_commit_message, str):
+            stripped = payload_commit_message.strip()
+            if stripped:
+                return stripped
+        return self.draft_commit_message(files=files, issue_number=issue_number)
+
     def finalize_approval(
         self,
         *,

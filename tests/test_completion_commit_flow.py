@@ -10,7 +10,7 @@ from unittest.mock import patch
 from agentmux.integrations.completion import CompletionService
 from agentmux.shared.models import AgentConfig, CompletionSettings, GitHubConfig, WorkflowSettings
 from agentmux.workflow.phases import CompletingPhase
-from agentmux.workflow.prompts import build_confirmation_prompt
+from agentmux.workflow.prompts import build_confirmation_prompt, build_reviewer_prompt
 from agentmux.sessions.state_store import create_feature_files, load_state
 from agentmux.workflow.transitions import EXIT_SUCCESS, PipelineContext
 
@@ -82,6 +82,35 @@ class CompletionCommitFlowTests(unittest.TestCase):
             self.assertIn("complete approval flow", commit_message)
             self.assertIn("#54", commit_message)
 
+    def test_completion_service_resolve_commit_message_prefers_payload_and_falls_back_to_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, _ = _make_ctx(feature_dir)
+            service = CompletionService()
+
+            with patch.object(service, "draft_commit_message", return_value="feat: drafted commit") as draft_mock:
+                commit_message = service.resolve_commit_message(
+                    payload_commit_message="  reviewer summary  ",
+                    files=ctx.files,
+                    issue_number=None,
+                )
+
+            self.assertEqual("reviewer summary", commit_message)
+            draft_mock.assert_not_called()
+
+            with patch.object(service, "draft_commit_message", return_value="feat: drafted commit") as draft_mock:
+                fallback_commit = service.resolve_commit_message(
+                    payload_commit_message="   ",
+                    files=ctx.files,
+                    issue_number="42",
+                )
+
+            self.assertEqual("feat: drafted commit", fallback_commit)
+            draft_mock.assert_called_once_with(
+                files=ctx.files,
+                issue_number="42",
+            )
+
     def test_completing_phase_on_enter_sends_confirmation_prompt_to_reviewer(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
@@ -121,7 +150,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 check=True,
             )
 
-    def test_build_confirmation_prompt_does_not_request_commit_message(self) -> None:
+    def test_build_confirmation_prompt_requests_optional_commit_message(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
             ctx, _ = _make_ctx(feature_dir)
@@ -130,7 +159,17 @@ class CompletionCommitFlowTests(unittest.TestCase):
 
             self.assertIn('"action": "approve"', prompt)
             self.assertIn('"exclude_files": ["relative/path"]', prompt)
-            self.assertNotIn("commit_message", prompt)
+            self.assertIn('"commit_message": "optional summary"', prompt)
+
+    def test_build_reviewer_review_prompt_requests_commit_message_on_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, _ = _make_ctx(feature_dir)
+
+            prompt = build_reviewer_prompt(ctx.files, is_review=True)
+
+            self.assertIn("verdict: pass", prompt)
+            self.assertIn("commit_message", prompt)
 
     def test_approval_commits_changed_minus_exclusions_and_cleans_up_on_success(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -156,7 +195,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 CompletionService,
                 "draft_commit_message",
                 return_value="feat: drafted commit",
-            ), patch("agentmux.integrations.completion.commit_changes", return_value="abc123") as commit_mock, patch(
+            ) as draft_mock, patch("agentmux.integrations.completion.commit_changes", return_value="abc123") as commit_mock, patch(
                 "agentmux.integrations.completion.cleanup_feature_dir"
             ) as cleanup_mock:
                 result = CompletingPhase().handle_event(state, "approval_received", ctx)
@@ -164,9 +203,10 @@ class CompletionCommitFlowTests(unittest.TestCase):
             self.assertEqual(EXIT_SUCCESS, result)
             commit_mock.assert_called_once_with(
                 ctx.files.project_dir,
-                "feat: drafted commit",
+                "test commit",
                 ["agentmux/phases.py", "renamed.py"],
             )
+            draft_mock.assert_not_called()
             cleanup_mock.assert_called_once_with(ctx.files.feature_dir)
 
     def test_approval_uses_drafted_commit_message_when_payload_omits_it(self) -> None:
@@ -334,14 +374,28 @@ class CompletionCommitFlowTests(unittest.TestCase):
                     stdout=" M agentmux/phases.py\n",
                     stderr="",
                 ),
-            ), patch(
+            ), patch.object(
+                CompletionService,
+                "draft_commit_message",
+                return_value="feat: drafted commit",
+            ) as draft_mock, patch(
                 "agentmux.integrations.completion.commit_changes",
                 return_value="abc123",
-            ) as commit_mock, patch("agentmux.integrations.completion.cleanup_feature_dir") as cleanup_mock:
+            ) as commit_mock, patch(
+                "agentmux.integrations.completion.cleanup_feature_dir"
+            ) as cleanup_mock:
                 result = phase.handle_event(state, "approval_received", ctx)
 
             self.assertEqual(EXIT_SUCCESS, result)
-            commit_mock.assert_called_once()
+            draft_mock.assert_called_once_with(
+                files=ctx.files,
+                issue_number=None,
+            )
+            commit_mock.assert_called_once_with(
+                ctx.files.project_dir,
+                "feat: drafted commit",
+                ["agentmux/phases.py"],
+            )
             cleanup_mock.assert_called_once_with(ctx.files.feature_dir)
 
     def test_changes_requested_deactivates_reviewer_and_resets_for_replanning(self) -> None:
