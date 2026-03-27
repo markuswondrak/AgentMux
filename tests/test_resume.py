@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -591,6 +592,78 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertIn(state["interruption_cause"], printed)
             self.assertIn(state["interruption_resume_command"], printed)
             self.assertIn(state["interruption_log_path"], printed)
+
+    def test_run_treats_removed_feature_directory_as_success_after_attach_returns(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            messages: list[str] = []
+            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=messages.append))
+            args = self._main_args()
+            loaded = self._loaded_config()
+
+            def cleanup_feature_dir(feature_dir: Path, _keep_session: bool, product_manager: bool) -> None:
+                _ = product_manager
+                shutil.rmtree(feature_dir)
+
+            with patch.object(app, "ensure_dependencies", return_value=None), patch(
+                "agentmux.pipeline.application.load_layered_config", return_value=loaded
+            ), patch(
+                "agentmux.pipeline.application.tmux_session_exists", return_value=False
+            ), patch(
+                "agentmux.integrations.github.check_gh_available", return_value=False
+            ), patch(
+                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
+            ), patch(
+                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents", return_value=loaded.agents
+            ), patch(
+                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
+            ), patch.object(
+                app,
+                "_start_background_orchestrator",
+                side_effect=cleanup_feature_dir,
+            ), patch(
+                "agentmux.pipeline.application.subprocess.run", return_value=None
+            ):
+                result = app.run(args)
+
+            feature_dir = project_dir / ".agentmux" / ".sessions" / "demo"
+            self.assertEqual(0, result)
+            self.assertFalse(feature_dir.exists())
+
+    def test_run_fails_cleanly_when_state_is_missing_but_feature_directory_remains(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=lambda _message: None))
+            args = self._main_args()
+            loaded = self._loaded_config()
+
+            def remove_state_only(feature_dir: Path, _keep_session: bool, product_manager: bool) -> None:
+                _ = product_manager
+                (feature_dir / "state.json").unlink()
+
+            with patch.object(app, "ensure_dependencies", return_value=None), patch(
+                "agentmux.pipeline.application.load_layered_config", return_value=loaded
+            ), patch(
+                "agentmux.pipeline.application.tmux_session_exists", return_value=False
+            ), patch(
+                "agentmux.integrations.github.check_gh_available", return_value=False
+            ), patch(
+                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
+            ), patch(
+                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents", return_value=loaded.agents
+            ), patch(
+                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
+            ), patch.object(
+                app,
+                "_start_background_orchestrator",
+                side_effect=remove_state_only,
+            ), patch(
+                "agentmux.pipeline.application.subprocess.run", return_value=None
+            ), self.assertRaises(SystemExit) as ctx:
+                app.run(args)
+
+            self.assertIn("Session state missing after tmux exited", str(ctx.exception))
+            self.assertIn("state.json", str(ctx.exception))
 
 
 class ProjectDirInferenceTests(unittest.TestCase):
