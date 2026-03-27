@@ -13,6 +13,11 @@ from ..sessions.state_store import now_iso, write_state
 from .execution_plan import load_execution_plan
 from .handlers import load_plan_meta, reset_markers, send_to_role, write_phase
 from .plan_parser import coder_label_for_subplan, split_plan_into_subplans
+from .preference_memory import (
+    apply_preference_proposal,
+    load_preference_proposal,
+    proposal_artifact_for_source,
+)
 from .prompts import (
     build_architect_prompt,
     build_change_prompt,
@@ -59,6 +64,14 @@ def _parse_changed_paths(status_output: str) -> list[str]:
         if path:
             paths.append(path)
     return paths
+
+
+def _apply_approved_preferences(ctx: PipelineContext, source_role: str) -> None:
+    proposal_path = proposal_artifact_for_source(ctx.files, source_role)
+    proposal = load_preference_proposal(proposal_path)
+    if proposal is None:
+        return
+    apply_preference_proposal(ctx.files.project_dir, proposal)
 
 
 def _reset_implementation_progress(state: dict) -> None:
@@ -417,6 +430,7 @@ class ProductManagementPhase(_ResearchDispatchMixin, Phase):
 
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
         if event == "pm_completed":
+            _apply_approved_preferences(ctx, "product-manager")
             ctx.runtime.kill_primary("product-manager")
             write_phase(ctx, state, "planning", "pm_completed")
             return None
@@ -465,6 +479,7 @@ class PlanningPhase(_ResearchDispatchMixin, Phase):
 
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
         if event == "plan_written":
+            _apply_approved_preferences(ctx, "architect")
             load_execution_plan(ctx.files.planning_dir)
             meta = load_plan_meta(ctx.files.planning_dir)
             needs_design = bool(meta.get("needs_design")) and "designer" in ctx.agents
@@ -897,6 +912,7 @@ class CompletingPhase(Phase):
         if event == "approval_received":
             approval_path = ctx.files.completion_dir / "approval.json"
             payload = json.loads(approval_path.read_text(encoding="utf-8"))
+            _apply_approved_preferences(ctx, "reviewer")
             changed_paths = _parse_changed_paths(_git_status_porcelain(ctx.files.project_dir))
             exclude_files = {
                 str(path).strip()

@@ -1,6 +1,8 @@
 You are the architect agent for this feature request. Your task is to plan the architecture and create an actionable plan.
 
 Session directory: {feature_dir}
+Project directory: {project_dir}
+Approved preference proposal artifact: {architect_preference_proposal_file}
 
 Read these files first:
 - context.md
@@ -79,6 +81,17 @@ Set `needs_design` to `true` only when the plan requires a dedicated design hand
 Set `needs_docs` to `true` only when documentation updates are required for this feature scope.
 `doc_files` must list the documentation files expected to change when `needs_docs` is `true`, and must be an empty list when `needs_docs` is `false`.
 18. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
+
+## Preference memory at phase-end approval
+
+[[shared:preference-memory]]
+
+Architect preference proposal output:
+
+1. If one or more candidates are approved, write `{architect_preference_proposal_file}` as JSON with this shape:
+   - `{{"source_role":"architect","approved":[{{"target_role":"coder","bullet":"- ..."}}]}}`
+2. If no candidates are approved, do not write the proposal artifact.
+
 {project_instructions}
 
 Constraints:

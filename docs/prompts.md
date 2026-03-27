@@ -30,6 +30,38 @@ Curly braces in project content are automatically escaped before `format_map()` 
 
 `agentmux/prompts/context.md` is pipeline-controlled and is not project-extendable.
 
+## Preference memory artifacts
+
+Preference memory uses session-scoped proposal artifacts so agents never mutate project extensions directly:
+
+- `01_product_management/approved_preferences.json` (product-manager approvals)
+- `02_planning/approved_preferences.json` (architect approvals)
+- `08_completion/approved_preferences.json` (reviewer approvals)
+
+Each proposal uses this shape:
+
+```json
+{
+  "source_role": "product-manager|architect|reviewer",
+  "approved": [
+    {"target_role": "coder", "bullet": "- ..."}
+  ]
+}
+```
+
+Application flow:
+
+- Agents write proposal artifacts only after explicit user approval.
+- The orchestrator applies proposals during phase transitions (`pm_completed`, `plan_written`, `approval_received`).
+- Applied preferences are appended to `.agentmux/prompts/agents/<role>.md`.
+- Prompt builds are lazy, so newly persisted preferences are visible in subsequent prompt renders in later phases.
+
+Deduplication rules (high level):
+
+- Normalize bullets by trimming, removing leading bullet markers (`-`, `*`, `+`), collapsing whitespace, and comparing case-insensitively.
+- Deduplicate within the current proposal batch per target role.
+- Skip appending bullets already present in the target extension file after normalization.
+
 ## Prompt injection
 
 Prompts are not injected as full text. Instead, `send_prompt()` in `agentmux/runtime/tmux_control.py` sends a concise file reference message like:

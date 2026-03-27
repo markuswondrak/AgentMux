@@ -1,18 +1,48 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
 from ..shared.models import RuntimeFiles
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+_SHARED_FRAGMENT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
+_MAX_SHARED_FRAGMENT_EXPANSION_DEPTH = 8
 
 _CHANGED_FILES_FALLBACK = "_Unable to read changed files from git status._"
 
 
+def _load_shared_fragment(name: str) -> str:
+    fragment_path = PROMPTS_DIR / "shared" / f"{name}.md"
+    if not fragment_path.is_file():
+        raise RuntimeError(f"Shared prompt fragment not found: {fragment_path}")
+    return fragment_path.read_text(encoding="utf-8")
+
+
+def _expand_shared_fragments(template: str) -> str:
+    expanded = template
+
+    for _ in range(_MAX_SHARED_FRAGMENT_EXPANSION_DEPTH):
+        if _SHARED_FRAGMENT_PATTERN.search(expanded) is None:
+            return expanded
+        expanded = _SHARED_FRAGMENT_PATTERN.sub(
+            lambda match: _load_shared_fragment(match.group(1)),
+            expanded,
+        )
+
+    if _SHARED_FRAGMENT_PATTERN.search(expanded) is not None:
+        raise RuntimeError(
+            "Shared prompt fragment expansion exceeded maximum depth. "
+            "Check for a recursive [[shared:...]] include chain.",
+        )
+    return expanded
+
+
 def _load_template(subdir: str, name: str, project_dir: Path | None = None) -> str:
     template = (PROMPTS_DIR / subdir / f"{name}.md").read_text(encoding="utf-8")
+    template = _expand_shared_fragments(template)
     project_instructions = ""
     if project_dir is not None:
         project_prompt = project_dir / ".agentmux" / "prompts" / subdir / f"{name}.md"
@@ -88,7 +118,11 @@ def build_architect_prompt(files: RuntimeFiles) -> str:
         "agents",
         "architect",
         project_dir=files.project_dir,
-    ).format_map({"feature_dir": files.feature_dir})
+    ).format_map({
+        "feature_dir": files.feature_dir,
+        "project_dir": files.project_dir,
+        "architect_preference_proposal_file": files.relative_path(files.architect_preference_proposal),
+    })
 
 
 def build_product_manager_prompt(files: RuntimeFiles) -> str:
@@ -99,6 +133,7 @@ def build_product_manager_prompt(files: RuntimeFiles) -> str:
     ).format_map({
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
+        "pm_preference_proposal_file": files.relative_path(files.pm_preference_proposal),
     })
 
 
@@ -113,7 +148,11 @@ def build_reviewer_prompt(files: RuntimeFiles, is_review: bool = False) -> str:
         "agents",
         "reviewer",
         project_dir=files.project_dir,
-    ).format_map({"feature_dir": files.feature_dir})
+    ).format_map({
+        "feature_dir": files.feature_dir,
+        "project_dir": files.project_dir,
+        "reviewer_preference_proposal_file": files.relative_path(files.reviewer_preference_proposal),
+    })
 
 
 def build_coder_prompt(files: RuntimeFiles) -> str:
@@ -239,7 +278,9 @@ def build_confirmation_prompt(files: RuntimeFiles) -> str:
         project_dir=files.project_dir,
     ).format_map({
         "feature_dir": files.feature_dir,
+        "project_dir": files.project_dir,
         "changed_files": changed_files,
+        "reviewer_preference_proposal_file": files.relative_path(files.reviewer_preference_proposal),
     })
 
 

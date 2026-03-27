@@ -1,0 +1,1 @@
+- Prefer extracting repeated prompt instructions into shared fragments/helpers instead of duplicating them across multiple prompt templates.

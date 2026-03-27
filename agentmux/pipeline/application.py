@@ -132,6 +132,29 @@ class PipelineApplication:
             )
         )
 
+    def _post_attach_result(self, *, files, feature_dir: Path) -> int:
+        if not files.state.exists():
+            if not feature_dir.exists():
+                return 0
+            raise SystemExit(
+                f"Session state missing after tmux exited: expected {files.state}. "
+                "The feature directory still exists, so the session did not clean up successfully."
+            )
+
+        post_attach_state = load_state(files.state)
+        if str(post_attach_state.get("phase")) == "failed":
+            report = self.interruptions.report_from_state(post_attach_state, feature_dir, files=files)
+            if report is None:
+                report = self.interruptions.build_failed(
+                    feature_dir,
+                    "The pipeline ended in a failed state while the tmux session was active.",
+                    files=files,
+                )
+                self.interruptions.persist(files, report)
+            self.ui.print(self.interruptions.render(report))
+            return 130 if report.category == "canceled" else 1
+        return 0
+
     def _launch_attached_session(self, args, loaded, prepared: PreparedSession, agents) -> int:
         files = prepared.files
         feature_dir = prepared.feature_dir
@@ -149,20 +172,7 @@ class PipelineApplication:
             self.ui.print(f"Feature directory: {feature_dir}")
             self.ui.print(f"tmux session: {loaded.session_name}")
             subprocess.run(["tmux", "attach-session", "-t", loaded.session_name], check=True)
-
-            post_attach_state = load_state(files.state)
-            if str(post_attach_state.get("phase")) == "failed":
-                report = self.interruptions.report_from_state(post_attach_state, feature_dir, files=files)
-                if report is None:
-                    report = self.interruptions.build_failed(
-                        feature_dir,
-                        "The pipeline ended in a failed state while the tmux session was active.",
-                        files=files,
-                    )
-                    self.interruptions.persist(files, report)
-                self.ui.print(self.interruptions.render(report))
-                return 130 if report.category == "canceled" else 1
-            return 0
+            return self._post_attach_result(files=files, feature_dir=feature_dir)
         except KeyboardInterrupt:
             report = self.interruptions.build_canceled(
                 feature_dir,
