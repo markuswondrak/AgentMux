@@ -20,8 +20,8 @@ python3 pipeline.py --resume <feature-dir-or-name>  # Resume specific session by
 5. If `"product_manager": true` in state and `01_product_management/done` is missing, resume returns `product_management`; once `done` exists, resume falls through to normal `02_planning` / `05_implementation` inference
 6. `plan_meta.json` is used as architect-authored intent metadata during inference:
    - `needs_design: true` resumes into `designing` when `04_design/design.md` is still missing
-   - `needs_docs: true` with review verdict `pass` resumes into `documenting` until `07_docs/docs_done` exists
-   - otherwise a passed review resumes directly into `completing`
+   - `needs_docs`/`doc_files` remain planning metadata and do not create a dedicated resume phase
+   - a passed review resumes directly into `completing`
 7. On resume, the phase is updated in `state.json`, `last_event` is set to `"resumed"`, and any research tasks with `"dispatched"` status are cleaned up (allowing re-request)
 8. Orchestrator/monitor entrypoints infer the project directory from session paths under `.agentmux/.sessions/<id>` and also keep compatibility with legacy `.multi-agent/<id>` directories
 9. The orchestrator picks up the updated state and injects the appropriate phase prompt to resume work

@@ -56,6 +56,8 @@ On resume, `TmuxAgentRuntime.attach()` rehydrates pane IDs, reconstructs `Conten
 
 `TmuxAgentRuntime` also exposes a read-only view of the registered primary and parallel panes. The background `InterruptionEventSource` polls that registry and publishes an interruption event when any registered agent pane disappears, even if it was parked in `_hidden`.
 
+Orchestrator-managed pane retirement is not an interruption. The runtime marks panes as intentionally retiring for the full remove/update/persist lifecycle, and interruption polling must treat those panes as internal cleanup rather than user-visible cancellation.
+
 That is treated as a user-visible run cancellation rather than a silent pane recreation. The orchestrator persists the interruption to `state.json`, shows the cause in the monitor, and requires `--resume` to continue.
 
 ## Prompt dispatch

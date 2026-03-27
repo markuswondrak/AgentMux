@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -41,7 +40,7 @@ class FakeRuntime:
 
 
 class ReviewPassRequirementsTests(unittest.TestCase):
-    def _make_ctx(self, feature_dir: Path, with_docs: bool) -> tuple[PipelineContext, Path]:
+    def _make_ctx(self, feature_dir: Path) -> tuple[PipelineContext, Path]:
         project_dir = feature_dir.parent / "project"
         project_dir.mkdir(parents=True, exist_ok=True)
         files = create_feature_files(project_dir, feature_dir, "review handling", "session-x")
@@ -56,8 +55,6 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             "reviewer": AgentConfig(role="reviewer", cli="claude", model="sonnet", args=[]),
             "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[]),
         }
-        if with_docs:
-            agents["docs"] = AgentConfig(role="docs", cli="codex", model="gpt-5.3-codex", args=[])
 
         ctx = PipelineContext(
             files=files,
@@ -67,18 +64,6 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             prompts=prompts,
         )
         return ctx, files.state
-
-    def _write_plan_meta(self, ctx: PipelineContext, *, needs_docs: bool, doc_files: list[str] | None = None) -> None:
-        ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-        plan_meta = {
-            "needs_design": False,
-            "needs_docs": needs_docs,
-            "doc_files": doc_files if doc_files is not None else [],
-        }
-        (ctx.files.planning_dir / "plan_meta.json").write_text(
-            json.dumps(plan_meta) + "\n",
-            encoding="utf-8",
-        )
 
     def test_reviewer_prompt_requires_review_md_for_pass_and_fail(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -95,7 +80,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
     def test_reviewing_phase_on_enter_sends_prompt_to_reviewer(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
-            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=False)
+            ctx, state_path = self._make_ctx(tmp_path / "feature")
             ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
             ctx.files.review.write_text("verdict: pass\n", encoding="utf-8")
 
@@ -112,11 +97,10 @@ class ReviewPassRequirementsTests(unittest.TestCase):
     def test_reviewing_phase_is_registered(self) -> None:
         self.assertIn("reviewing", PHASES)
 
-    def test_handle_review_passed_moves_to_documenting_when_docs_agent_exists(self) -> None:
+    def test_handle_review_passed_moves_to_completing(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
-            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=True)
-            self._write_plan_meta(ctx, needs_docs=True, doc_files=["docs/file-protocol.md"])
+            ctx, state_path = self._make_ctx(tmp_path / "feature")
 
             state = load_state(state_path)
             state["phase"] = "reviewing"
@@ -126,14 +110,20 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             phase.handle_event(load_state(state_path), "review_passed", ctx)
 
             updated = load_state(state_path)
-            self.assertEqual("documenting", updated["phase"])
+            self.assertEqual("completing", updated["phase"])
             self.assertEqual("review_passed", updated["last_event"])
+            self.assertIn(("finish_many", "coder"), ctx.runtime.calls)
+            self.assertIn(("kill_primary", "coder"), ctx.runtime.calls)
 
-    def test_handle_review_passed_moves_to_completing_when_docs_not_required(self) -> None:
+    def test_handle_review_passed_ignores_docs_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
-            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=True)
-            self._write_plan_meta(ctx, needs_docs=False, doc_files=[])
+            ctx, state_path = self._make_ctx(tmp_path / "feature")
+            ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
+            (ctx.files.planning_dir / "plan_meta.json").write_text(
+                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md"]}',
+                encoding="utf-8",
+            )
 
             state = load_state(state_path)
             state["phase"] = "reviewing"
@@ -146,24 +136,10 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             self.assertEqual("completing", updated["phase"])
             self.assertEqual("review_passed", updated["last_event"])
 
-    def test_handle_review_passed_raises_when_docs_required_but_docs_agent_missing(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=False)
-            self._write_plan_meta(ctx, needs_docs=True, doc_files=["README.md"])
-
-            state = load_state(state_path)
-            state["phase"] = "reviewing"
-            write_state(state_path, state)
-
-            phase = get_phase(load_state(state_path))
-            with self.assertRaises(RuntimeError):
-                phase.handle_event(load_state(state_path), "review_passed", ctx)
-
     def test_handle_review_failed_moves_to_fixing_before_limit(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
-            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=False)
+            ctx, state_path = self._make_ctx(tmp_path / "feature")
             ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
             ctx.files.review.write_text("verdict: fail\n- finding\n", encoding="utf-8")
 
@@ -179,29 +155,6 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             self.assertEqual("fixing", updated["phase"])
             self.assertEqual(2, updated["review_iteration"])
             self.assertTrue(ctx.files.fix_request.exists())
-
-    def test_documenting_phase_completion_kills_docs_pane_and_transitions(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            ctx, state_path = self._make_ctx(tmp_path / "feature", with_docs=True)
-
-            state = load_state(state_path)
-            state["phase"] = "documenting"
-            write_state(state_path, state)
-
-            ctx.files.docs_dir.mkdir(parents=True, exist_ok=True)
-            (ctx.files.docs_dir / "docs_done").touch()
-
-            phase = get_phase(load_state(state_path))
-            event = phase.detect_event(load_state(state_path), ctx)
-            self.assertEqual("docs_completed", event)
-            phase.handle_event(load_state(state_path), "docs_completed", ctx)
-
-            updated = load_state(state_path)
-            self.assertEqual("completing", updated["phase"])
-            self.assertEqual("docs_completed", updated["last_event"])
-            self.assertIn(("kill_primary", "docs"), ctx.runtime.calls)
-            self.assertNotIn(("deactivate", "docs"), ctx.runtime.calls)
 
 
 if __name__ == "__main__":

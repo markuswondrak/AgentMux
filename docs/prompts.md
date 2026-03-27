@@ -5,7 +5,7 @@
 ## Template directories
 
 - `agentmux/prompts/agents/` — role-level prompts (define what each agent is): `architect.md`, `product-manager.md`, `reviewer.md`, `coder.md`, `code-researcher.md`, `web-researcher.md`, `designer.md`
-- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `fix.md`, `confirmation.md`, `change.md`, `docs.md`
+- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `fix.md`, `confirmation.md`, `change.md`
 
 ## Placeholder syntax
 
@@ -120,12 +120,16 @@ Planning and replanning prompts share one contract for implementation scheduling
 - `02_planning/execution_plan.json` is the scheduling source of truth (ordered execution groups, each marked as `serial` or `parallel`, with explicit named plan references)
 - `02_planning/tasks.md` remains the implementation checklist mapped to the same work
 - `02_planning/plan_meta.json` remains workflow intent metadata (`needs_design`, `needs_docs`, `doc_files`)
+- Documentation updates must be represented in planning artifacts (`plan.md`, `plan_<N>.md`, and `tasks.md`) rather than a dedicated post-review docs phase.
 
 Architect output requirements for parallel work include:
 
 - A Phase 1 / Phase 2 / Phase 3 breakdown where Phase 1 defines interfaces/contracts and Phase 2 uses those contracts for parallel implementation
-- Per parallel sub-plan sections for `Scope`, `Dependencies`, and `Isolation`
-- Explicit conflict mapping by touched files; empty file-set intersection should be treated as parallelizable unless a precise technical conflict is documented
+- Per parallel sub-plan sections for `Scope`, `Owned files/modules`, `Dependencies`, and `Isolation`
+- Explicit conflict mapping by touched files/modules plus explicit ownership for each parallel lane
+- Safety-first rule: Phase 2 parallel sub-plans are allowed only when their owned files/modules are disjoint; if two lanes would edit the same file/module, that work must be merged into one sub-plan or moved into a serial integration step
+- Shared mutable artifacts such as `02_planning/tasks.md`, prompt templates, monitor/state metadata files, and cross-cutting tests/docs should have a single Phase 2 owner unless intentionally deferred to integration
+- `Isolation` must be justified in terms of exclusive ownership, not only logical separation
 - A callout for any enabling refactor needed to preserve boundaries, plus explicit technical debt rationale when refactor work is deferred
 
 Compatibility requirement:
@@ -145,5 +149,4 @@ Current split:
 - `build_product_manager_prompt()` renders the PM analysis prompt
 - `build_coder_prompt()` / `build_coder_subplan_prompt()` render coder implementation prompts with completion marker instructions and optional research handoff references
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
-- `build_docs_prompt()` requires `02_planning/plan_meta.json` with `needs_docs: true` and a non-empty `doc_files` list, then injects those file paths as the only docs-update scope
 - `build_confirmation_prompt()` renders the confirmation command prompt used in completion

@@ -85,8 +85,6 @@ roles:
     profile: standard
   reviewer:
     profile: standard
-  docs:
-    profile: low
 ```
 
 Profiles (`max`, `standard`, `low`) map to provider-specific models and launch arguments through the layered configuration system.

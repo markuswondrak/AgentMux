@@ -12,7 +12,6 @@ SESSION_DIR_NAMES: dict[str, str] = {
     "design": "04_design",
     "implementation": "05_implementation",
     "review": "06_review",
-    "docs": "07_docs",
     "completion": "08_completion",
 }
 
@@ -62,7 +61,6 @@ class RuntimeFiles:
     design_dir: Path
     implementation_dir: Path
     review_dir: Path
-    docs_dir: Path
     completion_dir: Path
     context: Path
     requirements: Path

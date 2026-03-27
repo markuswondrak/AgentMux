@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover - optional at import time in this enviro
 
 
 KNOWN_PROVIDERS = ("claude", "codex", "gemini", "opencode")
-PROMPTED_ROLES = ("architect", "product-manager", "reviewer", "coder", "designer", "docs")
+PROMPTED_ROLES = ("architect", "product-manager", "reviewer", "coder", "designer")
 PROMPT_STUB_ROLES = ("coder", "reviewer", "architect", "product-manager", "designer")
 PROFILE_CHOICES = ("max", "standard", "low")
 

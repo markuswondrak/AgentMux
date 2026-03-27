@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -9,6 +10,8 @@ from unittest.mock import patch
 from agentmux.shared.models import AgentConfig
 from agentmux.runtime import ParallelPromptSpec
 from agentmux.runtime import TmuxAgentRuntime
+from agentmux.runtime.event_bus import EventBus
+from agentmux.runtime.interruption_sources import InterruptionEventSource
 
 
 def _agents() -> dict[str, AgentConfig]:
@@ -22,13 +25,6 @@ def _agents() -> dict[str, AgentConfig]:
         ),
         "coder": AgentConfig(
             role="coder",
-            cli="codex",
-            model="gpt-5.3-codex",
-            args=[],
-            trust_snippet=None,
-        ),
-        "docs": AgentConfig(
-            role="docs",
             cli="codex",
             model="gpt-5.3-codex",
             args=[],
@@ -83,6 +79,44 @@ class ObservedRemoveZone(FakeZone):
 
 
 class RuntimeTests(unittest.TestCase):
+    def _assert_cleanup_suppresses_interruption_poll(
+        self,
+        *,
+        runtime: TmuxAgentRuntime,
+        zone: ObservedRemoveZone,
+        existing: set[str],
+        cleanup,
+    ) -> None:
+        source = InterruptionEventSource(runtime)
+        bus = EventBus()
+        seen = []
+        bus.register(seen.append)
+        poll_started = threading.Event()
+        poll_finished = threading.Event()
+        poll_threads: list[threading.Thread] = []
+
+        def _poll() -> None:
+            poll_started.set()
+            source.poll_once(bus)
+            poll_finished.set()
+
+        def _observe(pane_id: str) -> None:
+            existing.discard(pane_id)
+            thread = threading.Thread(target=_poll, daemon=True)
+            poll_threads.append(thread)
+            thread.start()
+            self.assertTrue(poll_started.wait(1.0))
+            self.assertFalse(poll_finished.wait(0.05))
+
+        zone.on_remove = _observe
+
+        with patch("agentmux.runtime.tmux_pane_exists", side_effect=lambda pane_id: pane_id in existing):
+            cleanup()
+            for thread in poll_threads:
+                thread.join(1.0)
+            self.assertTrue(poll_finished.wait(1.0))
+            self.assertEqual([], seen)
+
     def test_send_creates_primary_pane_and_persists_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
@@ -115,7 +149,7 @@ class RuntimeTests(unittest.TestCase):
                 runtime.send("coder", prompt_file)
 
             self.assertEqual(
-                [("session-x", "coder", ("architect", "coder", "docs"), None, None)],
+                [("session-x", "coder", ("architect", "coder"), None, None)],
                 created,
             )
             self.assertEqual(["%42"], zone.shown)
@@ -219,7 +253,7 @@ class RuntimeTests(unittest.TestCase):
 
             self.assertEqual("%2", runtime.primary_panes["coder"])
             self.assertEqual({1: "%2"}, runtime.parallel_panes["coder"])
-            self.assertEqual([["%1", "%2", "%3", "%2"]], runtime._zone.restored)
+            self.assertEqual([["%1", "%2", "%2"]], runtime._zone.restored)
             snapshot = json.loads((feature_dir / "runtime_state.json").read_text(encoding="utf-8"))
             self.assertEqual({"1": "%2"}, snapshot["parallel"]["coder"])
             self.assertEqual([], snapshot["visible"])
@@ -240,7 +274,7 @@ class RuntimeTests(unittest.TestCase):
                 _ = (session_name, agents, feature_dir_arg, config_path, primary_role)
                 args_seen.append(trust_snippet)
                 return (
-                    {"_control": "%0", "architect": "%1", "coder": None, "docs": None},
+                    {"_control": "%0", "architect": "%1", "coder": None},
                     FakeZone("session-x", visible=["%1"]),
                 )
 
@@ -310,6 +344,26 @@ class RuntimeTests(unittest.TestCase):
             )
             self.assertFalse(runtime.is_expected_missing_pane("%1"))
 
+    def test_kill_primary_suppresses_interruption_poll_during_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            existing = {"%1", "%2"}
+            zone = ObservedRemoveZone("session-x", visible=["%1"])
+            runtime = TmuxAgentRuntime(
+                feature_dir=feature_dir,
+                session_name="session-x",
+                agents=_agents(),
+                primary_panes={"architect": "%1", "coder": "%2"},
+                zone=zone,
+            )
+
+            self._assert_cleanup_suppresses_interruption_poll(
+                runtime=runtime,
+                zone=zone,
+                existing=existing,
+                cleanup=lambda: runtime.kill_primary("architect"),
+            )
+
     def test_finish_many_marks_parallel_cleanup_as_expected_missing_during_removal(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
@@ -351,6 +405,30 @@ class RuntimeTests(unittest.TestCase):
             )
             self.assertFalse(runtime.is_expected_missing_pane("%9"))
 
+    def test_finish_many_suppresses_interruption_poll_during_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            planning_dir = feature_dir / "02_planning"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "plan_2.md").write_text("## Sub-plan 2: UI polish\n", encoding="utf-8")
+            existing = {"%1", "%2", "%9"}
+            zone = ObservedRemoveZone("session-x", visible=["%2", "%9"])
+            runtime = TmuxAgentRuntime(
+                feature_dir=feature_dir,
+                session_name="session-x",
+                agents=_agents(),
+                primary_panes={"architect": "%1", "coder": "%2"},
+                zone=zone,
+                parallel_panes={"coder": {1: "%2", 2: "%9"}},
+            )
+
+            self._assert_cleanup_suppresses_interruption_poll(
+                runtime=runtime,
+                zone=zone,
+                existing=existing,
+                cleanup=lambda: runtime.finish_many("coder"),
+            )
+
     def test_finish_task_marks_removed_worker_as_expected_missing_during_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
@@ -391,6 +469,30 @@ class RuntimeTests(unittest.TestCase):
                 observed,
             )
             self.assertFalse(runtime.is_expected_missing_pane("%9"))
+
+    def test_finish_task_suppresses_interruption_poll_during_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            planning_dir = feature_dir / "02_planning"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "plan_2.md").write_text("## Sub-plan 2: UI polish\n", encoding="utf-8")
+            existing = {"%1", "%2", "%9"}
+            zone = ObservedRemoveZone("session-x", visible=["%2", "%9"])
+            runtime = TmuxAgentRuntime(
+                feature_dir=feature_dir,
+                session_name="session-x",
+                agents=_agents(),
+                primary_panes={"architect": "%1", "coder": "%2"},
+                zone=zone,
+                parallel_panes={"coder": {2: "%9"}},
+            )
+
+            self._assert_cleanup_suppresses_interruption_poll(
+                runtime=runtime,
+                zone=zone,
+                existing=existing,
+                cleanup=lambda: runtime.finish_task("coder", 2),
+            )
 
     def test_registered_and_missing_panes_include_primary_and_parallel_workers(self) -> None:
         with tempfile.TemporaryDirectory() as td:

@@ -12,11 +12,8 @@ class _FakeRuntime:
         self._missing = list(missing)
         self._expected = set(expected or set())
 
-    def missing_registered_panes(self) -> list[RegisteredPaneRef]:
-        return list(self._missing)
-
-    def is_expected_missing_pane(self, pane_id: str | None) -> bool:
-        return bool(pane_id) and pane_id in self._expected
+    def unexpected_missing_registered_panes(self) -> list[RegisteredPaneRef]:
+        return [pane for pane in self._missing if pane.pane_id not in self._expected]
 
 
 class InterruptionEventSourceTests(unittest.TestCase):

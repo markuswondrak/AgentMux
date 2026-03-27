@@ -39,7 +39,6 @@ class ProviderAbstractionTests(unittest.TestCase):
                 "architect": {"tier": "max"},
                 "reviewer": {"tier": "standard"},
                 "coder": {"provider": "codex", "tier": "standard"},
-                "docs": {"tier": "low"},
             }
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
@@ -56,8 +55,7 @@ class ProviderAbstractionTests(unittest.TestCase):
             self.assertEqual("sonnet", agents["reviewer"].model)
             self.assertEqual("codex", agents["coder"].cli)
             self.assertEqual("gpt-5.3-codex", agents["coder"].model)
-            self.assertEqual("claude", agents["docs"].cli)
-            self.assertEqual("haiku", agents["docs"].model)
+            self.assertNotIn("docs", agents)
 
     def test_load_layered_config_supports_yaml_profiles_and_custom_launcher(self) -> None:
         with tempfile.TemporaryDirectory() as td:

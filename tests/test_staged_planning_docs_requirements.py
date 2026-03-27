@@ -16,11 +16,16 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         self.assertIn("02_planning/execution_plan.json", text)
         self.assertIn("plan_<N>.md", text)
         self.assertIn("Scope", text)
+        self.assertIn("Owned files/modules", text)
         self.assertIn("Dependencies", text)
         self.assertIn("Isolation", text)
         self.assertIn("conflict mapping", text.lower())
+        self.assertIn("disjoint", text.lower())
+        self.assertIn("shared mutable artifacts", text.lower())
+        self.assertIn("exclusive ownership", text.lower())
         self.assertIn("enabling refactor", text.lower())
         self.assertIn("technical debt", text.lower())
+        self.assertNotIn("empty file-set intersection should be treated as parallelizable", text.lower())
 
     def test_prompts_doc_covers_two_stage_template_rendering(self) -> None:
         text = self._read_doc("docs/prompts.md")
@@ -58,6 +63,36 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         self.assertIn("serial", text.lower())
         self.assertIn("parallel", text.lower())
         self.assertIn("overall progress", text.lower())
+
+    def test_prompts_doc_no_longer_describes_docs_agent_prompt_builder(self) -> None:
+        text = self._read_doc("docs/prompts.md")
+        self.assertNotIn("build_docs_prompt()", text)
+        self.assertNotIn("commands/docs.md", text)
+        self.assertIn("Documentation updates must be represented in planning artifacts", text)
+
+    def test_workflow_docs_no_longer_reference_removed_docs_phase_markers(self) -> None:
+        for relative_path in [
+            "docs/file-protocol.md",
+            "docs/completing-phase.md",
+            "docs/session-resumption.md",
+            "docs/monitor.md",
+        ]:
+            with self.subTest(path=relative_path):
+                text = self._read_doc(relative_path)
+                self.assertNotIn("`documenting`", text)
+                self.assertNotIn("`docs_written`", text)
+                self.assertNotIn("`07_docs`", text)
+                self.assertNotIn("`docs_done`", text)
+
+    def test_repo_docs_no_longer_list_removed_docs_role_or_phase(self) -> None:
+        for relative_path, forbidden in [
+            ("README.md", "\n  docs:\n"),
+            ("docs/configuration.md", "\n  docs:\n"),
+            ("CLAUDE.md", "→ verdict:pass → documenting? → completing"),
+        ]:
+            with self.subTest(path=relative_path):
+                text = self._read_doc(relative_path)
+                self.assertNotIn(forbidden, text)
 
 
 if __name__ == "__main__":

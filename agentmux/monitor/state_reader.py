@@ -17,7 +17,7 @@ ALWAYS_VISIBLE_STATES = [
     "completing",
     "done",
 ]
-OPTIONAL_PHASES = {"designing", "fixing", "documenting"}
+OPTIONAL_PHASES = {"designing", "fixing"}
 PIPELINE_STATES = [
     "product_management",
     "planning",
@@ -26,7 +26,6 @@ PIPELINE_STATES = [
     "reviewing",
     "fixing",
     "completing",
-    "documenting",
     "done",
 ]
 EVENT_LABELS: dict[str, str] = {
@@ -43,7 +42,6 @@ EVENT_LABELS: dict[str, str] = {
     "review_written": "review ready",
     "fix_requested": "fix needed",
     "fix_completed": "fix done",
-    "docs_written": "docs ready",
     "approved": "approved ✓",
     "changes_requested": "changes asked",
     "plan_approved": "plan approved",

@@ -71,7 +71,6 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
     design_dir = feature_dir / SESSION_DIR_NAMES["design"]
     implementation_dir = feature_dir / SESSION_DIR_NAMES["implementation"]
     review_dir = feature_dir / SESSION_DIR_NAMES["review"]
-    docs_dir = feature_dir / SESSION_DIR_NAMES["docs"]
     completion_dir = feature_dir / SESSION_DIR_NAMES["completion"]
     return RuntimeFiles(
         project_dir=project_dir,
@@ -82,7 +81,6 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         design_dir=design_dir,
         implementation_dir=implementation_dir,
         review_dir=review_dir,
-        docs_dir=docs_dir,
         completion_dir=completion_dir,
         context=feature_dir / "context.md",
         requirements=feature_dir / "requirements.md",
@@ -193,7 +191,6 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
     planning_dir = feature_dir / SESSION_DIR_NAMES["planning"]
     implementation_dir = feature_dir / SESSION_DIR_NAMES["implementation"]
     review_dir = feature_dir / SESSION_DIR_NAMES["review"]
-    docs_dir = feature_dir / SESSION_DIR_NAMES["docs"]
 
     plan_path = planning_dir / "plan.md"
     if not plan_path.exists():
@@ -237,10 +234,6 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
     verdict = parse_review_verdict(review_path.read_text(encoding="utf-8"))
     if verdict is None:
         return "reviewing"
-
-    needs_docs = bool(plan_meta.get("needs_docs"))
-    if verdict == "pass" and needs_docs and not (docs_dir / "docs_done").exists():
-        return "documenting"
 
     return "completing"
 

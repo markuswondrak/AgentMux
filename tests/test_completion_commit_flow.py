@@ -237,7 +237,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
 
             self.assertIsNone(result)
             self.assertIn(
-                ("deactivate_many", ("reviewer", "coder", "docs", "designer")),
+                ("deactivate_many", ("reviewer", "coder", "designer")),
                 ctx.runtime.calls,
             )
             self.assertIn(("finish_many", "coder"), ctx.runtime.calls)

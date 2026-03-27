@@ -59,8 +59,6 @@ roles:
   coder:
     provider: codex
     profile: standard
-  docs:
-    profile: low
 ```
 
 ## Config structure

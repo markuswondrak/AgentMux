@@ -94,7 +94,7 @@ class TmuxAgentRuntime:
         self._zone = zone
         self.parallel_panes = parallel_panes or {}
         self._expected_missing_panes: set[str] = set()
-        self._pane_tracking_lock = threading.Lock()
+        self._pane_tracking_lock = threading.RLock()
         self._normalize_primary_panes()
 
     @classmethod
@@ -136,6 +136,17 @@ class TmuxAgentRuntime:
         agents: dict[str, AgentConfig],
     ) -> "TmuxAgentRuntime":
         primary_panes, parallel_panes, visible = cls._load_snapshot(feature_dir)
+        allowed_roles = {"_control", "architect", *agents.keys()}
+        primary_panes = {
+            role: pane_id
+            for role, pane_id in primary_panes.items()
+            if role in allowed_roles
+        }
+        parallel_panes = {
+            role: workers
+            for role, workers in parallel_panes.items()
+            if role in agents
+        }
         runtime = cls(
             feature_dir=feature_dir,
             session_name=session_name,
@@ -261,10 +272,9 @@ class TmuxAgentRuntime:
             return
         with self._pane_tracking_lock:
             self._expected_missing_panes.update(expected)
-        try:
-            yield
-        finally:
-            with self._pane_tracking_lock:
+            try:
+                yield
+            finally:
                 for pane_id in expected:
                     self._expected_missing_panes.discard(pane_id)
 
@@ -274,7 +284,7 @@ class TmuxAgentRuntime:
         with self._pane_tracking_lock:
             return pane_id in self._expected_missing_panes
 
-    def registered_panes(self) -> list[RegisteredPaneRef]:
+    def _registered_panes_unlocked(self) -> list[RegisteredPaneRef]:
         panes: list[RegisteredPaneRef] = []
         for role, pane_id in self.primary_panes.items():
             if role == "_control" or not pane_id:
@@ -302,8 +312,23 @@ class TmuxAgentRuntime:
                 )
         return panes
 
+    def registered_panes(self) -> list[RegisteredPaneRef]:
+        with self._pane_tracking_lock:
+            return self._registered_panes_unlocked()
+
     def missing_registered_panes(self) -> list[RegisteredPaneRef]:
-        return [pane for pane in self.registered_panes() if not tmux_pane_exists(pane.pane_id)]
+        with self._pane_tracking_lock:
+            panes = self._registered_panes_unlocked()
+            return [pane for pane in panes if not tmux_pane_exists(pane.pane_id)]
+
+    def unexpected_missing_registered_panes(self) -> list[RegisteredPaneRef]:
+        with self._pane_tracking_lock:
+            panes = self._registered_panes_unlocked()
+            return [
+                pane
+                for pane in panes
+                if pane.pane_id not in self._expected_missing_panes and not tmux_pane_exists(pane.pane_id)
+            ]
 
     def _rehydrate(self) -> None:
         for role, pane_id in list(self.primary_panes.items()):

@@ -218,7 +218,6 @@ class DesignerRequirementsTests(unittest.TestCase):
                 "implementing",
                 "reviewing",
                 "fixing",
-                "documenting",
                 "completing",
                 "failed",
             },

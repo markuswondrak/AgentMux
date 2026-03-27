@@ -58,7 +58,7 @@ class FakeRuntime:
         self.calls.append(("shutdown", keep_session))
 
 
-def _make_ctx(feature_dir: Path, with_docs: bool = True) -> tuple[PipelineContext, Path]:
+def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
     project_dir = feature_dir.parent / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
     files = create_feature_files(project_dir, feature_dir, "on demand prompt generation", "session-x")
@@ -70,8 +70,6 @@ def _make_ctx(feature_dir: Path, with_docs: bool = True) -> tuple[PipelineContex
         "reviewer": AgentConfig(role="reviewer", cli="claude", model="sonnet", args=[]),
         "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[]),
     }
-    if with_docs:
-        agents["docs"] = AgentConfig(role="docs", cli="codex", model="gpt-5.3-codex", args=[])
     ctx = PipelineContext(
         files=files,
         runtime=FakeRuntime(),
@@ -206,7 +204,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
     def test_enter_completing_builds_confirmation_prompt_inline(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
-            ctx, state_path = _make_ctx(tmp_path / "feature", with_docs=True)
+            ctx, state_path = _make_ctx(tmp_path / "feature")
             state = load_state(state_path)
             state["phase"] = "completing"
             write_state(state_path, state)

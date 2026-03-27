@@ -119,8 +119,6 @@ def role_display_label(
         return format_agent_label(role, _coder_detail(feature_dir, current_state, task_id))
     if role == "reviewer":
         return format_agent_label(role, f"iteration {_review_iteration(current_state) + 1}")
-    if role == "docs":
-        return format_agent_label(role, "updates")
     if role in {"code-researcher", "web-researcher"} and task_id is not None:
         return format_agent_label(role, str(task_id))
     if task_id is not None:

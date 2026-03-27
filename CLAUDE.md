@@ -70,9 +70,9 @@ The pipeline application:
 
 The workflow progresses through these states (stored in `.agentmux/.sessions/<feature>/state.json`):
 
-```
+``` 
 product_management? → planning → designing? → implementing → reviewing
-    → verdict:pass → documenting? → completing
+    → verdict:pass → completing
     → verdict:fail → fixing → reviewing (review loop)
     → loop cap reached → completing
     → approval_received (done) OR changes_requested → planning

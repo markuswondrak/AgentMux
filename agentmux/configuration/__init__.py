@@ -15,7 +15,6 @@ ROLES = (
     "reviewer",
     "coder",
     "designer",
-    "docs",
     "code-researcher",
     "web-researcher",
 )

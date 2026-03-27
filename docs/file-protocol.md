@@ -33,8 +33,9 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
 - `tasks.md` — architect implementation checklist derived from the same staged plan
 - `plan_meta.json` — architect workflow-intent metadata:
   - `needs_design` (`true`/`false`) — whether to run a dedicated design handoff
-  - `needs_docs` (`true`/`false`) — whether review-pass must enter docs before completion
-  - `doc_files` (`string[]`) — expected docs update targets when `needs_docs` is `true`; must be `[]` when `needs_docs` is `false`
+  - `needs_docs` (`true`/`false`) — informational signal that documentation updates are in scope
+  - `doc_files` (`string[]`) — planned documentation targets when docs work is in scope
+  - Documentation updates must be captured explicitly in `plan.md`, each `plan_<N>.md`, and `tasks.md`; this metadata does not create a separate runtime phase
 
 Compatibility behavior:
 
@@ -67,11 +68,6 @@ Compatibility behavior:
 
 - `review_prompt.md` / `review.md`
 - `fix_prompt.txt` / `fix_request.md`
-
-## Docs (`07_docs/`)
-
-- `docs_prompt.txt` / `docs_done`
-- `docs_prompt.txt` must be scoped by `02_planning/plan_meta.json` `doc_files`; no implicit `README.md`/`CLAUDE.md` targets are added
 
 ## Completion (`08_completion/`)
 

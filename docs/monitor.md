@@ -7,7 +7,7 @@ The control pane renders a live status box with the following sections:
 - **Feature request** — the initial feature description from `requirements.md`
 - **Pipeline stages** — progress through the workflow (`product_management`, `planning`, `implementing`, `reviewing`, `completing`, `done`)
   - Always-visible stages: `product_management`, `planning`, `implementing`, `reviewing`, `completing`
-  - Optional phases (shown only when active): `designing`, `fixing`, `documenting`
+  - Optional phases (shown only when active): `designing`, `fixing`
   - Displayed with `▶` for active, `·` for inactive
 - **Pipeline metadata** — human-readable event label (e.g. "plan ready" for `plan_written`), review iteration count, subplan count
   - During staged implementation, metadata also shows execution group details:

@@ -8,6 +8,7 @@ You have two distinct responsibilities:
 
 1. Implementation review (`06_review/review.md`): focus strictly on correctness versus `requirements.md` and `02_planning/plan.md`.
 2. Final user confirmation (`08_completion/confirmation_prompt.md`): gather reusable preference candidates, ask the user to approve/edit/dismiss each candidate, and write approved results to the reviewer proposal artifact.
+Treat planned documentation updates as required implementation scope during review; do not defer them to a separate phase or agent.
 
 Preference-capture rules for the final confirmation step:
 

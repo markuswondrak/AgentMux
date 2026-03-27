@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 from pathlib import Path
@@ -101,35 +100,6 @@ def _build_coder_research_handoff(files: RuntimeFiles) -> str:
         "Research handoff (read before new exploration):",
         *references,
     ])
-
-
-def _load_docs_scope(files: RuntimeFiles) -> list[str]:
-    plan_meta_path = files.planning_dir / "plan_meta.json"
-    if not plan_meta_path.is_file():
-        raise RuntimeError("docs prompt requires 02_planning/plan_meta.json with needs_docs/doc_files metadata.")
-
-    try:
-        raw_meta = json.loads(plan_meta_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("docs prompt requires valid JSON in 02_planning/plan_meta.json.") from exc
-
-    if not isinstance(raw_meta, dict):
-        raise RuntimeError("docs prompt requires plan_meta.json to be a JSON object.")
-
-    if raw_meta.get("needs_docs") is not True:
-        raise RuntimeError("docs prompt requires plan_meta.json with needs_docs set to true.")
-
-    doc_files_raw = raw_meta.get("doc_files")
-    if not isinstance(doc_files_raw, list):
-        raise RuntimeError("docs prompt requires plan_meta.json doc_files to be a list of repository paths.")
-
-    if any(not isinstance(path, str) for path in doc_files_raw):
-        raise RuntimeError("docs prompt requires every doc_files entry to be a string path.")
-
-    doc_files = [path.strip() for path in doc_files_raw if path.strip()]
-    if not doc_files:
-        raise RuntimeError("docs prompt requires a non-empty doc_files list when needs_docs is true.")
-    return doc_files
 
 
 def build_architect_prompt(files: RuntimeFiles) -> str:
@@ -266,22 +236,6 @@ def build_fix_prompt(files: RuntimeFiles) -> str:
     ), {
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
-    })
-
-
-def build_docs_prompt(files: RuntimeFiles) -> str:
-    doc_files = _load_docs_scope(files)
-    doc_targets = [str(files.project_dir / rel_path) for rel_path in doc_files]
-    doc_targets_block = "\n".join(f"- {target}" for target in doc_targets)
-    return _render_template(
-        _load_template(
-        "commands",
-        "docs",
-        project_dir=files.project_dir,
-    ), {
-        "feature_dir": files.feature_dir,
-        "project_dir": files.project_dir,
-        "doc_targets_block": doc_targets_block,
     })
 
 

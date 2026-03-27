@@ -26,7 +26,6 @@ from .prompts import (
     build_coder_subplan_prompt,
     build_confirmation_prompt,
     build_designer_prompt,
-    build_docs_prompt,
     build_fix_prompt,
     build_product_manager_prompt,
     build_reviewer_prompt,
@@ -765,14 +764,7 @@ class ReviewingPhase(Phase):
         if event == "review_passed":
             ctx.runtime.finish_many("coder")
             ctx.runtime.kill_primary("coder")
-            meta = load_plan_meta(ctx.files.planning_dir)
-            needs_docs = bool(meta.get("needs_docs"))
-            if needs_docs and "docs" not in ctx.agents:
-                raise RuntimeError(
-                    "plan_meta.json requires docs phase (`needs_docs: true`) but no docs role is configured."
-                )
-            next_phase = "documenting" if needs_docs else "completing"
-            write_phase(ctx, state, next_phase, "review_passed")
+            write_phase(ctx, state, "completing", "review_passed")
             return None
         if event != "review_failed":
             return None
@@ -831,39 +823,6 @@ class FixingPhase(Phase):
         ctx.runtime.finish_many("coder")
         ctx.runtime.deactivate("coder")
         write_phase(ctx, state, "reviewing", "implementation_completed")
-        return None
-
-
-class DocumentingPhase(Phase):
-    name = "documenting"
-
-    def on_enter(self, state: dict, ctx: PipelineContext) -> None:
-        _ = state
-        docs_done = ctx.files.docs_dir / "docs_done"
-        if docs_done.exists():
-            docs_done.unlink()
-        prompt_file = write_prompt_file(
-            ctx.files.feature_dir,
-            ctx.files.relative_path(ctx.files.docs_dir / "docs_prompt.txt"),
-            build_docs_prompt(ctx.files),
-        )
-        send_to_role(ctx, "docs", prompt_file)
-
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
-        _ = state
-        return {"docs_done": file_signature(ctx.files.docs_dir / "docs_done")}
-
-    def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
-        _ = state
-        if phase_input_changed(ctx, "docs_done", file_signature(ctx.files.docs_dir / "docs_done")):
-            return "docs_completed"
-        return None
-
-    def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
-        if event != "docs_completed":
-            return None
-        ctx.runtime.kill_primary("docs")
-        write_phase(ctx, state, "completing", "docs_completed")
         return None
 
 
@@ -941,7 +900,7 @@ class CompletingPhase(Phase):
 
         if event != "changes_requested":
             return None
-        ctx.runtime.deactivate_many(("reviewer", "coder", "docs", "designer"))
+        ctx.runtime.deactivate_many(("reviewer", "coder", "designer"))
         ctx.runtime.finish_many("coder")
         state["subplan_count"] = 0
         state["review_iteration"] = 0
@@ -980,7 +939,6 @@ PHASES: dict[str, Phase] = {
         ImplementingPhase(),
         ReviewingPhase(),
         FixingPhase(),
-        DocumentingPhase(),
         CompletingPhase(),
         FailedPhase(),
     )

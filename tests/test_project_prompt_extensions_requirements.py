@@ -15,7 +15,6 @@ from agentmux.workflow.prompts import (
     build_coder_subplan_prompt,
     build_confirmation_prompt,
     build_designer_prompt,
-    build_docs_prompt,
     build_fix_prompt,
     build_product_manager_prompt,
     build_reviewer_prompt,
@@ -262,7 +261,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             repo_root / "agentmux/prompts/commands/fix.md",
             repo_root / "agentmux/prompts/commands/confirmation.md",
             repo_root / "agentmux/prompts/commands/change.md",
-            repo_root / "agentmux/prompts/commands/docs.md",
         ]
 
         for template_path in template_paths:
@@ -282,11 +280,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "project-specific prompts", "session")
-            files.planning_dir.mkdir(parents=True, exist_ok=True)
-            (files.planning_dir / "plan_meta.json").write_text(
-                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/prompts.md"]}',
-                encoding="utf-8",
-            )
 
             cases: list[tuple[str, str, str, object]] = [
                 ("agents", "architect", "EXT-ARCHITECT", lambda runtime: build_architect_prompt(runtime)),
@@ -314,7 +307,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 ),
                 ("commands", "review", "EXT-REVIEW-COMMAND", lambda runtime: build_reviewer_prompt(runtime, True)),
                 ("commands", "fix", "EXT-FIX", lambda runtime: build_fix_prompt(runtime)),
-                ("commands", "docs", "EXT-DOCS", lambda runtime: build_docs_prompt(runtime)),
                 (
                     "commands",
                     "confirmation",
@@ -354,41 +346,32 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertIn(injected, prompt)
             self.assertNotIn("{project_instructions}", prompt)
 
-    def test_docs_prompt_targets_architect_declared_doc_files(self) -> None:
+    def test_planning_and_coder_prompts_keep_docs_work_in_main_implementation_scope(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
-            files = create_feature_files(project_dir, feature_dir, "docs prompt", "session")
-            files.planning_dir.mkdir(parents=True, exist_ok=True)
-            (files.planning_dir / "plan_meta.json").write_text(
-                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md", "docs/prompts.md"]}',
-                encoding="utf-8",
+            files = create_feature_files(project_dir, feature_dir, "docs scope", "session")
+
+            architect_prompt = build_architect_prompt(files)
+            change_prompt = build_change_prompt(files)
+            coder_prompt = build_coder_prompt(files)
+
+            planning_contract_line = (
+                "Documentation updates must be captured as explicit plan and task items in "
+                "`02_planning/plan.md`, every `02_planning/plan_<N>.md`, and `02_planning/tasks.md`."
             )
-
-            prompt = build_docs_prompt(files)
-
-            self.assertIn(f"- {project_dir}/docs/file-protocol.md", prompt)
-            self.assertIn(f"- {project_dir}/docs/prompts.md", prompt)
-            self.assertNotIn(f"- {project_dir}/README.md", prompt)
-            self.assertNotIn(f"- {project_dir}/CLAUDE.md", prompt)
-
-    def test_docs_prompt_fails_when_plan_meta_lacks_doc_files(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            project_dir = tmp_path / "project"
-            feature_dir = tmp_path / "feature"
-            project_dir.mkdir()
-            files = create_feature_files(project_dir, feature_dir, "docs prompt", "session")
-            files.planning_dir.mkdir(parents=True, exist_ok=True)
-            (files.planning_dir / "plan_meta.json").write_text(
-                '{"needs_design": false, "needs_docs": true}',
-                encoding="utf-8",
+            self.assertIn(planning_contract_line, architect_prompt)
+            self.assertIn(planning_contract_line, change_prompt)
+            self.assertIn(
+                "When `02_planning/tasks.md` includes documentation tasks, complete them as part of implementation in this coder step.",
+                coder_prompt,
             )
-
-            with self.assertRaises(RuntimeError):
-                build_docs_prompt(files)
+            self.assertIn("Do not defer documentation to a separate docs agent or post-review docs phase.", coder_prompt)
+            self.assertNotIn("07_docs/docs_done", coder_prompt)
+            self.assertNotIn("07_docs/docs_done", architect_prompt)
+            self.assertNotIn("07_docs/docs_done", change_prompt)
 
     def test_coder_prompt_includes_completed_research_references(self) -> None:
         with tempfile.TemporaryDirectory() as td:

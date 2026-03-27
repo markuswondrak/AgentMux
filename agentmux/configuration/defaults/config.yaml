@@ -38,9 +38,6 @@ launchers:
       designer:
         - --permission-mode
         - acceptEdits
-      docs:
-        - --permission-mode
-        - acceptEdits
       code-researcher:
         - --permission-mode
         - acceptEdits
@@ -62,7 +59,6 @@ launchers:
       reviewer: [-s, workspace-write, -a, never]
       coder: [-s, workspace-write, -a, never]
       designer: [-s, workspace-write, -a, never]
-      docs: [-s, workspace-write, -a, never]
       code-researcher: [-s, workspace-write, -a, never]
       web-researcher: [-s, workspace-write, -a, never]
 
@@ -76,7 +72,6 @@ launchers:
       reviewer: [--approval-mode, yolo]
       coder: [--approval-mode, yolo]
       designer: [--approval-mode, yolo]
-      docs: [--approval-mode, yolo]
       code-researcher: [--approval-mode, yolo]
       web-researcher: [--approval-mode, yolo]
 
@@ -90,7 +85,6 @@ launchers:
       reviewer: []
       coder: []
       designer: []
-      docs: []
       code-researcher: []
       web-researcher: []
 
@@ -139,8 +133,6 @@ roles:
     profile: standard
   designer:
     profile: standard
-  docs:
-    profile: low
   code-researcher:
     profile: low
   web-researcher:

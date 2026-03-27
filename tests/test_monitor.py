@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from agentmux import monitor
 from agentmux.shared.models import SESSION_DIR_NAMES
+from agentmux.monitor.state_reader import EVENT_LABELS, OPTIONAL_PHASES, PIPELINE_STATES
 
 
 class MonitorTests(unittest.TestCase):
@@ -50,6 +51,11 @@ class MonitorTests(unittest.TestCase):
             self.assertIn("monitor soll auch", output)
             self.assertIn("beschreibung des features", output)
             self.assertIn("▶ implementing", output)
+
+    def test_state_reader_no_longer_lists_removed_docs_phase_or_event_markers(self) -> None:
+        self.assertNotIn("documenting", OPTIONAL_PHASES)
+        self.assertNotIn("documenting", PIPELINE_STATES)
+        self.assertNotIn("docs_written", EVENT_LABELS)
 
     def test_render_falls_back_cleanly_when_monitor_is_narrow(self) -> None:
         with tempfile.TemporaryDirectory() as td:
