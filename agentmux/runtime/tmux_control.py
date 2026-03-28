@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shlex
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -479,10 +480,8 @@ def tmux_new_session(
     primary_role: str = "architect",
 ) -> tuple[dict[str, str | None], ContentZone]:
     """Create the tmux session with control pane + primary agent pane."""
-    project_root = Path(__file__).resolve().parent.parent
     monitor_cmd = (
-        f"cd {shlex.quote(str(project_root))} && "
-        f"python3 -m agentmux.monitor"
+        f"{shlex.quote(sys.executable)} -m agentmux.monitor"
         f" --feature-dir {shlex.quote(str(feature_dir))}"
         f" --session-name {shlex.quote(session_name)}"
     )

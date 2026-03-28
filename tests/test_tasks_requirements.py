@@ -15,6 +15,12 @@ from agentmux.sessions.state_store import create_feature_files, load_runtime_fil
 
 
 class TasksRequirementsTests(unittest.TestCase):
+    def _write_coder_inputs(self, feature_dir: Path, plan_name: str = "plan_1.md") -> None:
+        planning_dir = feature_dir / "02_planning"
+        planning_dir.mkdir(parents=True, exist_ok=True)
+        (planning_dir / plan_name).write_text(f"## {plan_name}\n", encoding="utf-8")
+        (planning_dir / "tasks.md").write_text("# Tasks\n\n- [ ] one task\n", encoding="utf-8")
+
     def test_command_prompt_templates_no_longer_include_docs_agent_handoff_template(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         command_templates = sorted(path.name for path in (repo_root / "agentmux/prompts/commands").glob("*.md"))
@@ -62,6 +68,7 @@ class TasksRequirementsTests(unittest.TestCase):
             project_dir.mkdir()
 
             files = create_feature_files(project_dir, feature_dir, "add tasks list", "session")
+            self._write_coder_inputs(feature_dir, "plan_1.md")
 
             architect_prompt = build_architect_prompt(files)
             coder_prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
@@ -112,6 +119,7 @@ class TasksRequirementsTests(unittest.TestCase):
             project_dir.mkdir()
 
             files = create_feature_files(project_dir, feature_dir, "subplan coder contract", "session")
+            self._write_coder_inputs(feature_dir, "plan_2.md")
 
             prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_2.md", 2)
 
@@ -132,6 +140,7 @@ class TasksRequirementsTests(unittest.TestCase):
             project_dir.mkdir()
 
             files = create_feature_files(project_dir, feature_dir, "docs ownership", "session")
+            self._write_coder_inputs(feature_dir, "plan_1.md")
 
             coder_prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
             reviewer_agent_prompt = build_reviewer_prompt(files)
@@ -152,7 +161,7 @@ class TasksRequirementsTests(unittest.TestCase):
                 reviewer_review_prompt,
             )
 
-    def test_change_prompt_references_files_instead_of_embedding_text(self) -> None:
+    def test_change_prompt_inlines_required_files(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
@@ -168,11 +177,10 @@ class TasksRequirementsTests(unittest.TestCase):
 
             prompt = build_change_prompt(files)
 
-            self.assertIn("Read these files first:", prompt)
-            self.assertIn("- requirements.md", prompt)
-            self.assertIn("- 02_planning/plan.md", prompt)
-            self.assertIn("- 02_planning/tasks.md", prompt)
-            self.assertIn("- 08_completion/changes.md", prompt)
+            self.assertIn('<file path="requirements.md">', prompt)
+            self.assertIn('<file path="02_planning/plan.md">', prompt)
+            self.assertIn('<file path="02_planning/tasks.md">', prompt)
+            self.assertIn('<file path="08_completion/changes.md">', prompt)
             self.assertIn("02_planning/execution_plan.json", prompt)
             self.assertIn("02_planning/plan_meta.json", prompt)
             self.assertIn(
@@ -199,7 +207,7 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("must belong only to that sub-plan's owned files/modules", prompt)
             self.assertIn("technical debt", prompt.lower())
             self.assertNotIn("should be treated as parallelizable unless a precise technical conflict is documented", prompt)
-            self.assertNotIn("1. Example task", prompt)
+            self.assertIn("1. Example task", prompt)
 
     def test_architect_prompt_no_longer_accepts_review_mode_and_reviewer_prompt_handles_review(self) -> None:
         with tempfile.TemporaryDirectory() as td:

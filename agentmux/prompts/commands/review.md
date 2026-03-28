@@ -2,8 +2,9 @@ You are the reviewer agent in review mode for this pipeline run.
 
 Session directory: [[placeholder:feature_dir]]
 
-Read these files first:
-- state.json
+<file path="state.json">
+[[include:state.json]]
+</file>
 
 Then inspect the current repository state and compare the implementation against both requirements and plan.
 

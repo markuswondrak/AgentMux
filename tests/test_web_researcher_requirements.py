@@ -51,6 +51,11 @@ class FakeRuntime:
 
 
 class WebResearcherRequirementsTests(unittest.TestCase):
+    def _write_web_request(self, feature_dir: Path, topic: str) -> None:
+        request_path = feature_dir / RESEARCH_DIR / f"web-{topic}" / "request.md"
+        request_path.parent.mkdir(parents=True, exist_ok=True)
+        request_path.write_text("research request\n", encoding="utf-8")
+
     def _make_ctx(self, feature_dir: Path) -> tuple[PipelineContext, Path]:
         project_dir = feature_dir.parent / "project"
         project_dir.mkdir(parents=True, exist_ok=True)
@@ -106,6 +111,7 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "research", "session-x")
+            self._write_web_request(feature_dir, "openai-models")
 
             prompt = build_web_researcher_prompt("openai-models", files)
 
@@ -132,7 +138,6 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             self.assertIn("03_research/web-<topic>/summary.md", prompt)
             self.assertIn("03_research/web-<topic>/detail.md", prompt)
             self.assertIn("agentmux_research_dispatch_web", prompt)
-            self.assertNotIn("03_research/web-<topic>/request.md", prompt)
 
     def test_planning_detects_web_task_requested_and_completed(self) -> None:
         with tempfile.TemporaryDirectory() as td:

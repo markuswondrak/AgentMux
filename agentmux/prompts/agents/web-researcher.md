@@ -4,10 +4,17 @@ Session directory: [[placeholder:feature_dir]]
 Project directory: [[placeholder:project_dir]]
 Topic: [[placeholder:topic]]
 
-Read these files first:
-- context.md
-- requirements.md
-- 03_research/web-[[placeholder:topic]]/request.md
+<file path="context.md">
+[[include:context.md]]
+</file>
+
+<file path="requirements.md">
+[[include:requirements.md]]
+</file>
+
+<file path="03_research/web-[[placeholder:topic]]/request.md">
+[[include:03_research/web-[[placeholder:topic]]/request.md]]
+</file>
 
 Your job:
 1. Analyze the assignment in `03_research/web-[[placeholder:topic]]/request.md`. Note the context, questions, and scope.

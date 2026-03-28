@@ -2,11 +2,21 @@ You are the architect agent for this pipeline run, handling requested changes.
 
 Session directory: [[placeholder:feature_dir]]
 
-Read these files first:
-- requirements.md
-- 02_planning/plan.md
-- 02_planning/tasks.md
-- 08_completion/changes.md
+<file path="requirements.md">
+[[include:requirements.md]]
+</file>
+
+<file path="02_planning/plan.md">
+[[include:02_planning/plan.md]]
+</file>
+
+<file path="02_planning/tasks.md">
+[[include:02_planning/tasks.md]]
+</file>
+
+<file path="08_completion/changes.md">
+[[include:08_completion/changes.md]]
+</file>
 
 Your job:
 1. Revise requirements/plan as needed based on the change feedback.
