@@ -12,6 +12,7 @@ from ..runtime.file_events import ensure_watchdog_available
 from ..runtime.tmux_control import tmux_session_exists
 from ..sessions import PreparedSession, PromptInput, SessionCreateRequest, SessionService
 from ..sessions.state_store import feature_slug_from_dir, load_runtime_files, load_state
+from ..shared.models import WorkflowSettings
 from ..terminal_ui.console import ConsoleUI
 from ..workflow.interruptions import InterruptionService
 from ..workflow.orchestrator import PipelineOrchestrator
@@ -52,7 +53,14 @@ class PipelineApplication:
             session_name=loaded.session_name,
             agents=agents,
         )
-        ctx = self.orchestrator.create_context(files, runtime, agents, loaded.max_review_iterations, loaded.github)
+        ctx = self.orchestrator.create_context(
+            files,
+            runtime,
+            agents,
+            loaded.max_review_iterations,
+            loaded.github,
+            workflow_settings=self._resolve_workflow_settings(loaded),
+        )
         try:
             return self.orchestrator.run(ctx, args.keep_session)
         except KeyboardInterrupt:
@@ -76,6 +84,12 @@ class PipelineApplication:
             self.interruptions.persist(files, report)
             self.ui.print(self.interruptions.render(report))
             return 1
+
+    def _resolve_workflow_settings(self, loaded) -> WorkflowSettings:
+        candidate = getattr(loaded, "workflow_settings", None)
+        if isinstance(candidate, WorkflowSettings):
+            return candidate
+        return WorkflowSettings()
 
     def _run_launcher(self, args, loaded) -> int:
         if args.resume and getattr(args, "issue", None):

@@ -61,6 +61,24 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _write_execution_plan(files, *, name: str = "implementation") -> None:
+    files.planning_dir.mkdir(parents=True, exist_ok=True)
+    (files.planning_dir / "plan_1.md").write_text(f"## Sub-plan 1: {name}\n", encoding="utf-8")
+    _write_json(
+        files.execution_plan,
+        {
+            "version": 1,
+            "groups": [
+                {
+                    "group_id": "g1",
+                    "mode": "serial",
+                    "plans": [{"file": "plan_1.md", "name": name}],
+                }
+            ],
+        },
+    )
+
+
 class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
     def test_pm_completed_applies_approved_preferences_before_planning_transition(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -109,6 +127,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
             state = load_state(state_path)
             state["phase"] = "planning"
             write_state(state_path, state)
+            _write_execution_plan(ctx.files)
             _write_json(ctx.files.planning_dir / "plan_meta.json", {"needs_design": False})
             _write_json(
                 ctx.files.architect_preference_proposal,
@@ -135,6 +154,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
             state = load_state(state_path)
             state["phase"] = "planning"
             write_state(state_path, state)
+            _write_execution_plan(ctx.files)
             _write_json(ctx.files.planning_dir / "plan_meta.json", {"needs_design": False})
 
             PlanningPhase().handle_event(load_state(state_path), "plan_written", ctx)
@@ -185,6 +205,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 result = CompletingPhase().handle_event(load_state(state_path), "approval_received", ctx)
 
             self.assertEqual(EXIT_SUCCESS, result)
+            self.assertEqual("complete", finalize_mock.call_args.kwargs["commit_message"])
             self.assertIn(".agentmux/prompts/agents/coder.md", finalize_mock.call_args.kwargs["changed_paths"])
 
     def test_approval_received_without_proposal_file_is_prompt_extension_noop(self) -> None:
@@ -208,12 +229,50 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 COMPLETION_SERVICE,
                 "finalize_approval",
                 return_value=CompletionResult(commit_hash=None, pr_url=None, cleaned_up=False),
-            ):
+            ) as finalize_mock:
                 result = CompletingPhase().handle_event(load_state(state_path), "approval_received", ctx)
 
             self.assertEqual(EXIT_SUCCESS, result)
+            self.assertEqual("complete", finalize_mock.call_args.kwargs["commit_message"])
             prompts_dir = ctx.files.project_dir / ".agentmux" / "prompts" / "agents"
             self.assertFalse(prompts_dir.exists())
+
+    def test_approval_received_without_commit_message_uses_drafted_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, state_path = _make_ctx(feature_dir)
+
+            state = load_state(state_path)
+            state["phase"] = "completing"
+            write_state(state_path, state)
+            _write_json(
+                ctx.files.completion_dir / "approval.json",
+                {
+                    "action": "approve",
+                    "exclude_files": [],
+                },
+            )
+
+            with patch(
+                "agentmux.workflow.phases._git_status_porcelain",
+                return_value=" M agentmux/workflow/phases.py\n",
+            ), patch.object(
+                COMPLETION_SERVICE,
+                "draft_commit_message",
+                return_value="feat: drafted fallback",
+            ) as draft_mock, patch.object(
+                COMPLETION_SERVICE,
+                "finalize_approval",
+                return_value=CompletionResult(commit_hash=None, pr_url=None, cleaned_up=False),
+            ) as finalize_mock:
+                result = CompletingPhase().handle_event(load_state(state_path), "approval_received", ctx)
+
+            self.assertEqual(EXIT_SUCCESS, result)
+            draft_mock.assert_called_once_with(
+                files=ctx.files,
+                issue_number=None,
+            )
+            self.assertEqual("feat: drafted fallback", finalize_mock.call_args.kwargs["commit_message"])
 
     def test_changes_requested_does_not_apply_reviewer_preferences(self) -> None:
         with tempfile.TemporaryDirectory() as td:

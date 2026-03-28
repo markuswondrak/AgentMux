@@ -37,11 +37,11 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
   - `doc_files` (`string[]`) — planned documentation targets when docs work is in scope
   - Documentation updates must be captured explicitly in `plan.md`, each `plan_<N>.md`, and `tasks.md`; this metadata does not create a separate runtime phase
 
-Compatibility behavior:
+Execution scheduling is strict:
 
-- Legacy flat plans without `execution_plan.json` still rely on `plan.md` `## Sub-plan <N>: ...` splitting into generated `plan_*.md` files.
-- Legacy execution plans with `plans: ["plan_1.md"]` remain readable, but new architect output must use named plan objects.
-- Staged execution should be preferred for new plans; legacy splitting is retained for backward compatibility.
+- `execution_plan.json` is required before implementation starts.
+- `groups[].plans[]` entries must use `{ "file": "plan_<N>.md", "name": "Human title" }` objects.
+- Implementation dispatch uses numbered prompt files (`coder_prompt_<N>.txt`) only.
 
 ## Research (`03_research/`)
 
@@ -54,7 +54,7 @@ Compatibility behavior:
 
 ## Implementation (`05_implementation/`)
 
-- `coder_prompt.md` / `coder_prompt_*.txt`
+- `coder_prompt_<N>.txt` — implementing-phase prompts mapped to scheduled plan units (`plan_<N>.md`)
 - `done_*` — coder completion markers for implementing-phase scheduled plan units (`done_<N>` maps to `plan_<N>.md`)
 - `done_1` — fixing-phase completion marker after a review-requested fix run
 - `state.json` includes implementing-phase progress metadata so monitor/orchestrator can track:

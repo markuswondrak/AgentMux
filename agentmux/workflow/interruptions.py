@@ -32,35 +32,11 @@ _EVENT_DEFINITIONS: dict[str, InterruptionEventDefinition] = {
         fallback_cause="The pipeline launcher was interrupted with Ctrl-C.",
         monitor_label="run canceled by user",
     ),
-    "keyboard_interrupt": InterruptionEventDefinition(
-        canonical_event=INTERRUPTION_EVENT_CANCELED,
-        category=INTERRUPTION_CATEGORY_CANCELED,
-        fallback_cause="The pipeline launcher was interrupted with Ctrl-C.",
-        monitor_label="canceled by user",
-    ),
     INTERRUPTION_EVENT_FAILED: InterruptionEventDefinition(
         canonical_event=INTERRUPTION_EVENT_FAILED,
         category=INTERRUPTION_CATEGORY_FAILED,
         fallback_cause="The pipeline failed unexpectedly.",
         monitor_label="run failed unexpectedly",
-    ),
-    "subprocess_error": InterruptionEventDefinition(
-        canonical_event=INTERRUPTION_EVENT_FAILED,
-        category=INTERRUPTION_CATEGORY_FAILED,
-        fallback_cause="A required command failed while running the pipeline.",
-        monitor_label="run failed",
-    ),
-    "pipeline_exception": InterruptionEventDefinition(
-        canonical_event=INTERRUPTION_EVENT_FAILED,
-        category=INTERRUPTION_CATEGORY_FAILED,
-        fallback_cause="The pipeline hit an unexpected internal exception.",
-        monitor_label="run failed",
-    ),
-    "orchestrator_exception": InterruptionEventDefinition(
-        canonical_event=INTERRUPTION_EVENT_FAILED,
-        category=INTERRUPTION_CATEGORY_FAILED,
-        fallback_cause="The background orchestrator crashed unexpectedly.",
-        monitor_label="orchestrator crashed",
     ),
 }
 

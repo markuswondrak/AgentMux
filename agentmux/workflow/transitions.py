@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..runtime import AgentRuntime
-from ..shared.models import AgentConfig, GitHubConfig, RuntimeFiles
+from ..shared.models import AgentConfig, GitHubConfig, RuntimeFiles, WorkflowSettings
 
 
 EXIT_SUCCESS = "EXIT_SUCCESS"
@@ -19,6 +19,7 @@ class PipelineContext:
     max_review_iterations: int
     prompts: dict[str, Path]
     github_config: GitHubConfig = field(default_factory=GitHubConfig)
+    workflow_settings: WorkflowSettings = field(default_factory=WorkflowSettings)
     entered_phase: str | None = None
     phase_baseline: dict[str, str | None] = field(default_factory=dict)
 

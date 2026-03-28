@@ -58,7 +58,7 @@ def resolve_agent(
     provider_name = role_config.get("provider")
     provider = get_provider(provider_name) if provider_name else global_provider
 
-    profile = str(role_config.get("profile", role_config.get("tier", "standard")))
+    profile = str(role_config.get("profile", "standard"))
     try:
         model = provider.models[profile]
     except KeyError as exc:

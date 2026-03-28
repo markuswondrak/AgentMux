@@ -29,20 +29,6 @@ Research completion stays file-driven: the orchestrator detects `done`, updates 
 
 Completed research topics are also used for coder handoff: coder prompts include references to `03_research/<type>-<topic>/summary.md` (and `detail.md` when present) for topics that have a `done` marker.
 
-## File protocol fallback
-
-If MCP tools are unavailable, the legacy file protocol still works:
-
-- Write `03_research/code-<topic>/request.md` or `03_research/web-<topic>/request.md`
-- Wait for `03_research/<type>-<topic>/done`
-- Read `summary.md` and optionally `detail.md`
-
-Request files should include:
-
-- `## Context`
-- `## Questions`
-- `## Scope hints`
-
 ## Provider setup strategy
 
 AgentMux expects an MCP registration named `agentmux-research` for the effective `architect` and `product-manager` providers at the provider's native config scope:
@@ -57,4 +43,3 @@ AgentMux expects an MCP registration named `agentmux-research` for the effective
 For each run, AgentMux may inject `PYTHONPATH` into the launched `architect` / `product-manager` process so the MCP server can import the project checkout. Feature routing now comes from the `feature_dir` MCP tool argument.
 
 For Claude, default launcher args allow MCP calls via `mcp__agentmux-research__*` in `--allowedTools`.
-If the user declines setup, architect/product-manager should use the file-protocol fallback instead.

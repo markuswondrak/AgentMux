@@ -19,9 +19,11 @@ Your job:
    [[placeholder:changed_files]]
    ```
 4. If the user approves, write `08_completion/approval.json` with this exact JSON shape:
-   - `{{"action": "approve", "commit_message": "...", "exclude_files": ["relative/path"]}}`
+   - `{{"action": "approve", "exclude_files": ["relative/path"]}}`
+   - `{{"action": "approve", "exclude_files": ["relative/path"], "commit_message": "optional summary"}}`
    - `exclude_files` is optional and defaults to `[]` (commit all changed files).
-5. Ask for exclusions only. Do not ask the user to enumerate all commit files.
+   - `commit_message` is optional. If present, completion uses it as the final commit message; if omitted, completion drafts a deterministic fallback.
+5. Ask for exclusions only. Do not ask the user to enumerate all commit files. Also ask for an optional `commit_message` summary.
 6. If the user requests changes, write the user feedback to `08_completion/changes.md`.
 [[shared:preference-memory]]
 7. If one or more candidates are approved, write `[[placeholder:reviewer_preference_proposal_file]]` as JSON:

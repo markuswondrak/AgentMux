@@ -368,6 +368,10 @@ class MonitorTests(unittest.TestCase):
             planning_dir = feature_dir / "02_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_2.md").write_text("## Sub-plan 2: API wiring\n", encoding="utf-8")
+            (planning_dir / "execution_plan.json").write_text(
+                '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", "plans": [{"file": "plan_2.md", "name": "API wiring"}]}]}',
+                encoding="utf-8",
+            )
             state_path.write_text('{"phase": "implementing"}', encoding="utf-8")
             runtime_state_path.write_text('{"primary": {"coder": "%2"}, "parallel": {"coder": {"2": "%2"}}}', encoding="utf-8")
 
@@ -588,7 +592,7 @@ class MonitorTests(unittest.TestCase):
             self.assertIn("› run failed unexpectedly", output)
             self.assertIn("› cause: Background orchestrator exited unexpectedly.", output)
 
-    def test_render_legacy_interruption_event_uses_shared_label(self) -> None:
+    def test_render_unknown_interruption_event_falls_back_to_raw_label(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             state_path = feature_dir / "state.json"
@@ -601,7 +605,7 @@ class MonitorTests(unittest.TestCase):
 
             output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
 
-            self.assertIn("› canceled by user", output)
+            self.assertIn("› keyboard interrupt", output)
 
     def test_get_role_states_treats_dead_tmux_panes_as_inactive(self) -> None:
         with tempfile.TemporaryDirectory() as td:

@@ -80,16 +80,17 @@ class WebResearcherRequirementsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             cfg = {
-                "session_name": "s",
-                "provider": "claude",
-                "architect": {"tier": "max"},
-                "coder": {"provider": "codex", "tier": "max"},
-                "web-researcher": {
-                    "tier": "standard",
-                    "args": ["--permission-mode", "acceptEdits"],
+                "defaults": {"session_name": "s", "provider": "claude"},
+                "roles": {
+                    "architect": {"profile": "max"},
+                    "coder": {"provider": "codex", "profile": "max"},
+                    "web-researcher": {
+                        "profile": "standard",
+                        "args": ["--permission-mode", "acceptEdits"],
+                    },
                 },
             }
-            cfg_path = tmp_path / "pipeline_config.json"
+            cfg_path = tmp_path / "config.json"
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
             agents = load_explicit_config(cfg_path).agents
@@ -128,10 +129,10 @@ class WebResearcherRequirementsTests(unittest.TestCase):
 
             prompt = build_architect_prompt(files)
 
-            self.assertIn("03_research/web-<topic>/request.md", prompt)
             self.assertIn("03_research/web-<topic>/summary.md", prompt)
             self.assertIn("03_research/web-<topic>/detail.md", prompt)
-            self.assertIn("03_research/web-<topic>/done", prompt)
+            self.assertIn("agentmux_research_dispatch_web", prompt)
+            self.assertNotIn("03_research/web-<topic>/request.md", prompt)
 
     def test_planning_detects_web_task_requested_and_completed(self) -> None:
         with tempfile.TemporaryDirectory() as td:

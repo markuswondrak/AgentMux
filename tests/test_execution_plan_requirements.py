@@ -9,12 +9,13 @@ from agentmux.workflow.execution_plan import load_execution_plan
 
 
 class ExecutionPlanRequirementsTests(unittest.TestCase):
-    def test_missing_execution_plan_returns_none_for_legacy_fallback(self) -> None:
+    def test_missing_execution_plan_raises_when_file_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             planning_dir = Path(td) / "02_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
 
-            self.assertIsNone(load_execution_plan(planning_dir))
+            with self.assertRaisesRegex(RuntimeError, "required"):
+                load_execution_plan(planning_dir)
 
     def test_load_execution_plan_accepts_valid_structure_and_existing_plan_files(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -53,7 +54,7 @@ class ExecutionPlanRequirementsTests(unittest.TestCase):
             self.assertEqual("plan_1.md", execution_plan.groups[0].plans[0].file)
             self.assertEqual("Foundation", execution_plan.groups[0].plans[0].name)
 
-    def test_load_execution_plan_keeps_legacy_string_entries_compatible(self) -> None:
+    def test_load_execution_plan_rejects_legacy_string_entries(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             planning_dir = Path(td) / "02_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
@@ -68,11 +69,8 @@ class ExecutionPlanRequirementsTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            execution_plan = load_execution_plan(planning_dir)
-
-            assert execution_plan is not None
-            self.assertEqual("plan_1.md", execution_plan.groups[0].plans[0].file)
-            self.assertIsNone(execution_plan.groups[0].plans[0].name)
+            with self.assertRaisesRegex(RuntimeError, "must be an object"):
+                load_execution_plan(planning_dir)
 
     def test_load_execution_plan_fails_for_missing_referenced_plan_file(self) -> None:
         with tempfile.TemporaryDirectory() as td:

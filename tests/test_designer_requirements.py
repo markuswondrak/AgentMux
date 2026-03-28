@@ -8,7 +8,7 @@ from pathlib import Path
 from agentmux.configuration import load_explicit_config
 from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
 from agentmux.workflow.phases import PHASES, get_phase, run_phase_cycle
-from agentmux.workflow.prompts import build_coder_prompt, build_designer_prompt, build_initial_prompts
+from agentmux.workflow.prompts import build_coder_subplan_prompt, build_designer_prompt, build_initial_prompts
 from agentmux.sessions.state_store import create_feature_files, load_runtime_files, load_state, write_state
 from agentmux.workflow.transitions import PipelineContext
 
@@ -75,21 +75,43 @@ def _make_ctx(feature_dir: Path, with_designer: bool = True) -> tuple[PipelineCo
     return ctx, files.state
 
 
+def _write_execution_plan(feature_dir: Path, *, name: str = "implementation") -> None:
+    planning_dir = feature_dir / PLANNING_DIR
+    planning_dir.mkdir(parents=True, exist_ok=True)
+    (planning_dir / "plan_1.md").write_text(f"## Sub-plan 1: {name}\n", encoding="utf-8")
+    (planning_dir / "execution_plan.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "groups": [
+                    {
+                        "group_id": "g1",
+                        "mode": "serial",
+                        "plans": [{"file": "plan_1.md", "name": name}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 class DesignerRequirementsTests(unittest.TestCase):
     def test_load_config_parses_optional_designer(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             cfg = {
-                "session_name": "s",
-                "provider": "claude",
-                "architect": {"tier": "max"},
-                "coder": {"provider": "codex", "tier": "max"},
-                "designer": {
-                    "tier": "standard",
-                    "args": ["--permission-mode", "acceptEdits"],
+                "defaults": {"session_name": "s", "provider": "claude"},
+                "roles": {
+                    "architect": {"profile": "max"},
+                    "coder": {"provider": "codex", "profile": "max"},
+                    "designer": {
+                        "profile": "standard",
+                        "args": ["--permission-mode", "acceptEdits"],
+                    },
                 },
             }
-            cfg_path = tmp_path / "pipeline_config.json"
+            cfg_path = tmp_path / "config.json"
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
             agents = load_explicit_config(cfg_path).agents
@@ -121,7 +143,7 @@ class DesignerRequirementsTests(unittest.TestCase):
 
             files = create_feature_files(project_dir, feature_dir, "do ui", "session")
 
-            coder_prompt = build_coder_prompt(files)
+            coder_prompt = build_coder_subplan_prompt(files, feature_dir / PLANNING_DIR / "plan_1.md", 1)
             designer_prompt = build_designer_prompt(files)
             initial_prompts = build_initial_prompts(files)
 
@@ -165,6 +187,7 @@ class DesignerRequirementsTests(unittest.TestCase):
             state = load_state(state_path)
             state["phase"] = "planning"
             write_state(state_path, state)
+            _write_execution_plan(feature_dir, name="implementation")
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / PLANNING_DIR / "plan_meta.json").write_text('{"needs_design": true}\n', encoding="utf-8")
 

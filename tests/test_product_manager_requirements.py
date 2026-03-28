@@ -93,13 +93,14 @@ class ProductManagerRequirementsTests(unittest.TestCase):
     def test_load_config_parses_optional_product_manager(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             cfg = {
-                "session_name": "s",
-                "provider": "claude",
-                "architect": {"tier": "max"},
-                "coder": {"provider": "codex", "tier": "max"},
-                "product-manager": {"tier": "max"},
+                "defaults": {"session_name": "s", "provider": "claude"},
+                "roles": {
+                    "architect": {"profile": "max"},
+                    "coder": {"provider": "codex", "profile": "max"},
+                    "product-manager": {"profile": "max"},
+                },
             }
-            cfg_path = Path(td) / "pipeline_config.json"
+            cfg_path = Path(td) / "config.json"
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
             agents = load_explicit_config(cfg_path).agents
@@ -252,7 +253,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
                     feature_dir=feature_dir,
                     session_name="session-x",
                     agents=agents,
-                    config_path=feature_dir / "pipeline_config.json",
+                    config_path=feature_dir / "config.json",
                     initial_role="product-manager",
                 )
 

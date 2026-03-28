@@ -9,7 +9,7 @@ from agentmux.runtime.event_bus import SessionEvent
 from agentmux.workflow.handlers import load_plan_meta
 from agentmux.workflow.interruptions import InterruptionService
 from agentmux.workflow.orchestrator import PipelineOrchestrator
-from agentmux.workflow.plan_parser import coder_label_for_subplan, read_subplan_title, split_plan_into_subplans
+from agentmux.workflow.plan_parser import coder_label_for_subplan
 from agentmux.workflow.prompts import write_prompt_file
 from agentmux.sessions.state_store import create_feature_files, load_state
 from agentmux.workflow.transitions import EXIT_SUCCESS, PipelineContext
@@ -125,35 +125,22 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
 
             self.assertEqual({"needs_design": True}, meta)
 
-    def test_split_plan_into_subplans_writes_into_planning_directory(self) -> None:
+    def test_coder_label_for_subplan_reads_name_from_execution_plan(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             planning_dir = feature_dir / "02_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
-            plan_path = planning_dir / "plan.md"
-            plan_path.write_text(
-                "# Plan\n\n## Sub-plan 1: A\n\nDo A\n\n## Sub-plan 2: B\n\nDo B\n",
+            (planning_dir / "plan_1.md").write_text("## Sub-plan 1: API wiring\n", encoding="utf-8")
+            (planning_dir / "execution_plan.json").write_text(
+                '{"version": 1, "groups": [{"group_id": "g1", "mode": "serial", "plans": [{"file": "plan_1.md", "name": "API wiring"}]}]}',
                 encoding="utf-8",
             )
 
-            subplans = split_plan_into_subplans(plan_path, planning_dir)
+            self.assertEqual("API wiring", coder_label_for_subplan(planning_dir, 1))
 
-            self.assertEqual([planning_dir / "plan_1.md", planning_dir / "plan_2.md"], subplans)
-            self.assertTrue((planning_dir / "plan_1.md").exists())
-            self.assertTrue((planning_dir / "plan_2.md").exists())
-
-    def test_read_subplan_title_extracts_header_title(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            subplan_path = Path(td) / "plan_2.md"
-            subplan_path.write_text("# Plan\n\n## Sub-plan 2: API wiring\n\nDo it\n", encoding="utf-8")
-
-            self.assertEqual("API wiring", read_subplan_title(subplan_path))
-
-    def test_coder_label_for_subplan_falls_back_when_header_missing(self) -> None:
+    def test_coder_label_for_subplan_falls_back_when_execution_plan_missing(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             planning_dir = Path(td)
-            (planning_dir / "plan_4.md").write_text("# Plan\n\nNo subplan header here\n", encoding="utf-8")
-
             self.assertEqual("plan 4", coder_label_for_subplan(planning_dir, 4))
 
     def test_orchestrate_starts_and_stops_event_bus(self) -> None:

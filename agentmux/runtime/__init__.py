@@ -22,7 +22,6 @@ from .tmux_control import (
 )
 
 SNAPSHOT_VERSION = 2
-LEGACY_PANES_FILE = "panes.json"
 
 
 class AgentRuntime(Protocol):
@@ -165,42 +164,27 @@ class TmuxAgentRuntime:
         feature_dir: Path,
     ) -> tuple[dict[str, str | None], dict[str, dict[int | str, str]], list[str]]:
         snapshot_path = feature_dir / "runtime_state.json"
-        if snapshot_path.exists():
-            raw = json.loads(snapshot_path.read_text(encoding="utf-8"))
-            primary = {
-                str(key): value if value is None else str(value)
-                for key, value in dict(raw.get("primary", {})).items()
-            }
-            parallel: dict[str, dict[int | str, str]] = {}
-            for role, workers in dict(raw.get("parallel", {})).items():
-                parsed: dict[int | str, str] = {}
-                for worker_key, pane_id in dict(workers).items():
-                    if pane_id is None:
-                        continue
-                    key: int | str = str(worker_key)
-                    if str(worker_key).isdigit():
-                        key = int(str(worker_key))
-                    parsed[key] = str(pane_id)
-                if parsed:
-                    parallel[str(role)] = parsed
-            visible = [str(pane_id) for pane_id in list(raw.get("visible", [])) if pane_id]
-            return primary, parallel, visible
-
-        legacy_path = feature_dir / LEGACY_PANES_FILE
-        if not legacy_path.exists():
+        if not snapshot_path.exists():
             return {}, {}, []
-
-        panes = json.loads(legacy_path.read_text(encoding="utf-8"))
-        primary: dict[str, str | None] = {}
+        raw = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        primary = {
+            str(key): value if value is None else str(value)
+            for key, value in dict(raw.get("primary", {})).items()
+        }
         parallel: dict[str, dict[int | str, str]] = {}
-        for role, pane_id in panes.items():
-            if role.startswith("coder_"):
-                suffix = role.split("_", 1)[1]
-                if suffix.isdigit() and pane_id:
-                    parallel.setdefault("coder", {})[int(suffix)] = str(pane_id)
-                continue
-            primary[str(role)] = None if pane_id is None else str(pane_id)
-        return primary, parallel, []
+        for role, workers in dict(raw.get("parallel", {})).items():
+            parsed: dict[int | str, str] = {}
+            for worker_key, pane_id in dict(workers).items():
+                if pane_id is None:
+                    continue
+                key: int | str = str(worker_key)
+                if str(worker_key).isdigit():
+                    key = int(str(worker_key))
+                parsed[key] = str(pane_id)
+            if parsed:
+                parallel[str(role)] = parsed
+        visible = [str(pane_id) for pane_id in list(raw.get("visible", [])) if pane_id]
+        return primary, parallel, visible
 
     def _normalize_primary_panes(self) -> None:
         self.primary_panes.setdefault("_control", None)

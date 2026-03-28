@@ -27,8 +27,8 @@ Your job:
 9. Keep Phase 2 task ownership unambiguous. Tasks grouped under one `## Sub-plan <N>` in `02_planning/tasks.md` must belong only to that sub-plan's owned files/modules. Cross-cutting validation or cleanup that depends on sibling-lane edits belongs in a serial integration sub-plan, not in a parallel lane.
 10. Explicitly assess enabling refactors and technical debt tradeoffs.
 11. After writing `02_planning/plan.md`, also write numbered executable plan files (`02_planning/plan_<N>.md`) and also write `02_planning/execution_plan.json` with shape:
-`{{ "version": 1, "groups": [{{ "group_id": "string", "mode": "serial|parallel", "plans": ["plan_1.md"] }}] }}`
-12. Compatibility policy: runtime keeps a legacy flat `plan.md` parsing fallback for older sessions that do not have `execution_plan.json`, but replanning output must always write `execution_plan.json`.
+`{{ "version": 1, "groups": [{{ "group_id": "string", "mode": "serial|parallel", "plans": [{{ "file": "plan_1.md", "name": "Foundation contracts" }}] }}] }}`
+12. `02_planning/execution_plan.json` is required. Every `plans[]` entry must be an object with both `file` and `name`.
 13. After writing planning/execution artifacts, also write `02_planning/tasks.md` as a numbered checklist derived from the plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z"). If you created sub-plans, group tasks under the corresponding `## Sub-plan <N>: <title>` header.
 14. Documentation updates must be captured as explicit plan and task items in `02_planning/plan.md`, every `02_planning/plan_<N>.md`, and `02_planning/tasks.md`.
 Do not defer documentation to a separate post-review handoff; keep documentation work in the same implementation scope as code changes.

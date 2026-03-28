@@ -14,12 +14,11 @@ The control pane renders a live status box with the following sections:
     - active execution group index / total groups
     - active group mode (`serial` or `parallel`)
     - overall progress through all execution groups
-  - For legacy flat plans, monitor falls back to subplan-count-only metadata
 - **Agents** — list of active agents only (WORKING/IDLE), with provider/model info
   - Inactive agents are filtered out of the AGENTS section
   - For parallel coder mode, only non-inactive `coder_<n>` workers are shown
   - Agent rows use a shared `[role] secondary-info` format
-  - Coder rows prefer the explicit `name` from `02_planning/execution_plan.json`, then fall back to the `## Sub-plan <N>: <title>` header in `02_planning/plan_<n>.md`
+  - Coder rows use the explicit `name` from `02_planning/execution_plan.json`
   - Reviewer rows show the current review iteration, and designer rows show the feature being designed
 - **Research tasks** — progress on code and web research (if any)
 - **Event log** — recent timeline entries with timestamps: phase transitions plus filtered handover-relevant file creations from `created_files.log`
@@ -37,7 +36,6 @@ The control pane renders a live status box with the following sections:
 
 - The monitor should represent implementing as grouped work, not only a single undifferentiated `implementing` phase.
 - Group labels are derived from orchestrator-managed state and should stay consistent with `02_planning/execution_plan.json`.
-- If staged fields are absent (older sessions), rendering remains compatible with legacy flat sub-plan execution.
 
 ## Component split
 

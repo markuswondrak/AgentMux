@@ -33,23 +33,6 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
 
 **IMPORTANT:** Do NOT use your built-in tools (web search, code exploration sub-agents, etc.) for research. Use the MCP research tools described above. Your built-in tools bypass the pipeline's agent coordination.
 
-**Fallback:** If the MCP research tools are not available, create `03_research/code-<topic>/request.md` or `03_research/web-<topic>/request.md` manually. Format each request file as:
-
-```
-## Context
-What you are planning and why you need this information.
-
-## Questions
-1. Specific, answerable question
-2. ...
-
-## Scope hints
-- Files, directories, or patterns to start with (if known)
-- What to ignore (if relevant)
-```
-
-Do not poll for `done` yourself. AgentMux will notify you when `03_research/code-<topic>/done` or `03_research/web-<topic>/done` appears. After that, read `03_research/code-<topic>/summary.md` or `03_research/web-<topic>/summary.md`; detailed artifacts are `03_research/code-<topic>/detail.md` and `03_research/web-<topic>/detail.md`.
-
 ## Your job
 
 1. Clarify and tighten the requirements if needed. If the requirements have been sharpened or changed you must adjust the requirements file accordingly.
@@ -61,7 +44,7 @@ Do not poll for `done` yourself. AgentMux will notify you when `03_research/code
    - Phase 3: Integration & Validation (sequential) — merge outcomes and define final verification.
 5. Right-size your sub-plans (Granularity & Cohesion). Do NOT create micro-tasks. A sub-plan should represent a cohesive, meaningful chunk of work. Tightly coupled files (e.g., a prompt template, its validation logic, and its corresponding tests) MUST be grouped into a single sub-plan, even if they don't have technical conflicts.
 6. Use parallelization strategically, not blindly. Seek to parallelize independent domains (e.g., completely separate features or independent modules). Do NOT split a single atomic feature into multiple sub-plans just because it touches multiple files. Perform explicit conflict mapping by touched files/modules and assign explicit ownership. For Phase 2 parallel sub-plans, the owned files/modules must be disjoint. If two sub-plans would edit the same file or module, merge that work into one sub-plan or move the overlapping portion into a serial Phase 3 integration step.
-7. Keep the existing sub-plan header format exactly as `## Sub-plan <N>: <title>` so current parser behavior remains compatible.
+7. Keep sub-plan headers in this exact format: `## Sub-plan <N>: <title>`.
 8. For every executable sub-plan, include all of:
    - Scope: concrete files/modules expected to change.
    - Owned files/modules: the explicit files/modules that sub-plan is allowed to mutate. Be concrete; avoid broad catch-all ownership when possible.
@@ -77,7 +60,7 @@ Do not poll for `done` yourself. AgentMux will notify you when `03_research/code
 16. After writing plan files, also write `02_planning/execution_plan.json` as the machine-readable execution schedule with this shape:
 `{{ "version": 1, "groups": [{{ "group_id": "string", "mode": "serial|parallel", "plans": [{{ "file": "plan_1.md", "name": "Foundation contracts" }}, {{ "file": "plan_2.md", "name": "API wiring" }}] }}] }}`
 Every `plans[]` entry must include an explicit `name` for that work unit. Use the same work-unit title you want displayed in coder pane titles and monitor labels.
-17. Compatibility policy: runtime keeps a legacy flat `plan.md` parsing fallback for older sessions that do not have `execution_plan.json`, but new plans must always write `execution_plan.json`.
+17. `02_planning/execution_plan.json` is required. Always write it alongside the numbered `plan_<N>.md` files.
 18. After writing `02_planning/plan.md`, plan files, and `02_planning/execution_plan.json`, also write `02_planning/tasks.md` as a numbered checklist derived from the plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z"). If you created sub-plans, group tasks under the corresponding `## Sub-plan <N>: <title>` header.
 For Phase 2 parallel sub-plans, ensure each task list stays within that sub-plan's owned files/modules. Cross-cutting validation or cleanup that depends on sibling-lane edits belongs in a serial integration sub-plan, not in a parallel lane.
 19. Documentation updates must be captured as explicit plan and task items in `02_planning/plan.md`, every `02_planning/plan_<N>.md`, and `02_planning/tasks.md`.

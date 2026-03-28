@@ -32,10 +32,10 @@ def _error(path: Path, message: str) -> RuntimeError:
     return RuntimeError(f"{path.name}: {message}")
 
 
-def load_execution_plan(planning_dir: Path) -> ExecutionPlan | None:
+def load_execution_plan(planning_dir: Path) -> ExecutionPlan:
     path = planning_dir / "execution_plan.json"
     if not path.is_file():
-        return None
+        raise _error(path, "is required.")
 
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -79,22 +79,16 @@ def load_execution_plan(planning_dir: Path) -> ExecutionPlan | None:
 
         plans: list[ExecutionPlanRef] = []
         for plan_index, plan_raw in enumerate(plans_raw, start=1):
-            plan_name: str | None = None
-            if isinstance(plan_raw, str):
-                if not plan_raw.strip():
-                    raise _error(path, f"groups[{index}].plans[{plan_index}] must be a non-empty string.")
-                plan_ref = plan_raw.strip()
-            elif isinstance(plan_raw, dict):
-                plan_file_raw = plan_raw.get("file")
-                if not isinstance(plan_file_raw, str) or not plan_file_raw.strip():
-                    raise _error(path, f"groups[{index}].plans[{plan_index}].file must be a non-empty string.")
-                plan_name_raw = plan_raw.get("name")
-                if not isinstance(plan_name_raw, str) or not plan_name_raw.strip():
-                    raise _error(path, f"groups[{index}].plans[{plan_index}].name must be a non-empty string.")
-                plan_ref = plan_file_raw.strip()
-                plan_name = plan_name_raw.strip()
-            else:
-                raise _error(path, f"groups[{index}].plans[{plan_index}] must be a string or object.")
+            if not isinstance(plan_raw, dict):
+                raise _error(path, f"groups[{index}].plans[{plan_index}] must be an object.")
+            plan_file_raw = plan_raw.get("file")
+            if not isinstance(plan_file_raw, str) or not plan_file_raw.strip():
+                raise _error(path, f"groups[{index}].plans[{plan_index}].file must be a non-empty string.")
+            plan_name_raw = plan_raw.get("name")
+            if not isinstance(plan_name_raw, str) or not plan_name_raw.strip():
+                raise _error(path, f"groups[{index}].plans[{plan_index}].name must be a non-empty string.")
+            plan_ref = plan_file_raw.strip()
+            plan_name = plan_name_raw.strip()
             if not _PLAN_FILE_RE.match(plan_ref):
                 raise _error(
                     path,

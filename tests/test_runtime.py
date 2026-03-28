@@ -222,21 +222,9 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual({"1": "%2", "2": "%99"}, snapshot["parallel"]["coder"])
             self.assertEqual(["%99"], snapshot["visible"])
 
-    def test_attach_imports_legacy_panes_file_and_discards_stale_parallel_workers(self) -> None:
+    def test_attach_without_runtime_snapshot_starts_with_empty_registry(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            (feature_dir / "panes.json").write_text(
-                json.dumps(
-                    {
-                        "architect": "%1",
-                        "coder": "%2",
-                        "coder_1": "%2",
-                        "coder_2": "%9",
-                        "docs": "%3",
-                    }
-                ),
-                encoding="utf-8",
-            )
 
             with patch(
                 "agentmux.runtime.tmux_pane_exists",
@@ -251,11 +239,11 @@ class RuntimeTests(unittest.TestCase):
                     agents=_agents(),
                 )
 
-            self.assertEqual("%2", runtime.primary_panes["coder"])
-            self.assertEqual({1: "%2"}, runtime.parallel_panes["coder"])
-            self.assertEqual([["%1", "%2", "%2"]], runtime._zone.restored)
+            self.assertIsNone(runtime.primary_panes["coder"])
+            self.assertNotIn("coder", runtime.parallel_panes)
+            self.assertEqual([[]], runtime._zone.restored)
             snapshot = json.loads((feature_dir / "runtime_state.json").read_text(encoding="utf-8"))
-            self.assertEqual({"1": "%2"}, snapshot["parallel"]["coder"])
+            self.assertEqual({}, snapshot["parallel"])
             self.assertEqual([], snapshot["visible"])
 
     def test_create_passes_architect_trust_snippet_to_tmux_new_session(self) -> None:
@@ -283,7 +271,7 @@ class RuntimeTests(unittest.TestCase):
                     feature_dir=feature_dir,
                     session_name="session-x",
                     agents=_agents(),
-                    config_path=feature_dir / "pipeline_config.json",
+                    config_path=feature_dir / "config.json",
                 )
 
             self.assertEqual(["Do you trust the contents of this directory?"], args_seen)
@@ -500,6 +488,10 @@ class RuntimeTests(unittest.TestCase):
             planning_dir = feature_dir / "02_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_2.md").write_text("## Sub-plan 2: UI polish\n", encoding="utf-8")
+            (planning_dir / "execution_plan.json").write_text(
+                '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", "plans": [{"file": "plan_2.md", "name": "UI polish"}]}]}',
+                encoding="utf-8",
+            )
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
                 session_name="session-x",

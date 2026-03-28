@@ -225,7 +225,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             state = load_state(state_path)
             state["phase"] = "failed"
-            state["last_event"] = "pipeline_exception"
+            state["last_event"] = "run_failed"
             write_state(state_path, state)
 
             resumed_state = load_state(state_path)

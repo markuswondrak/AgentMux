@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +49,20 @@ class GitHubConfig:
     base_branch: str = "main"
     draft: bool = True
     branch_prefix: str = "feature/"
+
+
+@dataclass(frozen=True)
+class CompletionSettings:
+    skip_final_approval: bool = False
+
+    @property
+    def require_final_approval(self) -> bool:
+        return not self.skip_final_approval
+
+
+@dataclass(frozen=True)
+class WorkflowSettings:
+    completion: CompletionSettings = field(default_factory=CompletionSettings)
 
 
 @dataclass(frozen=True)

@@ -11,7 +11,7 @@ import yaml
 
 import agentmux.pipeline.application as application
 from agentmux.workflow.interruptions import InterruptionService
-from agentmux.shared.models import AgentConfig, GitHubConfig
+from agentmux.shared.models import AgentConfig, CompletionSettings, GitHubConfig, WorkflowSettings
 from agentmux.workflow.orchestrator import PipelineOrchestrator
 from agentmux.workflow.prompts import build_architect_prompt, build_product_manager_prompt
 from agentmux.sessions.state_store import create_feature_files
@@ -121,6 +121,9 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 max_review_iterations=3,
                 github=GitHubConfig(),
                 agents=base_agents,
+                workflow_settings=WorkflowSettings(
+                    completion=CompletionSettings(skip_final_approval=True),
+                ),
             )
             args = argparse.Namespace(
                 prompt="ship mcp",
@@ -182,6 +185,9 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 max_review_iterations=3,
                 github=GitHubConfig(),
                 agents=base_agents,
+                workflow_settings=WorkflowSettings(
+                    completion=CompletionSettings(skip_final_approval=True),
+                ),
             )
             args = argparse.Namespace(
                 prompt=None,
@@ -211,7 +217,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             ) as attach_mock, patch(
                 "agentmux.pipeline.application.PipelineOrchestrator.create_context",
                 return_value=object(),
-            ), patch(
+            ) as create_context_mock, patch(
                 "agentmux.pipeline.application.PipelineOrchestrator.run",
                 return_value=0,
             ) as orchestrate_mock:
@@ -220,7 +226,66 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             self.assertEqual(0, result)
             setup_mock.assert_called_once()
             self.assertEqual(injected_agents, attach_mock.call_args.kwargs["agents"])
+            settings = create_context_mock.call_args.kwargs["workflow_settings"]
+            self.assertIsInstance(settings, WorkflowSettings)
+            self.assertTrue(settings.completion.skip_final_approval)
             self.assertEqual(False, orchestrate_mock.call_args.args[1])
+
+    def test_orchestrate_mode_uses_default_workflow_settings_when_loaded_object_is_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+            create_feature_files(project_dir, feature_dir, "resume", "session-x")
+
+            base_agents = {
+                "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
+            }
+            loaded = SimpleNamespace(
+                session_name="session-x",
+                max_review_iterations=3,
+                github=GitHubConfig(),
+                agents=base_agents,
+                workflow_settings=SimpleNamespace(
+                    completion=CompletionSettings(skip_final_approval=True),
+                ),
+            )
+            args = argparse.Namespace(
+                prompt=None,
+                name=None,
+                config=None,
+                keep_session=False,
+                product_manager=False,
+                orchestrate=str(feature_dir),
+                resume=None,
+                issue=None,
+            )
+
+            app = application.PipelineApplication(project_dir)
+
+            with patch.object(app, "ensure_dependencies", return_value=None), patch(
+                "agentmux.pipeline.application.load_layered_config",
+                return_value=loaded,
+            ), patch(
+                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                return_value=base_agents,
+            ), patch(
+                "agentmux.pipeline.application.TmuxRuntimeFactory.attach",
+                return_value=object(),
+            ), patch(
+                "agentmux.pipeline.application.PipelineOrchestrator.create_context",
+                return_value=object(),
+            ) as create_context_mock, patch(
+                "agentmux.pipeline.application.PipelineOrchestrator.run",
+                return_value=0,
+            ):
+                result = app.run(args)
+
+            self.assertEqual(0, result)
+            settings = create_context_mock.call_args.kwargs["workflow_settings"]
+            self.assertIsInstance(settings, WorkflowSettings)
+            self.assertFalse(settings.completion.skip_final_approval)
 
     def test_defaults_allow_mcp_research_tools_for_claude_architect_and_pm(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -232,7 +297,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
         self.assertIn("mcp__agentmux-research__*", role_args["architect"][-1])
         self.assertIn("mcp__agentmux-research__*", role_args["product-manager"][-1])
 
-    def test_architect_and_product_manager_prompts_reference_mcp_tools_with_fallback(self) -> None:
+    def test_architect_and_product_manager_prompts_reference_mcp_tools_without_legacy_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
@@ -251,9 +316,9 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 self.assertIn("scope_hints=[", prompt)
                 self.assertIn("stop and wait idle", prompt)
                 self.assertIn("summary.md", prompt)
-                self.assertIn("Fallback", prompt)
-                self.assertIn("03_research/code-<topic>/request.md", prompt)
-                self.assertIn("03_research/web-<topic>/request.md", prompt)
+                self.assertNotIn("Fallback", prompt)
+                self.assertNotIn("03_research/code-<topic>/request.md", prompt)
+                self.assertNotIn("03_research/web-<topic>/request.md", prompt)
 
 
 if __name__ == "__main__":

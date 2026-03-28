@@ -5,6 +5,8 @@ defaults:
   provider: claude
   profile: standard
   max_review_iterations: 3
+  completion:
+    skip_final_approval: false
 
 github:
   base_branch: main

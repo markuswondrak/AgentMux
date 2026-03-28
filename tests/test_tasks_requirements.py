@@ -8,7 +8,6 @@ from pathlib import Path
 from agentmux.workflow.prompts import (
     build_architect_prompt,
     build_change_prompt,
-    build_coder_prompt,
     build_coder_subplan_prompt,
     build_reviewer_prompt,
 )
@@ -65,7 +64,7 @@ class TasksRequirementsTests(unittest.TestCase):
             files = create_feature_files(project_dir, feature_dir, "add tasks list", "session")
 
             architect_prompt = build_architect_prompt(files)
-            coder_prompt = build_coder_prompt(files)
+            coder_prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
 
             self.assertIn("write the final plan to `02_planning/plan.md`", architect_prompt)
             self.assertIn("also write `02_planning/tasks.md`", architect_prompt)
@@ -94,7 +93,7 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("task ownership unambiguous", architect_prompt)
             self.assertIn("must belong only to that sub-plan's owned files/modules", architect_prompt)
             self.assertIn("technical debt", architect_prompt.lower())
-            self.assertIn("legacy flat `plan.md` parsing fallback", architect_prompt)
+            self.assertNotIn("legacy flat `plan.md` parsing fallback", architect_prompt)
             self.assertNotIn("Empty file-set intersection is a hint for parallelization", architect_prompt)
             self.assertIn("05_implementation/done_1", coder_prompt)
             self.assertIn("Do not update state.json", coder_prompt)
@@ -134,7 +133,7 @@ class TasksRequirementsTests(unittest.TestCase):
 
             files = create_feature_files(project_dir, feature_dir, "docs ownership", "session")
 
-            coder_prompt = build_coder_prompt(files)
+            coder_prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
             reviewer_agent_prompt = build_reviewer_prompt(files)
             reviewer_review_prompt = build_reviewer_prompt(files, is_review=True)
 

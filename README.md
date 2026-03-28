@@ -60,8 +60,6 @@ agentmux --issue https://github.com/owner/repo/issues/42
 # Resume an interrupted run
 agentmux --resume
 
-# Repo-root entry point
-python3 pipeline.py "Add rate limiting to the API"
 ```
 
 If `gh` is authenticated, AgentMux can bootstrap from issue content and open a pull request when the pipeline completes.
@@ -76,6 +74,8 @@ version: 1
 defaults:
   provider: claude
   profile: standard
+  completion:
+    skip_final_approval: false
 
 roles:
   architect:

@@ -7,9 +7,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agentmux.shared.models import AgentConfig, GitHubConfig
+from agentmux.integrations.completion import CompletionService
+from agentmux.shared.models import AgentConfig, CompletionSettings, GitHubConfig, WorkflowSettings
 from agentmux.workflow.phases import CompletingPhase
-from agentmux.workflow.prompts import build_confirmation_prompt
+from agentmux.workflow.prompts import build_confirmation_prompt, build_reviewer_prompt
 from agentmux.sessions.state_store import create_feature_files, load_state
 from agentmux.workflow.transitions import EXIT_SUCCESS, PipelineContext
 
@@ -31,7 +32,7 @@ class _FakeRuntime:
         self.calls.append(("finish_many", role))
 
 
-def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, dict]:
+def _make_ctx(feature_dir: Path, *, skip_final_approval: bool = False) -> tuple[PipelineContext, dict]:
     project_dir = feature_dir.parent / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
     files = create_feature_files(project_dir, feature_dir, "test", "session-x")
@@ -47,11 +48,69 @@ def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, dict]:
         max_review_iterations=3,
         prompts={},
         github_config=GitHubConfig(),
+        workflow_settings=WorkflowSettings(
+            completion=CompletionSettings(skip_final_approval=skip_final_approval),
+        ),
     )
     return ctx, load_state(files.state)
 
 
 class CompletionCommitFlowTests(unittest.TestCase):
+    def test_completion_service_can_draft_commit_message_without_reviewer_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, _ = _make_ctx(feature_dir)
+            ctx.files.requirements.write_text(
+                "\n".join(
+                    [
+                        "# Requirements",
+                        "",
+                        "## Initial Request",
+                        "",
+                        "complete approval flow without manual commit message",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            commit_message = CompletionService().draft_commit_message(
+                files=ctx.files,
+                issue_number="54",
+            )
+
+            self.assertIn("complete approval flow", commit_message)
+            self.assertIn("#54", commit_message)
+
+    def test_completion_service_resolve_commit_message_prefers_payload_and_falls_back_to_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, _ = _make_ctx(feature_dir)
+            service = CompletionService()
+
+            with patch.object(service, "draft_commit_message", return_value="feat: drafted commit") as draft_mock:
+                commit_message = service.resolve_commit_message(
+                    payload_commit_message="  reviewer summary  ",
+                    files=ctx.files,
+                    issue_number=None,
+                )
+
+            self.assertEqual("reviewer summary", commit_message)
+            draft_mock.assert_not_called()
+
+            with patch.object(service, "draft_commit_message", return_value="feat: drafted commit") as draft_mock:
+                fallback_commit = service.resolve_commit_message(
+                    payload_commit_message="   ",
+                    files=ctx.files,
+                    issue_number="42",
+                )
+
+            self.assertEqual("feat: drafted commit", fallback_commit)
+            draft_mock.assert_called_once_with(
+                files=ctx.files,
+                issue_number="42",
+            )
+
     def test_completing_phase_on_enter_sends_confirmation_prompt_to_reviewer(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
@@ -91,6 +150,27 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 check=True,
             )
 
+    def test_build_confirmation_prompt_requests_optional_commit_message(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, _ = _make_ctx(feature_dir)
+
+            prompt = build_confirmation_prompt(ctx.files)
+
+            self.assertIn('"action": "approve"', prompt)
+            self.assertIn('"exclude_files": ["relative/path"]', prompt)
+            self.assertIn('"commit_message": "optional summary"', prompt)
+
+    def test_build_reviewer_review_prompt_requests_commit_message_on_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, _ = _make_ctx(feature_dir)
+
+            prompt = build_reviewer_prompt(ctx.files, is_review=True)
+
+            self.assertIn("verdict: pass", prompt)
+            self.assertIn("commit_message", prompt)
+
     def test_approval_commits_changed_minus_exclusions_and_cleans_up_on_success(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
@@ -111,7 +191,11 @@ class CompletionCommitFlowTests(unittest.TestCase):
                     stdout=" M agentmux/phases.py\n?? tests/skip.py\nR  old.py -> renamed.py\n",
                     stderr="",
                 ),
-            ), patch("agentmux.integrations.completion.commit_changes", return_value="abc123") as commit_mock, patch(
+            ), patch.object(
+                CompletionService,
+                "draft_commit_message",
+                return_value="feat: drafted commit",
+            ) as draft_mock, patch("agentmux.integrations.completion.commit_changes", return_value="abc123") as commit_mock, patch(
                 "agentmux.integrations.completion.cleanup_feature_dir"
             ) as cleanup_mock:
                 result = CompletingPhase().handle_event(state, "approval_received", ctx)
@@ -122,7 +206,47 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 "test commit",
                 ["agentmux/phases.py", "renamed.py"],
             )
+            draft_mock.assert_not_called()
             cleanup_mock.assert_called_once_with(ctx.files.feature_dir)
+
+    def test_approval_uses_drafted_commit_message_when_payload_omits_it(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, state = _make_ctx(feature_dir)
+            approval = {
+                "action": "approve",
+                "exclude_files": ["tests/skip.py"],
+            }
+            ctx.files.completion_dir.mkdir(parents=True, exist_ok=True)
+            (ctx.files.completion_dir / "approval.json").write_text(json.dumps(approval), encoding="utf-8")
+
+            with patch(
+                "agentmux.workflow.phases.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["git", "status", "--porcelain"],
+                    returncode=0,
+                    stdout=" M agentmux/phases.py\n?? tests/skip.py\n",
+                    stderr="",
+                ),
+            ), patch.object(
+                CompletionService,
+                "draft_commit_message",
+                return_value="feat: drafted commit",
+            ) as draft_mock, patch("agentmux.integrations.completion.commit_changes", return_value="abc123") as commit_mock, patch(
+                "agentmux.integrations.completion.cleanup_feature_dir"
+            ):
+                result = CompletingPhase().handle_event(state, "approval_received", ctx)
+
+            self.assertEqual(EXIT_SUCCESS, result)
+            draft_mock.assert_called_once_with(
+                files=ctx.files,
+                issue_number=None,
+            )
+            commit_mock.assert_called_once_with(
+                ctx.files.project_dir,
+                "feat: drafted commit",
+                ["agentmux/phases.py"],
+            )
 
     def test_approval_failure_keeps_feature_directory(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -218,6 +342,60 @@ class CompletionCommitFlowTests(unittest.TestCase):
 
             self.assertEqual(EXIT_SUCCESS, result)
             pr_mock.assert_not_called()
+            cleanup_mock.assert_called_once_with(ctx.files.feature_dir)
+
+    def test_skip_final_approval_bypasses_reviewer_prompt_and_prepares_auto_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, state = _make_ctx(feature_dir, skip_final_approval=True)
+
+            with patch.object(ctx.runtime, "send") as send_mock:
+                CompletingPhase().on_enter(state, ctx)
+
+            send_mock.assert_not_called()
+            approval = json.loads((ctx.files.completion_dir / "approval.json").read_text(encoding="utf-8"))
+            self.assertEqual({"action": "approve", "exclude_files": []}, approval)
+
+    def test_skip_final_approval_auto_approval_reaches_commit_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            ctx, state = _make_ctx(feature_dir, skip_final_approval=True)
+            phase = CompletingPhase()
+            phase.on_enter(state, ctx)
+
+            event = phase.detect_event(state, ctx)
+            self.assertEqual("approval_received", event)
+
+            with patch(
+                "agentmux.workflow.phases.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=["git", "status", "--porcelain"],
+                    returncode=0,
+                    stdout=" M agentmux/phases.py\n",
+                    stderr="",
+                ),
+            ), patch.object(
+                CompletionService,
+                "draft_commit_message",
+                return_value="feat: drafted commit",
+            ) as draft_mock, patch(
+                "agentmux.integrations.completion.commit_changes",
+                return_value="abc123",
+            ) as commit_mock, patch(
+                "agentmux.integrations.completion.cleanup_feature_dir"
+            ) as cleanup_mock:
+                result = phase.handle_event(state, "approval_received", ctx)
+
+            self.assertEqual(EXIT_SUCCESS, result)
+            draft_mock.assert_called_once_with(
+                files=ctx.files,
+                issue_number=None,
+            )
+            commit_mock.assert_called_once_with(
+                ctx.files.project_dir,
+                "feat: drafted commit",
+                ["agentmux/phases.py"],
+            )
             cleanup_mock.assert_called_once_with(ctx.files.feature_dir)
 
     def test_changes_requested_deactivates_reviewer_and_resets_for_replanning(self) -> None:

@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Optional config override. Without this flag the loader resolves "
             f"built-in defaults, ~/.config/agentmux/config.yaml, then {DEFAULT_CONFIG_HINT} "
-            "or pipeline_config.json in the project."
+            "in the project."
         ),
     )
     parser.add_argument(

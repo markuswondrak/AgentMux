@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from ..shared.models import AgentConfig, GitHubConfig
+from ..shared.models import AgentConfig, CompletionSettings, GitHubConfig, WorkflowSettings
 
 ROLES = (
     "architect",
@@ -26,7 +26,6 @@ PROJECT_CONFIG_CANDIDATES = (
     Path(".agentmux/config.yaml"),
     Path(".agentmux/config.yml"),
     Path(".agentmux/config.json"),
-    Path("pipeline_config.json"),
 )
 
 
@@ -38,6 +37,7 @@ class LoadedConfig:
     github: GitHubConfig
     raw: dict[str, Any]
     sources: tuple[Path, ...]
+    workflow_settings: WorkflowSettings
 
 
 def load_builtin_catalog() -> dict[str, Any]:
@@ -87,8 +87,6 @@ def load_layered_config(
 def infer_project_dir(feature_dir: Path) -> Path:
     if feature_dir.parent.name == ".sessions" and feature_dir.parent.parent.name == ".agentmux":
         return feature_dir.parent.parent.parent
-    if feature_dir.parent.name == ".multi-agent":
-        return feature_dir.parent.parent
     return feature_dir.parent
 
 
@@ -121,23 +119,31 @@ def _load_structured_file(path: Path) -> dict[str, Any]:
 
 
 def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
+    legacy_top_level_keys = {
+        "session_name",
+        "provider",
+        "profile",
+        "max_review_iterations",
+        "skip_final_approval",
+        "require_final_approval",
+        *ROLES,
+    }
+    found_legacy_keys = sorted(key for key in legacy_top_level_keys if key in raw)
+    if found_legacy_keys:
+        found_csv = ", ".join(found_legacy_keys)
+        raise ValueError(
+            "Legacy top-level config keys are no longer supported. "
+            f"Move them under `defaults`/`roles`: {found_csv}."
+        )
+
     normalized: dict[str, Any] = {
         "version": int(raw.get("version", 1)),
-        "defaults": {},
-        "github": {},
+        "defaults": _normalize_defaults(raw.get("defaults", {})),
+        "github": _normalize_github(raw.get("github", {})),
         "launchers": {},
         "profiles": {},
         "roles": {},
     }
-
-    defaults = dict(raw.get("defaults", {})) if isinstance(raw.get("defaults"), dict) else {}
-    for key in ("session_name", "provider", "profile", "max_review_iterations"):
-        if key in raw:
-            defaults[key] = raw[key]
-    if "tier" in raw and "profile" not in defaults:
-        defaults["profile"] = raw["tier"]
-    normalized["defaults"] = _normalize_defaults(defaults)
-    normalized["github"] = _normalize_github(raw.get("github", {}))
 
     launchers = dict(raw.get("launchers", {})) if isinstance(raw.get("launchers"), dict) else {}
     normalized["launchers"] = {
@@ -151,30 +157,54 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         for provider, profile_map in profiles.items()
     }
 
-    role_sources: dict[str, Any] = {}
-    top_level_roles = {role: raw[role] for role in ROLES if role in raw}
-    role_sources.update(top_level_roles)
     nested_roles = dict(raw.get("roles", {})) if isinstance(raw.get("roles"), dict) else {}
-    role_sources.update(nested_roles)
     normalized["roles"] = {
         str(role): _normalize_role_config(str(role), role_raw)
-        for role, role_raw in role_sources.items()
+        for role, role_raw in nested_roles.items()
     }
     return normalized
 
 
 def _normalize_defaults(raw: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise ValueError("defaults must be a mapping.")
+    unsupported_keys = [key for key in ("skip_final_approval", "require_final_approval", "tier") if key in raw]
+    if unsupported_keys:
+        keys_csv = ", ".join(sorted(unsupported_keys))
+        raise ValueError(
+            "Legacy defaults keys are no longer supported. "
+            f"Use `defaults.profile` and `defaults.completion.skip_final_approval` instead: {keys_csv}."
+        )
     defaults: dict[str, Any] = {}
     if "session_name" in raw:
         defaults["session_name"] = str(raw["session_name"])
     if "provider" in raw:
         defaults["provider"] = str(raw["provider"])
-    profile = raw.get("profile", raw.get("tier"))
+    profile = raw.get("profile")
     if profile is not None:
         defaults["profile"] = str(profile)
     if "max_review_iterations" in raw:
         defaults["max_review_iterations"] = int(raw["max_review_iterations"])
+    completion = _normalize_completion_defaults(raw.get("completion"), "defaults.completion")
+    if completion:
+        defaults["completion"] = completion
     return defaults
+
+
+def _normalize_completion_defaults(raw: Any, label: str) -> dict[str, bool]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{label} must be a mapping.")
+    completion: dict[str, bool] = {}
+    if "skip_final_approval" in raw:
+        completion["skip_final_approval"] = _coerce_bool(
+            raw["skip_final_approval"],
+            f"{label}.skip_final_approval",
+        )
+    if "require_final_approval" in raw:
+        raise ValueError(f"{label}.require_final_approval is no longer supported.")
+    return completion
 
 
 def _normalize_launcher(name: str, raw: Any) -> dict[str, Any]:
@@ -219,10 +249,12 @@ def _normalize_profile(provider: str, profile: str, raw: Any) -> dict[str, Any]:
 def _normalize_role_config(role: str, raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError(f"Role '{role}' must be a mapping.")
+    if "tier" in raw:
+        raise ValueError(f"roles.{role}.tier is no longer supported. Use roles.{role}.profile.")
     data: dict[str, Any] = {}
     if "provider" in raw:
         data["provider"] = str(raw["provider"])
-    profile = raw.get("profile", raw.get("tier"))
+    profile = raw.get("profile")
     if profile is not None:
         data["profile"] = str(profile)
     if "args" in raw:
@@ -305,6 +337,12 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
         draft=_coerce_bool(github_raw.get("draft", True), "github.draft"),
         branch_prefix=str(github_raw.get("branch_prefix", "feature/")),
     )
+    completion_defaults = _normalize_completion_defaults(defaults.get("completion"), "defaults.completion")
+    workflow_settings = WorkflowSettings(
+        completion=CompletionSettings(
+            skip_final_approval=completion_defaults.get("skip_final_approval", False),
+        ),
+    )
 
     agents: dict[str, AgentConfig] = {}
     for role in ROLES:
@@ -356,6 +394,7 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
         max_review_iterations=max_review_iterations,
         agents=agents,
         github=github,
+        workflow_settings=workflow_settings,
         raw=raw,
         sources=sources,
     )

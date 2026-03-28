@@ -13,18 +13,18 @@ agentmux init                                        # Interactive setup wizard
 agentmux init --defaults                             # Non-interactive with built-in defaults
 
 # Start a feature workflow
-python3 pipeline.py "Your feature description"
+agentmux "Your feature description"
 
 # Optional flags
-python3 pipeline.py "feature" --name <slug>          # Custom feature directory name
-python3 pipeline.py "feature" --config <path>        # Explicit config override
-python3 pipeline.py "feature" --keep-session         # Keep tmux session after completion
-python3 pipeline.py "feature" --product-manager      # Run PM phase before architect planning
-python3 pipeline.py --issue <number-or-url>          # Bootstrap from GitHub issue title/body
+agentmux "feature" --name <slug>                     # Custom feature directory name
+agentmux "feature" --config <path>                   # Explicit config override
+agentmux "feature" --keep-session                    # Keep tmux session after completion
+agentmux "feature" --product-manager                 # Run PM phase before architect planning
+agentmux --issue <number-or-url>                     # Bootstrap from GitHub issue title/body
 
 # Resume an interrupted pipeline
-python3 pipeline.py --resume                         # Interactive selection from existing sessions
-python3 pipeline.py --resume <feature-dir-or-name>  # Resume specific session by name or path
+agentmux --resume                                    # Interactive selection from existing sessions
+agentmux --resume <feature-dir-or-name>             # Resume specific session by name or path
 ```
 
 ### Project Initialization
@@ -47,7 +47,7 @@ There are no lint commands in this repository.
 Default config resolution is layered:
 - built-in defaults from `agentmux/configuration/defaults/config.yaml`
 - optional user config from `~/.config/agentmux/config.yaml`
-- project config from `.agentmux/config.yaml` (preferred) or legacy `pipeline_config.json`
+- project config from `.agentmux/config.yaml`
 - explicit `--config <path>` override
 
 ## Architecture
@@ -56,7 +56,6 @@ This is a **tmux-based multi-agent orchestration system**. Instead of calling AI
 
 ### How it works
 
-The repo-root `pipeline.py` calls `agentmux.pipeline:main`.
 The pipeline application:
 1. Creates a feature directory under `.agentmux/.sessions/<feature-name>/`
 2. Spawns a tmux session with a **control pane** (left, 15 cols) and agent panes (right)
@@ -89,13 +88,12 @@ Role routing in these phases:
 ### Component structure
 
 ```
-pipeline.py                         — repo-root CLI entrypoint
 agentmux/pipeline/__init__.py       — CLI parsing and `main()`
 agentmux/pipeline/application.py    — PipelineApplication, launcher flow, hidden `--orchestrate` mode
 agentmux/pipeline/init_command.py   — project initialization wizard
 
 agentmux/configuration/             — layered config loading, provider/profile resolution, built-in defaults
-agentmux/configuration/providers.py — built-in provider compatibility helpers for profiles/models
+agentmux/configuration/providers.py — built-in provider helpers for launcher/profile resolution
 
 agentmux/shared/models.py           — AgentConfig, GitHubConfig, RuntimeFiles
 agentmux/sessions/__init__.py       — SessionService, session creation/resume
@@ -113,7 +111,7 @@ agentmux/workflow/prompts.py        — prompt rendering and prompt-file creatio
 agentmux/workflow/handlers.py       — phase helpers and state writes
 agentmux/workflow/transitions.py    — PipelineContext and transition helpers
 agentmux/workflow/interruptions.py  — interruption catalog and reporting
-agentmux/workflow/plan_parser.py    — subplan splitting
+agentmux/workflow/plan_parser.py    — execution-plan-backed subplan labels
 
 agentmux/monitor/__init__.py        — monitor command entrypoint
 agentmux/monitor/state_reader.py    — monitor state/log aggregation
@@ -171,7 +169,7 @@ Rules:
 Deeper context on specific subsystems:
 
 - `docs/file-protocol.md` — Shared file protocol, workflow artifacts per phase
-- `docs/configuration.md` — layered config schema, launchers/profiles, legacy compatibility
+- `docs/configuration.md` — layered config schema, launchers/profiles
 - `docs/tmux-layout.md` — Tmux session layout, pane lifecycle, zone approach
 - `docs/research-dispatch.md` — Code-researcher and web-researcher task dispatch
 - `docs/completing-phase.md` — Approval flow, commit selection, cleanup

@@ -11,9 +11,31 @@ _SHARED_FRAGMENT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
 _VALUE_PLACEHOLDER_PATTERN = re.compile(r"\[\[placeholder:([a-z0-9][a-z0-9_-]*)\]\]")
 _MAX_SHARED_FRAGMENT_EXPANSION_DEPTH = 8
 _PROJECT_INSTRUCTIONS_PLACEHOLDER = "[[placeholder:project_instructions]]"
-_PROJECT_INSTRUCTIONS_PLACEHOLDER_LEGACY = "{project_instructions}"
 
 _CHANGED_FILES_FALLBACK = "_Unable to read changed files from git status._"
+_CONFIRMATION_APPROVAL_FIELDS: tuple[str, ...] = (
+    "action",
+    "exclude_files",
+    "commit_message",
+)
+
+
+def confirmation_approval_payload_fields() -> tuple[str, ...]:
+    return _CONFIRMATION_APPROVAL_FIELDS
+
+
+def _append_confirmation_commit_message_contract(prompt: str) -> str:
+    if "commit_message" in prompt:
+        return prompt
+    return "\n".join(
+        [
+            prompt.rstrip(),
+            "",
+            "Approval payload contract extension:",
+            '- `commit_message` is optional and may contain a reviewer-authored summary for the final commit.',
+            "",
+        ]
+    )
 
 
 def _load_shared_fragment(name: str) -> str:
@@ -50,24 +72,17 @@ def _load_template(subdir: str, name: str, project_dir: Path | None = None) -> s
         project_prompt = project_dir / ".agentmux" / "prompts" / subdir / f"{name}.md"
         if project_prompt.is_file():
             project_instructions = project_prompt.read_text(encoding="utf-8")
-            project_instructions = project_instructions.replace("{", "{{").replace("}", "}}")
-    return (
-        template
-        .replace(_PROJECT_INSTRUCTIONS_PLACEHOLDER, project_instructions)
-        .replace(_PROJECT_INSTRUCTIONS_PLACEHOLDER_LEGACY, project_instructions)
-    )
+    return template.replace(_PROJECT_INSTRUCTIONS_PLACEHOLDER, project_instructions)
 
 
 def _render_template(template: str, values: dict[str, object]) -> str:
-    rendered = template.format_map(values)
-
     def _replace(match: re.Match[str]) -> str:
         key = match.group(1)
         if key not in values:
             raise KeyError(key)
         return str(values[key])
 
-    return _VALUE_PLACEHOLDER_PATTERN.sub(_replace, rendered)
+    return _VALUE_PLACEHOLDER_PATTERN.sub(_replace, template)
 
 
 def write_prompt_file(feature_dir: Path, name: str, content: str) -> Path:
@@ -145,32 +160,6 @@ def build_reviewer_prompt(files: RuntimeFiles, is_review: bool = False) -> str:
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
         "reviewer_preference_proposal_file": files.relative_path(files.reviewer_preference_proposal),
-    })
-
-
-def build_coder_prompt(files: RuntimeFiles) -> str:
-    completion_marker = files.relative_path(files.implementation_dir / "done_1")
-    completion_instruction = (
-        "FINAL STEP ONLY — once all code is written and nothing else remains, "
-        f"create the completion marker file `{completion_marker}` in the session directory "
-        "and leave it empty. This must be the very last action you take."
-    )
-    completion_constraints = "\n".join([
-        "- Do not update state.json from the coder step.",
-        "- Do not write anything to the marker file; create it as an empty file.",
-    ])
-    return _render_template(
-        _load_template(
-        "agents",
-        "coder",
-        project_dir=files.project_dir,
-    ), {
-        "feature_dir": files.feature_dir,
-        "project_dir": files.project_dir,
-        "plan_file": files.relative_path(files.plan),
-        "research_handoff": _build_coder_research_handoff(files),
-        "completion_instruction": completion_instruction,
-        "completion_constraints": completion_constraints,
     })
 
 
@@ -254,7 +243,7 @@ def build_confirmation_prompt(files: RuntimeFiles) -> str:
         stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
         changed_files = f"{_CHANGED_FILES_FALLBACK}\nError: {stderr}"
 
-    return _render_template(
+    prompt = _render_template(
         _load_template(
         "commands",
         "confirmation",
@@ -265,6 +254,7 @@ def build_confirmation_prompt(files: RuntimeFiles) -> str:
         "changed_files": changed_files,
         "reviewer_preference_proposal_file": files.relative_path(files.reviewer_preference_proposal),
     })
+    return _append_confirmation_commit_message_contract(prompt)
 
 
 def build_code_researcher_prompt(topic: str, files: RuntimeFiles) -> str:

@@ -61,7 +61,7 @@ class ResumeCliAndSessionTests(unittest.TestCase):
                 {
                     "phase": "failed",
                     "updated_at": "2026-01-01T20:00:00+01:00",
-                    "last_event": "pipeline_exception",
+                    "last_event": "run_failed",
                 },
             )
 
@@ -265,7 +265,7 @@ class ResumeApplicationFlowTests(unittest.TestCase):
             initial_state = {
                 "feature_dir": str(feature_dir),
                 "phase": "failed",
-                "last_event": "pipeline_exception",
+                "last_event": "run_failed",
                 "subplan_count": 0,
                 "review_iteration": 0,
                 "research_tasks": {"a": "dispatched", "b": "done"},
@@ -331,13 +331,13 @@ class ResumeApplicationFlowTests(unittest.TestCase):
 
 
 class InterruptionReportStateTests(unittest.TestCase):
-    def test_report_from_state_canonicalizes_legacy_failed_event(self) -> None:
+    def test_report_from_state_uses_default_cause_for_unknown_failed_event(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             service = InterruptionService()
             state = {
                 "phase": "failed",
-                "last_event": "pipeline_exception",
+                "last_event": "run_failed",
             }
 
             report = service.report_from_state(state, feature_dir)
@@ -347,7 +347,7 @@ class InterruptionReportStateTests(unittest.TestCase):
             self.assertEqual("failed", report.category)
             self.assertEqual("run_failed", report.last_event)
             self.assertEqual(
-                "The pipeline hit an unexpected internal exception.",
+                "The pipeline failed unexpectedly.",
                 report.cause,
             )
 

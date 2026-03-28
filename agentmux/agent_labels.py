@@ -7,7 +7,6 @@ from pathlib import Path
 from .sessions.state_store import feature_slug_from_dir
 from .shared.models import SESSION_DIR_NAMES
 from .workflow.execution_plan import load_execution_plan
-from .workflow.plan_parser import read_subplan_title
 
 _PLAN_ID_RE = re.compile(r"^plan_(\d+)(?:\.md)?$")
 
@@ -55,15 +54,13 @@ def plan_name_for_subplan(planning_dir: Path, subplan_index: int | str) -> str |
     try:
         execution_plan = load_execution_plan(planning_dir)
     except RuntimeError:
-        execution_plan = None
-    if execution_plan is not None:
-        target = f"plan_{index}.md"
-        for group in execution_plan.groups:
-            for plan in group.plans:
-                if plan.file == target:
-                    return plan.name
-
-    return read_subplan_title(planning_dir / f"plan_{index}.md")
+        return None
+    target = f"plan_{index}.md"
+    for group in execution_plan.groups:
+        for plan in group.plans:
+            if plan.file == target:
+                return plan.name
+    return None
 
 
 def plan_name_for_plan_id(planning_dir: Path, plan_id: str) -> str | None:

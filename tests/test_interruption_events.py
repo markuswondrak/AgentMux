@@ -6,36 +6,29 @@ import agentmux.workflow.interruptions as interruption_events
 
 
 class InterruptionEventCatalogTests(unittest.TestCase):
-    def test_legacy_events_canonicalize_to_shared_event_ids(self) -> None:
+    def test_only_canonical_events_are_recognized(self) -> None:
         self.assertEqual(
             interruption_events.INTERRUPTION_EVENT_CANCELED,
-            interruption_events.canonical_interruption_event("keyboard_interrupt"),
+            interruption_events.canonical_interruption_event("run_canceled"),
         )
         self.assertEqual(
             interruption_events.INTERRUPTION_EVENT_FAILED,
-            interruption_events.canonical_interruption_event("subprocess_error"),
+            interruption_events.canonical_interruption_event("run_failed"),
         )
-        self.assertEqual(
-            interruption_events.INTERRUPTION_EVENT_FAILED,
-            interruption_events.canonical_interruption_event("pipeline_exception"),
-        )
-        self.assertEqual(
-            interruption_events.INTERRUPTION_EVENT_FAILED,
-            interruption_events.canonical_interruption_event("orchestrator_exception"),
-        )
+        self.assertIsNone(interruption_events.canonical_interruption_event("keyboard_interrupt"))
 
     def test_category_and_fallback_cause_are_resolved_from_catalog(self) -> None:
         self.assertEqual(
             interruption_events.INTERRUPTION_CATEGORY_CANCELED,
-            interruption_events.interruption_category_from_event("keyboard_interrupt"),
+            interruption_events.interruption_category_from_event("run_canceled"),
         )
         self.assertEqual(
             interruption_events.INTERRUPTION_CATEGORY_FAILED,
-            interruption_events.interruption_category_from_event("pipeline_exception"),
+            interruption_events.interruption_category_from_event("run_failed"),
         )
         self.assertEqual(
-            "The pipeline hit an unexpected internal exception.",
-            interruption_events.fallback_cause_from_event("pipeline_exception"),
+            "The pipeline failed unexpectedly.",
+            interruption_events.fallback_cause_from_event("run_failed"),
         )
         self.assertEqual(
             "The pipeline stopped unexpectedly.",
@@ -44,8 +37,8 @@ class InterruptionEventCatalogTests(unittest.TestCase):
 
     def test_monitor_labels_and_report_titles_are_shared(self) -> None:
         self.assertEqual(
-            "canceled by user",
-            interruption_events.monitor_label_from_event("keyboard_interrupt"),
+            "run canceled by user",
+            interruption_events.monitor_label_from_event("run_canceled"),
         )
         self.assertEqual(
             "run failed unexpectedly",

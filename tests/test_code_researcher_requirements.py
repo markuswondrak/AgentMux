@@ -105,16 +105,17 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             cfg = {
-                "session_name": "s",
-                "provider": "claude",
-                "architect": {"tier": "max"},
-                "coder": {"provider": "codex", "tier": "max"},
-                "code-researcher": {
-                    "tier": "low",
-                    "args": ["--permission-mode", "acceptEdits"],
+                "defaults": {"session_name": "s", "provider": "claude"},
+                "roles": {
+                    "architect": {"profile": "max"},
+                    "coder": {"provider": "codex", "profile": "max"},
+                    "code-researcher": {
+                        "profile": "low",
+                        "args": ["--permission-mode", "acceptEdits"],
+                    },
                 },
             }
-            cfg_path = tmp_path / "pipeline_config.json"
+            cfg_path = tmp_path / "config.json"
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
             agents = load_explicit_config(cfg_path).agents

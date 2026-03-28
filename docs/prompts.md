@@ -18,7 +18,6 @@ Render model is two-stage:
    - Inject project extension text into `[[placeholder:project_instructions]]`.
 2. Render stage:
    - Resolve `[[placeholder:name]]` values from the active prompt builder context.
-   - Keep temporary compatibility for legacy `{name}` placeholders while migration completes.
 
 Every prompt builder provides `feature_dir` as the session directory and references workflow files with phase subpaths (for example `02_planning/plan.md`, `06_review/review.md`, `state.json`).
 Builders that need project-level context (for example product manager and coder) also provide `project_dir`.
@@ -34,11 +33,7 @@ The prompt loader merges project content into the matching built-in template via
 If a project file does not exist, `[[placeholder:project_instructions]]` resolves to an empty string and behavior stays unchanged.
 
 Project extension files are plain markdown. They do not need template placeholder syntax.
-Curly braces in project content are automatically escaped before legacy formatting runs, so text like `{example}` is preserved literally and cannot trigger placeholder errors.
-
-Compatibility note:
-- Built-in templates have migrated to `[[placeholder:...]]`.
-- The loader still supports legacy `{project_instructions}` replacement for compatibility, but new built-in templates should use `[[placeholder:project_instructions]]`.
+Curly braces in project content stay literal; only `[[placeholder:...]]` markers are rendered.
 
 `agentmux/prompts/context.md` is pipeline-controlled and is not project-extendable.
 
@@ -94,7 +89,7 @@ Coder prompt rendering injects a `Research handoff` block into `agentmux/prompts
 
 Behavior contract:
 
-- Applies to both `build_coder_prompt()` and `build_coder_subplan_prompt()`
+- Applies to `build_coder_subplan_prompt()`
 - Scans topic directories under `03_research/` in sorted (deterministic) order
 - Includes a topic only when both `done` and `summary.md` are present
 - Lists `summary.md` as the primary reference
@@ -132,10 +127,6 @@ Architect output requirements for parallel work include:
 - `Isolation` must be justified in terms of exclusive ownership, not only logical separation
 - A callout for any enabling refactor needed to preserve boundaries, plus explicit technical debt rationale when refactor work is deferred
 
-Compatibility requirement:
-
-- Keep `## Sub-plan <N>: <title>` headers in `plan.md` so legacy split-based workflows and tooling remain operable during migration.
-
 Current split:
 - `build_architect_prompt()` renders planning prompts only
 - `build_change_prompt()` applies the same staged planning artifact contract in replanning mode
@@ -145,8 +136,8 @@ Current split:
   - `02_planning/execution_plan.json` as machine-readable schedule metadata (`version`, ordered `groups`, `group_id`, `mode`, `plans`)
   - new plans must write `groups[].plans[]` entries as `{ "file": "plan_<N>.md", "name": "<sub-plan title>" }`
   - `02_planning/plan_meta.json` with `needs_design`, `needs_docs`, and `doc_files` (empty list when `needs_docs` is `false`)
-  - compatibility behavior where legacy flat `plan.md` parsing is only a fallback when `execution_plan.json` is absent
+  - `execution_plan.json` is required before implementation scheduling starts
 - `build_product_manager_prompt()` renders the PM analysis prompt
-- `build_coder_prompt()` / `build_coder_subplan_prompt()` render coder implementation prompts with completion marker instructions and optional research handoff references
+- `build_coder_subplan_prompt()` renders implementing prompts for numbered `coder_prompt_<N>.txt` dispatch, including completion marker instructions and optional research handoff references
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
-- `build_confirmation_prompt()` renders the confirmation command prompt used in completion
+- `build_confirmation_prompt()` renders the confirmation command prompt used in completion, including optional `commit_message` approval payload support

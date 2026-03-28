@@ -40,7 +40,7 @@ class TmuxPromptReferencesTests(unittest.TestCase):
     def test_tmux_new_session_enables_pane_border_titles(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
-            config_path = Path(td) / "pipeline_config.json"
+            config_path = Path(td) / "config.json"
             feature_dir.mkdir(parents=True, exist_ok=True)
             config_path.write_text("{}", encoding="utf-8")
             agents = {

@@ -218,12 +218,6 @@ def _enforce_monitor_min_width(session_name: str) -> None:
     )
     _log_layout(session_name)
 
-
-def _enforce_monitor_width(session_name: str) -> None:
-    """Backward-compatible alias for monitor width enforcement."""
-    _enforce_monitor_min_width(session_name)
-
-
 def _find_any_hidden_pane(session_name: str) -> str | None:
     for pane_id in _list_window_panes(session_name, "_hidden"):
         if tmux_pane_exists(pane_id):

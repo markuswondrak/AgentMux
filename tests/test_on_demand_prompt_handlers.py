@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -80,13 +81,35 @@ def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
     return ctx, files.state
 
 
+def _write_execution_plan(feature_dir: Path, plans: list[tuple[int, str]], *, mode: str) -> None:
+    planning_dir = feature_dir / "02_planning"
+    planning_dir.mkdir(parents=True, exist_ok=True)
+    (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
+    for index, name in plans:
+        (planning_dir / f"plan_{index}.md").write_text(f"## Sub-plan {index}: {name}\n", encoding="utf-8")
+    (planning_dir / "execution_plan.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "groups": [
+                    {
+                        "group_id": "g1",
+                        "mode": mode,
+                        "plans": [{"file": f"plan_{index}.md", "name": name} for index, name in plans],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 class OnDemandPromptHandlerTests(unittest.TestCase):
-    def test_enter_implementing_builds_coder_prompt_inline(self) -> None:
+    def test_enter_implementing_builds_numbered_coder_prompt_for_single_plan_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = _make_ctx(tmp_path / "feature")
-            ctx.files.plan.parent.mkdir(parents=True, exist_ok=True)
-            ctx.files.plan.write_text("# Plan\n\n1. Implement\n", encoding="utf-8")
+            _write_execution_plan(ctx.files.feature_dir, [(1, "implementation")], mode="serial")
             state = load_state(state_path)
             state["phase"] = "implementing"
             write_state(state_path, state)
@@ -94,9 +117,9 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             run_phase_cycle(load_state(state_path), ctx)
             updated = load_state(state_path)
 
-            self.assertTrue((ctx.files.implementation_dir / "coder_prompt.md").exists())
+            self.assertTrue((ctx.files.implementation_dir / "coder_prompt_1.txt").exists())
             self.assertEqual(
-                [("kill_primary", "coder"), ("send", "coder", "coder_prompt.md", "[coder] implementation")],
+                [("kill_primary", "coder"), ("send", "coder", "coder_prompt_1.txt", "[coder] implementation")],
                 ctx.runtime.calls,
             )
             self.assertEqual(1, updated["implementation_group_total"])
@@ -109,11 +132,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = _make_ctx(tmp_path / "feature")
-            ctx.files.plan.parent.mkdir(parents=True, exist_ok=True)
-            ctx.files.plan.write_text(
-                "# Plan\n\n## Sub-plan 1: A\n\nDo A\n\n## Sub-plan 2: B\n\nDo B\n",
-                encoding="utf-8",
-            )
+            _write_execution_plan(ctx.files.feature_dir, [(1, "A"), (2, "B")], mode="parallel")
             state = load_state(state_path)
             state["phase"] = "implementing"
             write_state(state_path, state)
@@ -139,11 +158,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = _make_ctx(tmp_path / "feature")
-            ctx.files.plan.parent.mkdir(parents=True, exist_ok=True)
-            ctx.files.plan.write_text(
-                "# Plan\n\n## Sub-plan 1: A\n\nDo A\n\n## Sub-plan 2: B\n\nDo B\n",
-                encoding="utf-8",
-            )
+            _write_execution_plan(ctx.files.feature_dir, [(1, "A"), (2, "B")], mode="parallel")
             state = load_state(state_path)
             state["phase"] = "implementing"
             write_state(state_path, state)

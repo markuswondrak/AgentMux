@@ -11,7 +11,6 @@ from agentmux.workflow.prompts import (
     build_architect_prompt,
     build_change_prompt,
     build_code_researcher_prompt,
-    build_coder_prompt,
     build_coder_subplan_prompt,
     build_confirmation_prompt,
     build_designer_prompt,
@@ -64,7 +63,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 prompts_dir,
                 "agents",
                 "coder",
-                "Header\n[[shared:preference-memory]]\n{project_instructions}\nConstraints:\n",
+                "Header\n[[shared:preference-memory]]\n[[placeholder:project_instructions]]\nConstraints:\n",
             )
             self._write_shared_fragment(
                 prompts_dir,
@@ -87,16 +86,19 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 prompts_dir,
                 "agents",
                 "coder",
-                "Start\n[[shared:preference-memory]]\n{project_instructions}\nConstraints:\n",
+                "Start\n[[shared:preference-memory]]\n[[placeholder:project_instructions]]\nConstraints:\n",
             )
             self._write_shared_fragment(
                 prompts_dir,
                 "preference-memory",
-                "Role: {role_name}\n",
+                "Role: [[placeholder:role_name]]\n",
             )
 
             with patch.object(prompts_module, "PROMPTS_DIR", prompts_dir):
-                loaded = prompts_module._load_template("agents", "coder").format_map({"role_name": "coder"})
+                loaded = prompts_module._render_template(
+                    prompts_module._load_template("agents", "coder"),
+                    {"role_name": "coder"},
+                )
 
             self.assertIn("Role: coder", loaded)
 
@@ -116,7 +118,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 (
                     "Feature dir: [[placeholder:feature_dir]]\n"
                     "Project dir: [[placeholder:project_dir]]\n"
-                    "{project_instructions}\n"
+                    "[[placeholder:project_instructions]]\n"
                     "Constraints:\n"
                 ),
             )
@@ -142,7 +144,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 prompts_dir,
                 "agents",
                 "architect",
-                "Top\n[[shared:scope]]\n{project_instructions}\nConstraints:\n",
+                "Top\n[[shared:scope]]\n[[placeholder:project_instructions]]\nConstraints:\n",
             )
             self._write_shared_fragment(
                 prompts_dir,
@@ -156,7 +158,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertIn(f"Scope feature: {feature_dir}", prompt)
             self.assertNotIn("[[placeholder:feature_dir]]", prompt)
 
-    def test_bracketed_placeholders_coexist_with_legacy_format_placeholders(self) -> None:
+    def test_legacy_format_placeholders_are_left_literal(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
@@ -181,7 +183,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 prompt = build_architect_prompt(files)
 
             self.assertIn(f"Feature bracketed: {feature_dir}", prompt)
-            self.assertIn(f"Project legacy: {project_dir}", prompt)
+            self.assertIn("Project legacy: {project_dir}", prompt)
             self.assertNotIn("[[placeholder:feature_dir]]", prompt)
 
     def test_project_prompt_curly_braces_remain_literal_with_bracketed_placeholders(self) -> None:
@@ -199,7 +201,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 "architect",
                 (
                     "Feature dir: [[placeholder:feature_dir]]\n"
-                    "{project_instructions}\n"
+                    "[[placeholder:project_instructions]]\n"
                     "Constraints:\n"
                 ),
             )
@@ -223,12 +225,12 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 prompts_dir,
                 "agents",
                 "coder",
-                "Start\n[[shared:preference-memory]]\n{project_instructions}\nConstraints:\n",
+                "Start\n[[shared:preference-memory]]\n[[placeholder:project_instructions]]\nConstraints:\n",
             )
             self._write_shared_fragment(
                 prompts_dir,
                 "preference-memory",
-                "Shared: {shared_value}\n",
+                "Shared: [[placeholder:shared_value]]\n",
             )
             self._write_project_prompt(
                 project_dir,
@@ -238,11 +240,14 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
 
             with patch.object(prompts_module, "PROMPTS_DIR", prompts_dir):
-                loaded = prompts_module._load_template(
-                    "agents",
-                    "coder",
-                    project_dir=project_dir,
-                ).format_map({"shared_value": "ok"})
+                loaded = prompts_module._render_template(
+                    prompts_module._load_template(
+                        "agents",
+                        "coder",
+                        project_dir=project_dir,
+                    ),
+                    {"shared_value": "ok"},
+                )
 
             self.assertIn("Shared: ok", loaded)
             self.assertIn("Project braces stay literal: {do_not_expand}", loaded)
@@ -285,13 +290,12 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 ("agents", "architect", "EXT-ARCHITECT", lambda runtime: build_architect_prompt(runtime)),
                 ("agents", "product-manager", "EXT-PM", lambda runtime: build_product_manager_prompt(runtime)),
                 ("agents", "reviewer", "EXT-REVIEWER", lambda runtime: build_reviewer_prompt(runtime)),
-                ("agents", "coder", "EXT-CODER", lambda runtime: build_coder_prompt(runtime)),
                 ("agents", "designer", "EXT-DESIGNER", lambda runtime: build_designer_prompt(runtime)),
                 (
                     "agents",
                     "coder",
                     "EXT-CODER",
-                    lambda runtime: build_coder_subplan_prompt(runtime, feature_dir / "02_planning" / "subplan_1.md", 1),
+                    lambda runtime: build_coder_subplan_prompt(runtime, feature_dir / "02_planning" / "plan_1.md", 1),
                 ),
                 (
                     "agents",
@@ -341,7 +345,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             injected = "Literal braces: {something} and orphan close brace } and open brace {\n"
             self._write_project_prompt(project_dir, "agents", "coder", injected)
 
-            prompt = build_coder_prompt(files)
+            prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
 
             self.assertIn(injected, prompt)
             self.assertNotIn("{project_instructions}", prompt)
@@ -356,7 +360,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
 
             architect_prompt = build_architect_prompt(files)
             change_prompt = build_change_prompt(files)
-            coder_prompt = build_coder_prompt(files)
+            coder_prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
 
             planning_contract_line = (
                 "Documentation updates must be captured as explicit plan and task items in "
@@ -373,7 +377,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertNotIn("07_docs/docs_done", architect_prompt)
             self.assertNotIn("07_docs/docs_done", change_prompt)
 
-    def test_coder_prompt_includes_completed_research_references(self) -> None:
+    def test_coder_subplan_prompt_includes_completed_research_references(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
@@ -385,7 +389,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self._create_research_topic(feature_dir, "code-auth-module", done=True, include_detail=True)
             self._create_research_topic(feature_dir, "code-incomplete-topic", done=False, include_detail=True)
 
-            prompt = build_coder_prompt(files)
+            prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
 
             self.assertIn("Research handoff (read before new exploration):", prompt)
             self.assertIn("03_research/code-auth-module/summary.md", prompt)
@@ -427,12 +431,9 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
 
             self._create_research_topic(feature_dir, "code-incomplete-topic", done=False, include_detail=True)
 
-            prompt = build_coder_prompt(files)
             subplan_prompt = build_coder_subplan_prompt(files, feature_dir / "02_planning" / "plan_1.md", 1)
 
-            self.assertNotIn("Research handoff (read before new exploration):", prompt)
             self.assertNotIn("Research handoff (read before new exploration):", subplan_prompt)
-            self.assertNotIn("03_research/code-incomplete-topic/summary.md", prompt)
             self.assertNotIn("03_research/code-incomplete-topic/summary.md", subplan_prompt)
 
     def test_preference_capture_prompts_render_project_and_proposal_paths(self) -> None:
@@ -600,7 +601,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 prompt = build_confirmation_prompt(files)
 
             self.assertIn(status_output.strip(), prompt)
-            self.assertIn('{"action": "approve", "commit_message": "...", "exclude_files": ["relative/path"]}', prompt)
+            self.assertIn('{"action": "approve", "exclude_files": ["relative/path"]}', prompt)
             self.assertIn("exclude_files` is optional and defaults to `[]`", prompt)
             self.assertIn("Ask for exclusions only. Do not ask the user to enumerate all commit files.", prompt)
             self.assertIn("Approved proposals are later applied by the orchestrator", prompt)

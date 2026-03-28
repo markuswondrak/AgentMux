@@ -12,7 +12,7 @@ from ..runtime import ParallelPromptSpec
 from ..sessions.state_store import now_iso, write_state
 from .execution_plan import load_execution_plan
 from .handlers import load_plan_meta, reset_markers, send_to_role, write_phase
-from .plan_parser import coder_label_for_subplan, split_plan_into_subplans
+from .plan_parser import coder_label_for_subplan
 from .preference_memory import (
     apply_preference_proposal,
     load_preference_proposal,
@@ -22,7 +22,6 @@ from .prompts import (
     build_architect_prompt,
     build_change_prompt,
     build_code_researcher_prompt,
-    build_coder_prompt,
     build_coder_subplan_prompt,
     build_confirmation_prompt,
     build_designer_prompt,
@@ -125,36 +124,9 @@ def _plan_index_from_name(plan_name: str) -> int:
 
 def _build_implementation_schedule(
     *,
-    plan_path: Path,
     planning_dir: Path,
 ) -> list[dict[str, object]]:
     execution_plan = load_execution_plan(planning_dir)
-    if execution_plan is None:
-        subplan_paths = split_plan_into_subplans(plan_path, planning_dir)
-        if len(subplan_paths) == 1:
-            return [
-                {
-                    "group_id": "group_1",
-                    "mode": "serial",
-                    "plan_paths": [plan_path],
-                    "plan_ids": ["plan_1"],
-                    "plan_names": [None],
-                    "marker_indexes": [1],
-                    "legacy_single_prompt": True,
-                }
-            ]
-        marker_indexes = list(range(1, len(subplan_paths) + 1))
-        return [
-            {
-                "group_id": "group_1",
-                "mode": "parallel",
-                "plan_paths": subplan_paths,
-                "plan_ids": [f"plan_{index}" for index in marker_indexes],
-                "plan_names": [coder_label_for_subplan(planning_dir, index) for index in marker_indexes],
-                "marker_indexes": marker_indexes,
-                "legacy_single_prompt": False,
-            }
-        ]
 
     schedule: list[dict[str, object]] = []
     all_indexes: list[int] = []
@@ -174,7 +146,6 @@ def _build_implementation_schedule(
                 "plan_ids": [Path(plan.file).stem for plan in group.plans],
                 "plan_names": [plan.name or coder_label_for_subplan(planning_dir, index) for plan, index in zip(group.plans, group_indexes)],
                 "marker_indexes": group_indexes,
-                "legacy_single_prompt": False,
             }
         )
 
@@ -537,7 +508,6 @@ class ImplementingPhase(Phase):
     @staticmethod
     def _schedule(ctx: PipelineContext) -> list[dict[str, object]]:
         return _build_implementation_schedule(
-            plan_path=ctx.files.plan,
             planning_dir=ctx.files.planning_dir,
         )
 
@@ -574,20 +544,6 @@ class ImplementingPhase(Phase):
             if not (ctx.files.implementation_dir / f"done_{index}").exists()
         ]
         if not pending:
-            return
-
-        if bool(group["legacy_single_prompt"]):
-            prompt_file = write_prompt_file(
-                ctx.files.feature_dir,
-                ctx.files.relative_path(ctx.files.implementation_dir / "coder_prompt.md"),
-                build_coder_prompt(ctx.files),
-            )
-            send_to_role(
-                ctx,
-                "coder",
-                prompt_file,
-                display_label=role_display_label(ctx.files.feature_dir, "coder"),
-            )
             return
 
         prompt_specs: list[ParallelPromptSpec] = []
@@ -834,6 +790,13 @@ class CompletingPhase(Phase):
         approval_path = ctx.files.completion_dir / "approval.json"
         if approval_path.exists():
             approval_path.unlink()
+        if ctx.workflow_settings.completion.skip_final_approval:
+            approval_path.parent.mkdir(parents=True, exist_ok=True)
+            approval_path.write_text(
+                json.dumps({"action": "approve", "exclude_files": []}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            return
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
             ctx.files.relative_path(ctx.files.completion_dir / "confirmation_prompt.md"),
@@ -856,6 +819,12 @@ class CompletingPhase(Phase):
     def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
         _ = state
         approval_path = ctx.files.completion_dir / "approval.json"
+        if ctx.workflow_settings.completion.skip_final_approval and approval_path.exists():
+            raw = approval_path.read_text(encoding="utf-8").strip()
+            if raw:
+                payload = json.loads(raw)
+                if payload.get("action") == "approve":
+                    return "approval_received"
         if phase_input_changed(ctx, "approval", file_signature(approval_path)):
             raw = approval_path.read_text(encoding="utf-8").strip()
             if not raw:
@@ -878,12 +847,18 @@ class CompletingPhase(Phase):
                 for path in payload.get("exclude_files", [])
                 if str(path).strip()
             }
+            issue_number = str(state.get("issue_number")) if state.get("issue_number") is not None else None
+            commit_message = COMPLETION_SERVICE.resolve_commit_message(
+                payload_commit_message=payload.get("commit_message"),
+                files=ctx.files,
+                issue_number=issue_number,
+            )
             result = COMPLETION_SERVICE.finalize_approval(
                 files=ctx.files,
                 github_config=ctx.github_config,
                 gh_available=bool(state.get("gh_available")),
-                issue_number=str(state.get("issue_number")) if state.get("issue_number") is not None else None,
-                commit_message=str(payload.get("commit_message", "")).strip(),
+                issue_number=issue_number,
+                commit_message=commit_message,
                 changed_paths=[path for path in changed_paths if path not in exclude_files],
             )
             if result.commit_hash is not None:

@@ -96,11 +96,7 @@ def load_runtime_registry(runtime_state_path: Path) -> dict[str, str | None]:
 def get_role_states(session_name: str, runtime_state_path: Path) -> dict[str, str]:
     registry = load_runtime_registry(runtime_state_path)
     if not registry:
-        legacy_path = runtime_state_path.parent / "panes.json"
-        try:
-            registry = json.loads(legacy_path.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
+        return {}
 
     try:
         result_all = subprocess.run(

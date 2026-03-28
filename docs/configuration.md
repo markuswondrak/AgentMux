@@ -4,7 +4,7 @@
 
 ## Overview
 
-AgentMux now resolves agent configuration from layered config files instead of splitting user-facing settings across `pipeline_config.json` and hard-coded provider data in Python.
+AgentMux resolves agent configuration from layered config files only.
 
 Resolution order:
 
@@ -12,8 +12,6 @@ Resolution order:
 2. User config in `~/.config/agentmux/config.yaml`
 3. Project config in `.agentmux/config.yaml` (or `.yml` / `.json`)
 4. Optional `--config <path>` override
-
-Legacy `pipeline_config.json` is still supported as a project config and as an explicit `--config` input.
 
 ## Project Initialization
 
@@ -45,6 +43,8 @@ defaults:
   provider: claude
   profile: standard
   max_review_iterations: 3
+  completion:
+    skip_final_approval: false
 
 github:
   base_branch: main
@@ -67,6 +67,7 @@ roles:
 - `defaults.provider` — default provider/launcher name for roles that do not override it
 - `defaults.profile` — default profile name, usually `max`, `standard`, or `low`
 - `defaults.max_review_iterations` — caps automatic reviewer→coder fix loops
+- `defaults.completion.skip_final_approval` — when `true`, skips reviewer confirmation in `completing` and auto-prepares approval (default: `false`)
 - `github.base_branch` — default PR base branch (default: `main`)
 - `github.draft` — whether PRs created at completion are draft PRs by default (default: `true`)
 - `github.branch_prefix` — prefix for completion branches created before opening a PR (default: `feature/`)
@@ -82,6 +83,13 @@ Built-in and user-level configs may additionally define:
 - `launchers.<name>.role_args.<role>` — default CLI args for a role
 - `profiles.<provider>.<profile>.model` — concrete model name
 - `profiles.<provider>.<profile>.args` — optional extra args appended after launcher role args
+
+## Completion settings boundary
+
+There is one runtime completion-settings owner: `workflow_settings.completion`.
+
+- Config input maps directly into `defaults.completion.skip_final_approval`
+- Runtime reads `workflow_settings.completion.skip_final_approval`
 
 ## Project vs user scope
 
@@ -115,25 +123,15 @@ roles:
     profile: low
 ```
 
-## Legacy compatibility
+## Strict schema
 
-The old schema is still accepted:
+Unsupported legacy forms now fail fast:
 
-```json
-{
-  "session_name": "multi-agent-mvp",
-  "provider": "claude",
-  "architect": { "tier": "max" },
-  "coder": { "provider": "codex", "tier": "standard" }
-}
-```
-
-Compatibility rules:
-
-- top-level `provider` maps to `defaults.provider`
-- top-level `session_name` maps to `defaults.session_name`
-- top-level `max_review_iterations` maps to `defaults.max_review_iterations`
-- per-role `tier` is accepted as an alias for `profile`
+- top-level role config outside `roles`
+- top-level defaults such as `session_name`, `provider`, or `max_review_iterations`
+- `defaults.skip_final_approval`
+- `defaults.completion.require_final_approval`
+- role `tier`
 
 ## Built-in profiles
 
