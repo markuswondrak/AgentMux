@@ -62,6 +62,8 @@ agentmux --resume
 
 ```
 
+For a detailed walkthrough, see the [Getting Started guide](docs/getting-started.md).
+
 If `gh` is authenticated, AgentMux can bootstrap from issue content and open a pull request when the pipeline completes.
 
 ## Configuration
@@ -115,6 +117,7 @@ Profiles (`max`, `standard`, `low`) map to provider-specific models and launch a
 
 ## Documentation
 
+- [`docs/getting-started.md`](docs/getting-started.md) — installation, setup, and first pipeline run
 - [`docs/configuration.md`](docs/configuration.md) — layered launcher/profile configuration
 - [`docs/file-protocol.md`](docs/file-protocol.md) — shared file protocol between agents and orchestrator
 - [`docs/monitor.md`](docs/monitor.md) — monitor command, state view, and terminal rendering
