@@ -9,7 +9,7 @@ from pathlib import Path
 from ..agent_labels import format_agent_label, role_display_label
 from ..integrations.completion import CompletionService
 from ..runtime import ParallelPromptSpec
-from ..sessions.state_store import now_iso, write_state
+from ..sessions.state_store import feature_slug_from_dir, now_iso, write_state
 from .execution_plan import load_execution_plan
 from .handlers import load_plan_meta, reset_markers, send_to_role, write_phase
 from .plan_parser import coder_label_for_subplan
@@ -861,6 +861,24 @@ class CompletingPhase(Phase):
                 commit_message=commit_message,
                 changed_paths=[path for path in changed_paths if path not in exclude_files],
             )
+            feature_name = feature_slug_from_dir(ctx.files.feature_dir)
+            branch_name = f"{ctx.github_config.branch_prefix}{feature_name}"
+            if result.commit_hash is not None:
+                summary_path = ctx.files.project_dir / ".agentmux" / ".last_completion.json"
+                summary_path.parent.mkdir(parents=True, exist_ok=True)
+                summary_path.write_text(
+                    json.dumps(
+                        {
+                            "feature_name": feature_name,
+                            "commit_hash": result.commit_hash,
+                            "pr_url": result.pr_url,
+                            "branch_name": branch_name,
+                        },
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
             if result.commit_hash is not None:
                 print("Completion approved and commit created.")
                 print(f"Commit hash: {result.commit_hash}")

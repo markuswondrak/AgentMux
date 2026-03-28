@@ -12,12 +12,12 @@ import yaml
 
 import agentmux.pipeline as pipeline
 from agentmux.configuration import load_builtin_catalog
+from agentmux.terminal_ui.screens import render_logo
 from agentmux.pipeline.init_command import (
     detect_clis,
     generate_config,
     prompt_role_config,
     prompt_stubs,
-    render_logo,
     run_init,
     validate_config,
 )

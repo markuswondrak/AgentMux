@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+import time
 from pathlib import Path
+from typing import Any
 
 from ..configuration import load_layered_config
 from ..integrations.github import GitHubBootstrapper, create_branch
@@ -14,6 +17,7 @@ from ..sessions import PreparedSession, PromptInput, SessionCreateRequest, Sessi
 from ..sessions.state_store import feature_slug_from_dir, load_runtime_files, load_state, write_state
 from ..shared.models import WorkflowSettings
 from ..terminal_ui.console import ConsoleUI
+from ..terminal_ui.screens import goodbye_canceled, goodbye_error, goodbye_success, welcome_screen
 from ..workflow.interruptions import InterruptionService
 from ..workflow.orchestrator import PipelineOrchestrator
 
@@ -21,6 +25,55 @@ from ..workflow.orchestrator import PipelineOrchestrator
 def _derive_session_name(feature_dir: Path) -> str:
     """Derive a unique tmux session name from the feature directory."""
     return f"agentmux-{feature_dir.name}"
+
+
+def _coalesce_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.split()).strip()
+
+
+def _read_initial_request_line(requirements_path: Path) -> str:
+    try:
+        lines = requirements_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+
+    in_initial_request = False
+    for line in lines:
+        stripped = line.strip()
+        if not in_initial_request:
+            if stripped == "## Initial Request":
+                in_initial_request = True
+            continue
+        if stripped.startswith("## "):
+            break
+        if stripped:
+            return stripped
+    return ""
+
+
+def _read_last_completion(project_dir: Path) -> dict[str, str | None]:
+    summary_path = project_dir / ".agentmux" / ".last_completion.json"
+    if not summary_path.exists():
+        return {}
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+
+    feature_name = _coalesce_text(payload.get("feature_name"))
+    commit_hash = _coalesce_text(payload.get("commit_hash"))
+    branch_name = _coalesce_text(payload.get("branch_name"))
+    pr_url_raw = _coalesce_text(payload.get("pr_url"))
+    return {
+        "feature_name": feature_name or None,
+        "commit_hash": commit_hash or None,
+        "pr_url": pr_url_raw or None,
+        "branch_name": branch_name or None,
+    }
 
 
 class PipelineApplication:
@@ -165,9 +218,18 @@ class PipelineApplication:
             )
         )
 
-    def _post_attach_result(self, *, files, feature_dir: Path) -> int:
+    def _post_attach_result(self, *, files, feature_dir: Path, elapsed_seconds: float = 0.0) -> int:
         if not files.state.exists():
             if not feature_dir.exists():
+                completion = _read_last_completion(self.project_dir)
+                goodbye_success(
+                    completion.get("feature_name") or feature_slug_from_dir(feature_dir),
+                    completion.get("commit_hash") or "",
+                    completion.get("pr_url"),
+                    completion.get("branch_name") or "",
+                    elapsed_seconds,
+                    console=self.ui,
+                )
                 return 0
             raise SystemExit(
                 f"Session state missing after tmux exited: expected {files.state}. "
@@ -184,6 +246,12 @@ class PipelineApplication:
                     files=files,
                 )
                 self.interruptions.persist(files, report)
+            feature_name = feature_slug_from_dir(feature_dir)
+            if report.category == "canceled":
+                goodbye_canceled(feature_name, str(feature_dir), report.resume_command, console=self.ui)
+                self.ui.print(self.interruptions.render(report))
+                return 130
+            goodbye_error(feature_name, str(feature_dir), report.cause, console=self.ui)
             self.ui.print(self.interruptions.render(report))
             return 130 if report.category == "canceled" else 1
         return 0
@@ -192,6 +260,7 @@ class PipelineApplication:
         files = prepared.files
         feature_dir = prepared.feature_dir
         initial_role = "product-manager" if prepared.product_manager and "product-manager" in agents else "architect"
+        start_time = time.time()
 
         try:
             self.runtime_factory.create(
@@ -202,10 +271,18 @@ class PipelineApplication:
                 initial_role=initial_role,
             )
             self._start_background_orchestrator(feature_dir, args.keep_session, prepared.product_manager)
-            self.ui.print(f"Feature directory: {feature_dir}")
-            self.ui.print(f"tmux session: {session_name}")
+            feature_description = _read_initial_request_line(files.requirements)
+            welcome_screen(
+                feature_description or feature_slug_from_dir(feature_dir),
+                session_name,
+                console=self.ui,
+            )
             subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
-            return self._post_attach_result(files=files, feature_dir=feature_dir)
+            return self._post_attach_result(
+                files=files,
+                feature_dir=feature_dir,
+                elapsed_seconds=time.time() - start_time,
+            )
         except KeyboardInterrupt:
             report = self.interruptions.build_canceled(
                 feature_dir,
@@ -213,6 +290,12 @@ class PipelineApplication:
                 files=files,
             )
             self.interruptions.persist(files, report)
+            goodbye_canceled(
+                feature_slug_from_dir(feature_dir),
+                str(feature_dir),
+                report.resume_command,
+                console=self.ui,
+            )
             self.ui.print(self.interruptions.render(report))
             return 130
         except subprocess.CalledProcessError as exc:
@@ -230,6 +313,12 @@ class PipelineApplication:
                     files=files,
                 )
             self.interruptions.persist(files, report)
+            feature_name = feature_slug_from_dir(feature_dir)
+            if report.category == "canceled":
+                goodbye_canceled(feature_name, str(feature_dir), report.resume_command, console=self.ui)
+                self.ui.print(self.interruptions.render(report))
+                return 130
+            goodbye_error(feature_name, str(feature_dir), report.cause, console=self.ui)
             self.ui.print(self.interruptions.render(report))
             return 130 if report.category == "canceled" else 1
         except Exception as exc:
@@ -242,6 +331,12 @@ class PipelineApplication:
                 files=files,
             )
             self.interruptions.persist(files, report)
+            goodbye_error(
+                feature_slug_from_dir(feature_dir),
+                str(feature_dir),
+                report.cause,
+                console=self.ui,
+            )
             self.ui.print(self.interruptions.render(report))
             return 1
 

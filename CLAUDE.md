@@ -117,6 +117,7 @@ agentmux/monitor/__init__.py        — monitor command entrypoint
 agentmux/monitor/state_reader.py    — monitor state/log aggregation
 agentmux/monitor/render.py          — ANSI rendering for the control pane
 agentmux/terminal_ui/console.py     — interactive terminal session selection
+agentmux/terminal_ui/screens.py     — welcome/goodbye terminal screens and shared logo
 agentmux/terminal_ui/layout.py      — shared terminal layout constants
 
 agentmux/integrations/github.py     — GitHub issue bootstrap and PR creation

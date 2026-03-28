@@ -11,6 +11,7 @@ import yaml
 
 from ..configuration import load_builtin_catalog, load_layered_config
 from ..integrations.mcp import McpServerSpec, ensure_mcp_config
+from ..terminal_ui.screens import render_logo
 
 try:
     import questionary
@@ -176,37 +177,6 @@ def _claude_md_content(project_dir: Path) -> str:
 
 def _stub_path(project_dir: Path, role: str) -> Path:
     return project_dir / ".agentmux" / "prompts" / "agents" / f"{role}.md"
-
-
-def render_logo(console: Any | None = None) -> None:
-    output = _console(console)
-    output.print("[blue]╭──────────────────────────────────────────────╮[/blue]")
-    output.print("[blue]│[/blue]   [bold cyan]█████╗  ██████╗ ███████╗███╗   ██╗████████╗[/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   [/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   [/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold cyan][blue]│[/blue]")
-    output.print("[blue]├──────────────────────────────┬───────────────┤[/blue]")
-    output.print(
-        "[blue]│[/blue] [bold magenta]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold magenta][blue]│[/blue]   [dim][ ]──┐[/dim]      [blue]│[/blue]"
-    )
-    output.print(
-        "[blue]│[/blue] [bold magenta]████╗ ████║██║   ██║╚██╗██╔╝ [/bold magenta][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
-    )
-    output.print(
-        "[blue]│[/blue] [bold magenta]██╔████╔██║██║   ██║ ╚███╔╝  [/bold magenta][blue]│[/blue] [dim]──[ ]──◆──[ ] [/dim][blue]│[/blue]"
-    )
-    output.print(
-        "[blue]│[/blue] [bold magenta]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold magenta][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
-    )
-    output.print(
-        "[blue]│[/blue] [bold magenta]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold magenta][blue]│[/blue]   [dim][ ]──┘[/dim]      [blue]│[/blue]"
-    )
-    output.print(
-        "[blue]│[/blue] [bold magenta]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold magenta][blue]│[/blue]               [blue]│[/blue]"
-    )
-    output.print("[blue]╰──────────────────────────────┴───────────────╯[/blue]")
 
 
 def detect_clis() -> dict[str, bool]:

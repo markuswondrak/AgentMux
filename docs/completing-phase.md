@@ -36,7 +36,20 @@ Documentation updates are expected to be delivered during implementation and ver
 
 7. **Branch + PR creation (best effort)** — If startup state indicates GitHub is available (`gh_available: true`), `CompletionService` creates a branch (`<github.branch_prefix><feature-slug>`), pushes it, and runs `gh pr create` against `github.base_branch`. PRs default to draft (`github.draft: true`). The PR body is assembled from `requirements.md`, `02_planning/plan.md`, and `06_review/review.md`, and includes `Closes #<N>` when the run started with `--issue`.
 
-8. **Cleanup only on success** — The feature directory is deleted only if the commit succeeds. If the commit fails, the feature directory is preserved so the user can investigate and retry. GitHub branch/PR failures do not roll back the local commit.
+8. **Completion summary artifact is written before cleanup** — On successful completion (when a commit hash exists), completion writes `<project_dir>/.agentmux/.last_completion.json` before removing the feature directory. The launcher reads this artifact after tmux exits to render the final goodbye screen in the original terminal.
+   - JSON schema:
+     ```json
+     {
+       "feature_name": "my-feature",
+       "commit_hash": "abc1234",
+       "pr_url": "https://github.com/org/repo/pull/42",
+       "branch_name": "feature/my-feature"
+     }
+     ```
+   - `pr_url` may be `null` when no PR is created.
+   - The artifact is skipped when completion does not produce a commit hash.
+
+9. **Cleanup only on success** — The feature directory is deleted only if the commit succeeds. If the commit fails, the feature directory is preserved so the user can investigate and retry. GitHub branch/PR failures do not roll back the local commit.
 
 Because reviewer-approved preferences are applied before changed-file collection, resulting edits to `.agentmux/prompts/agents/<role>.md` are included in the final changed-file set unless excluded.
 
