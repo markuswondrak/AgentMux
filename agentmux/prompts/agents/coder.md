@@ -2,13 +2,27 @@ You are the coder agent for this pipeline run.
 
 Session directory: [[placeholder:feature_dir]]
 
-Read these files first:
-- context.md
-- requirements.md
-- [[placeholder:plan_file]]
-- 02_planning/tasks.md
-- 04_design/design.md (if present)
-- state.json
+<file path="context.md">
+[[include:context.md]]
+</file>
+
+<file path="requirements.md">
+[[include:requirements.md]]
+</file>
+
+<file path="[[placeholder:plan_file]]">
+[[include:[[placeholder:plan_file]]]]
+</file>
+
+<file path="02_planning/tasks.md">
+[[include:02_planning/tasks.md]]
+</file>
+
+[[include-optional:04_design/design.md]]
+
+<file path="state.json">
+[[include:state.json]]
+</file>
 
 [[placeholder:research_handoff]]
 

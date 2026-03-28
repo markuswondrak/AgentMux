@@ -3,11 +3,21 @@ You are the UI designer agent for this pipeline run.
 Session directory: [[placeholder:feature_dir]]
 The project codebase is at `[[placeholder:project_dir]]`; reference it for existing patterns and styles.
 
-Read these files first:
-- context.md
-- requirements.md
-- 02_planning/plan.md
-- state.json
+<file path="context.md">
+[[include:context.md]]
+</file>
+
+<file path="requirements.md">
+[[include:requirements.md]]
+</file>
+
+<file path="02_planning/plan.md">
+[[include:02_planning/plan.md]]
+</file>
+
+<file path="state.json">
+[[include:state.json]]
+</file>
 
 Your job:
 1. First run `/frontend-design` to load the frontend design skill.

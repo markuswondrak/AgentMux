@@ -9,6 +9,8 @@ from ..shared.models import RuntimeFiles
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _SHARED_FRAGMENT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
 _VALUE_PLACEHOLDER_PATTERN = re.compile(r"\[\[placeholder:([a-z0-9][a-z0-9_-]*)\]\]")
+_SESSION_INCLUDE_PATTERN = re.compile(r"\[\[include:([^\]]+)\]\]")
+_SESSION_INCLUDE_OPTIONAL_PATTERN = re.compile(r"\[\[include-optional:([^\]]+)\]\]")
 _MAX_SHARED_FRAGMENT_EXPANSION_DEPTH = 8
 _PROJECT_INSTRUCTIONS_PLACEHOLDER = "[[placeholder:project_instructions]]"
 
@@ -85,6 +87,27 @@ def _render_template(template: str, values: dict[str, object]) -> str:
     return _VALUE_PLACEHOLDER_PATTERN.sub(_replace, template)
 
 
+def _expand_session_includes(template: str, feature_dir: Path) -> str:
+    def _resolve_path(raw_path: str) -> Path:
+        include_path = raw_path.strip()
+        return feature_dir / include_path
+
+    def _replace_optional(match: re.Match[str]) -> str:
+        path = _resolve_path(match.group(1))
+        if not path.is_file():
+            return ""
+        return path.read_text(encoding="utf-8")
+
+    def _replace_required(match: re.Match[str]) -> str:
+        path = _resolve_path(match.group(1))
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        return path.read_text(encoding="utf-8")
+
+    expanded = _SESSION_INCLUDE_OPTIONAL_PATTERN.sub(_replace_optional, template)
+    return _SESSION_INCLUDE_PATTERN.sub(_replace_required, expanded)
+
+
 def write_prompt_file(feature_dir: Path, name: str, content: str) -> Path:
     prompt_path = feature_dir / name
     prompt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -118,7 +141,7 @@ def _build_coder_research_handoff(files: RuntimeFiles) -> str:
 
 
 def build_architect_prompt(files: RuntimeFiles) -> str:
-    return _render_template(
+    rendered = _render_template(
         _load_template(
         "agents",
         "architect",
@@ -128,10 +151,11 @@ def build_architect_prompt(files: RuntimeFiles) -> str:
         "project_dir": files.project_dir,
         "architect_preference_proposal_file": files.relative_path(files.architect_preference_proposal),
     })
+    return _expand_session_includes(rendered, files.feature_dir)
 
 
 def build_product_manager_prompt(files: RuntimeFiles) -> str:
-    return _render_template(
+    rendered = _render_template(
         _load_template(
         "agents",
         "product-manager",
@@ -141,17 +165,19 @@ def build_product_manager_prompt(files: RuntimeFiles) -> str:
         "project_dir": files.project_dir,
         "pm_preference_proposal_file": files.relative_path(files.pm_preference_proposal),
     })
+    return _expand_session_includes(rendered, files.feature_dir)
 
 
 def build_reviewer_prompt(files: RuntimeFiles, is_review: bool = False) -> str:
     if is_review:
-        return _render_template(
+        rendered = _render_template(
             _load_template(
             "commands",
             "review",
             project_dir=files.project_dir,
         ), {"feature_dir": files.feature_dir})
-    return _render_template(
+        return _expand_session_includes(rendered, files.feature_dir)
+    rendered = _render_template(
         _load_template(
         "agents",
         "reviewer",
@@ -161,6 +187,7 @@ def build_reviewer_prompt(files: RuntimeFiles, is_review: bool = False) -> str:
         "project_dir": files.project_dir,
         "reviewer_preference_proposal_file": files.relative_path(files.reviewer_preference_proposal),
     })
+    return _expand_session_includes(rendered, files.feature_dir)
 
 
 def build_designer_prompt(files: RuntimeFiles) -> str:
@@ -172,7 +199,7 @@ def build_designer_prompt(files: RuntimeFiles) -> str:
         "- Do not update state.json from the designer step.",
         "- `design.md` is the completion signal for this phase.",
     ])
-    return _render_template(
+    rendered = _render_template(
         _load_template(
         "agents",
         "designer",
@@ -183,6 +210,7 @@ def build_designer_prompt(files: RuntimeFiles) -> str:
         "completion_instruction": completion_instruction,
         "completion_constraints": completion_constraints,
     })
+    return _expand_session_includes(rendered, files.feature_dir)
 
 
 def build_coder_subplan_prompt(
@@ -201,7 +229,7 @@ def build_coder_subplan_prompt(
         "- Do not update state.json in parallel coder mode.",
         "- Do not write anything to the marker file; create it as an empty file.",
     ])
-    return _render_template(
+    rendered = _render_template(
         _load_template(
         "agents",
         "coder",
@@ -214,10 +242,11 @@ def build_coder_subplan_prompt(
         "completion_instruction": completion_instruction,
         "completion_constraints": completion_constraints,
     })
+    return _expand_session_includes(rendered, files.feature_dir)
 
 
 def build_fix_prompt(files: RuntimeFiles) -> str:
-    return _render_template(
+    rendered = _render_template(
         _load_template(
         "commands",
         "fix",
@@ -226,6 +255,7 @@ def build_fix_prompt(files: RuntimeFiles) -> str:
         "feature_dir": files.feature_dir,
         "project_dir": files.project_dir,
     })
+    return _expand_session_includes(rendered, files.feature_dir)
 
 
 def build_confirmation_prompt(files: RuntimeFiles) -> str:
@@ -243,7 +273,7 @@ def build_confirmation_prompt(files: RuntimeFiles) -> str:
         stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
         changed_files = f"{_CHANGED_FILES_FALLBACK}\nError: {stderr}"
 
-    prompt = _render_template(
+    rendered = _render_template(
         _load_template(
         "commands",
         "confirmation",
@@ -254,11 +284,12 @@ def build_confirmation_prompt(files: RuntimeFiles) -> str:
         "changed_files": changed_files,
         "reviewer_preference_proposal_file": files.relative_path(files.reviewer_preference_proposal),
     })
+    prompt = _expand_session_includes(rendered, files.feature_dir)
     return _append_confirmation_commit_message_contract(prompt)
 
 
 def build_code_researcher_prompt(topic: str, files: RuntimeFiles) -> str:
-    return _render_template(
+    rendered = _render_template(
         _load_template(
         "agents",
         "code-researcher",
@@ -268,10 +299,11 @@ def build_code_researcher_prompt(topic: str, files: RuntimeFiles) -> str:
         "project_dir": files.project_dir,
         "topic": topic,
     })
+    return _expand_session_includes(rendered, files.feature_dir)
 
 
 def build_web_researcher_prompt(topic: str, files: RuntimeFiles) -> str:
-    return _render_template(
+    rendered = _render_template(
         _load_template(
         "agents",
         "web-researcher",
@@ -281,6 +313,7 @@ def build_web_researcher_prompt(topic: str, files: RuntimeFiles) -> str:
         "project_dir": files.project_dir,
         "topic": topic,
     })
+    return _expand_session_includes(rendered, files.feature_dir)
 
 
 def build_initial_prompts(files: RuntimeFiles) -> dict[str, Path]:
@@ -295,9 +328,10 @@ def build_initial_prompts(files: RuntimeFiles) -> dict[str, Path]:
 
 
 def build_change_prompt(files: RuntimeFiles) -> str:
-    return _render_template(
+    rendered = _render_template(
         _load_template(
         "commands",
         "change",
         project_dir=files.project_dir,
     ), {"feature_dir": files.feature_dir})
+    return _expand_session_includes(rendered, files.feature_dir)

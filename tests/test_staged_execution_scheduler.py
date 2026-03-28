@@ -63,6 +63,14 @@ def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
     project_dir = feature_dir.parent / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
     files = create_feature_files(project_dir, feature_dir, "staged execution", "session-x")
+    files.plan.parent.mkdir(parents=True, exist_ok=True)
+    files.plan.write_text("# Plan\n", encoding="utf-8")
+    files.tasks.parent.mkdir(parents=True, exist_ok=True)
+    files.tasks.write_text("# Tasks\n\n- [ ] execute\n", encoding="utf-8")
+    files.fix_request.parent.mkdir(parents=True, exist_ok=True)
+    files.fix_request.write_text("# Fix request\n", encoding="utf-8")
+    files.review.parent.mkdir(parents=True, exist_ok=True)
+    files.review.write_text("verdict: pass\n", encoding="utf-8")
     ctx = PipelineContext(
         files=files,
         runtime=_FakeRuntime(),
@@ -100,6 +108,7 @@ def _write_execution_plan(ctx: PipelineContext, groups: list[dict]) -> None:
     (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
     payload = {"version": 1, "groups": groups}
     (planning_dir / "execution_plan.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    (planning_dir / "tasks.md").write_text("# Tasks\n\n- [ ] execute\n", encoding="utf-8")
     for group in groups:
         for plan_file in group["plans"]:
             plan_ref = plan_file["file"] if isinstance(plan_file, dict) else plan_file

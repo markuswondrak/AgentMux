@@ -4,12 +4,25 @@ Session directory: [[placeholder:feature_dir]]
 Project directory: [[placeholder:project_dir]]
 Approved preference proposal artifact: [[placeholder:reviewer_preference_proposal_file]]
 
-Read these files first:
-- context.md
-- requirements.md
-- 02_planning/plan.md
-- 06_review/review.md
-- state.json
+<file path="context.md">
+[[include:context.md]]
+</file>
+
+<file path="requirements.md">
+[[include:requirements.md]]
+</file>
+
+<file path="02_planning/plan.md">
+[[include:02_planning/plan.md]]
+</file>
+
+<file path="06_review/review.md">
+[[include:06_review/review.md]]
+</file>
+
+<file path="state.json">
+[[include:state.json]]
+</file>
 
 Your job:
 1. Present what was implemented to the user.

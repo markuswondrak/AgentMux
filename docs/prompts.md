@@ -10,14 +10,21 @@
 ## Placeholder syntax
 
 Built-in prompt templates use `[[placeholder:name]]` value placeholders.
+Built-in templates can also inline session files with:
 
-Render model is two-stage:
+- `[[include:path]]` — required include; raises `FileNotFoundError` when missing.
+- `[[include-optional:path]]` — optional include; resolves to empty string when missing.
+
+Render model is three-stage:
 
 1. Template loading stage:
    - Expand shared fragments using `[[shared:fragment-name]]`.
    - Inject project extension text into `[[placeholder:project_instructions]]`.
 2. Render stage:
    - Resolve `[[placeholder:name]]` values from the active prompt builder context.
+3. Session include expansion stage:
+   - Resolve `[[include:path]]` / `[[include-optional:path]]` against `feature_dir`.
+   - Include expansion runs after placeholder rendering, so include paths can contain placeholders (for example `[[include:[[placeholder:plan_file]]]]`).
 
 Every prompt builder provides `feature_dir` as the session directory and references workflow files with phase subpaths (for example `02_planning/plan.md`, `06_review/review.md`, `state.json`).
 Builders that need project-level context (for example product manager and coder) also provide `project_dir`.
@@ -77,7 +84,7 @@ Prompts are not injected as full text. Instead, `send_prompt()` in `agentmux/run
 Read and follow the instructions in /full/path/to/prompt_file.md
 ```
 
-Agents read the referenced file themselves, reducing keystroke overhead and allowing agents to reuse file content without re-transmission. All prompt templates use file references (e.g., `requirements.md`, `02_planning/plan.md`) — agents fetch what they need.
+Agents still read the referenced prompt file themselves. Prompt files are now self-contained: session files referenced by template includes are inlined at build time, so agents do not need extra tool calls to fetch `requirements.md`, `plan.md`, `state.json`, and similar inputs separately.
 
 ## Lazy build
 

@@ -36,6 +36,10 @@ def _make_ctx(feature_dir: Path, *, skip_final_approval: bool = False) -> tuple[
     project_dir = feature_dir.parent / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
     files = create_feature_files(project_dir, feature_dir, "test", "session-x")
+    files.plan.parent.mkdir(parents=True, exist_ok=True)
+    files.plan.write_text("# Plan\n", encoding="utf-8")
+    files.review.parent.mkdir(parents=True, exist_ok=True)
+    files.review.write_text("verdict: pass\n", encoding="utf-8")
     agents = {
         "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
         "reviewer": AgentConfig(role="reviewer", cli="claude", model="sonnet", args=[]),

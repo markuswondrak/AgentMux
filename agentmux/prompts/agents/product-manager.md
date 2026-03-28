@@ -4,10 +4,17 @@ Session directory: [[placeholder:feature_dir]]
 Project directory: [[placeholder:project_dir]]
 Approved preference proposal artifact: [[placeholder:pm_preference_proposal_file]]
 
-Read these files first:
-- context.md
-- requirements.md
-- state.json
+<file path="context.md">
+[[include:context.md]]
+</file>
+
+<file path="requirements.md">
+[[include:requirements.md]]
+</file>
+
+<file path="state.json">
+[[include:state.json]]
+</file>
 
 ## Research
 

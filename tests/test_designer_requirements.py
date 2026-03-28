@@ -59,6 +59,8 @@ def _make_ctx(feature_dir: Path, with_designer: bool = True) -> tuple[PipelineCo
     project_dir = feature_dir.parent / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
     files = create_feature_files(project_dir, feature_dir, "add designer", "session-x")
+    files.plan.parent.mkdir(parents=True, exist_ok=True)
+    files.plan.write_text("# Plan\n", encoding="utf-8")
 
     prompts = {"architect": feature_dir / PLANNING_DIR / "architect_prompt.md"}
     for path in prompts.values():
@@ -97,6 +99,12 @@ def _write_execution_plan(feature_dir: Path, *, name: str = "implementation") ->
 
 
 class DesignerRequirementsTests(unittest.TestCase):
+    def _write_coder_inputs(self, feature_dir: Path) -> None:
+        planning_dir = feature_dir / PLANNING_DIR
+        planning_dir.mkdir(parents=True, exist_ok=True)
+        (planning_dir / "plan_1.md").write_text("## Sub-plan 1: implementation\n", encoding="utf-8")
+        (planning_dir / "tasks.md").write_text("# Tasks\n\n- [ ] implement\n", encoding="utf-8")
+
     def test_load_config_parses_optional_designer(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
@@ -142,6 +150,9 @@ class DesignerRequirementsTests(unittest.TestCase):
             project_dir.mkdir()
 
             files = create_feature_files(project_dir, feature_dir, "do ui", "session")
+            files.plan.parent.mkdir(parents=True, exist_ok=True)
+            files.plan.write_text("# Plan\n", encoding="utf-8")
+            self._write_coder_inputs(feature_dir)
 
             coder_prompt = build_coder_subplan_prompt(files, feature_dir / PLANNING_DIR / "plan_1.md", 1)
             designer_prompt = build_designer_prompt(files)
@@ -167,6 +178,8 @@ class DesignerRequirementsTests(unittest.TestCase):
             project_dir.mkdir()
 
             files = create_feature_files(project_dir, feature_dir, "do ui", "session")
+            files.plan.parent.mkdir(parents=True, exist_ok=True)
+            files.plan.write_text("# Plan\n", encoding="utf-8")
             designer_prompt = build_designer_prompt(files)
 
             self.assertIn("tailwind.config.js", designer_prompt)

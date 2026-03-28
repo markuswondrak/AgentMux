@@ -76,6 +76,11 @@ class FakeZone:
 
 
 class CodeResearcherRequirementsTests(unittest.TestCase):
+    def _write_code_request(self, feature_dir: Path, topic: str) -> None:
+        request_path = feature_dir / RESEARCH_DIR / f"code-{topic}" / "request.md"
+        request_path.parent.mkdir(parents=True, exist_ok=True)
+        request_path.write_text("investigate topic\n", encoding="utf-8")
+
     def _make_ctx(self, feature_dir: Path) -> tuple[PipelineContext, Path]:
         project_dir = feature_dir.parent / "project"
         project_dir.mkdir(parents=True, exist_ok=True)
@@ -131,6 +136,7 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "research", "session-x")
+            self._write_code_request(feature_dir, "auth-module")
 
             prompt = build_code_researcher_prompt("auth-module", files)
 

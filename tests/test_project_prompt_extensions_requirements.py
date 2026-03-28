@@ -54,6 +54,47 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
+    def _write_coder_inputs(self, feature_dir: Path, *, plan_name: str = "plan_1.md") -> None:
+        planning_dir = feature_dir / "02_planning"
+        planning_dir.mkdir(parents=True, exist_ok=True)
+        (planning_dir / plan_name).write_text(f"## {plan_name}\n", encoding="utf-8")
+        (planning_dir / "tasks.md").write_text("# Tasks\n\n- [ ] one\n", encoding="utf-8")
+
+    def _write_confirmation_inputs(self, feature_dir: Path) -> None:
+        planning_dir = feature_dir / "02_planning"
+        planning_dir.mkdir(parents=True, exist_ok=True)
+        (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
+        review_dir = feature_dir / "06_review"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        (review_dir / "review.md").write_text("verdict: pass\n", encoding="utf-8")
+
+    def _write_fix_inputs(self, feature_dir: Path) -> None:
+        planning_dir = feature_dir / "02_planning"
+        planning_dir.mkdir(parents=True, exist_ok=True)
+        (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
+        review_dir = feature_dir / "06_review"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        (review_dir / "fix_request.md").write_text("# Fix request\n", encoding="utf-8")
+
+    def _write_change_inputs(self, feature_dir: Path) -> None:
+        planning_dir = feature_dir / "02_planning"
+        planning_dir.mkdir(parents=True, exist_ok=True)
+        (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
+        (planning_dir / "tasks.md").write_text("# Tasks\n", encoding="utf-8")
+        completion_dir = feature_dir / "08_completion"
+        completion_dir.mkdir(parents=True, exist_ok=True)
+        (completion_dir / "changes.md").write_text("# Changes\n", encoding="utf-8")
+
+    def _write_designer_inputs(self, feature_dir: Path) -> None:
+        planning_dir = feature_dir / "02_planning"
+        planning_dir.mkdir(parents=True, exist_ok=True)
+        (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
+
+    def _write_research_request(self, feature_dir: Path, kind: str, topic: str) -> None:
+        request_path = feature_dir / "03_research" / f"{kind}-{topic}" / "request.md"
+        request_path.parent.mkdir(parents=True, exist_ok=True)
+        request_path.write_text("request\n", encoding="utf-8")
+
     def test_shared_fragment_markers_expand_during_template_loading(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
@@ -285,6 +326,13 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "project-specific prompts", "session")
+            self._write_designer_inputs(feature_dir)
+            self._write_coder_inputs(feature_dir, plan_name="plan_1.md")
+            self._write_research_request(feature_dir, "code", "topic-a")
+            self._write_research_request(feature_dir, "web", "topic-b")
+            self._write_fix_inputs(feature_dir)
+            self._write_confirmation_inputs(feature_dir)
+            self._write_change_inputs(feature_dir)
 
             cases: list[tuple[str, str, str, object]] = [
                 ("agents", "architect", "EXT-ARCHITECT", lambda runtime: build_architect_prompt(runtime)),
@@ -341,6 +389,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "project-specific prompts", "session")
+            self._write_coder_inputs(feature_dir, plan_name="plan_1.md")
 
             injected = "Literal braces: {something} and orphan close brace } and open brace {\n"
             self._write_project_prompt(project_dir, "agents", "coder", injected)
@@ -357,6 +406,8 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "docs scope", "session")
+            self._write_change_inputs(feature_dir)
+            self._write_coder_inputs(feature_dir, plan_name="plan_1.md")
 
             architect_prompt = build_architect_prompt(files)
             change_prompt = build_change_prompt(files)
@@ -384,6 +435,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "research handoff", "session")
+            self._write_coder_inputs(feature_dir, plan_name="plan_1.md")
 
             self._create_research_topic(feature_dir, "web-openai-models", done=True, include_detail=False)
             self._create_research_topic(feature_dir, "code-auth-module", done=True, include_detail=True)
@@ -409,6 +461,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "research handoff", "session")
+            self._write_coder_inputs(feature_dir, plan_name="plan_1.md")
 
             self._create_research_topic(feature_dir, "web-routing", done=True, include_detail=True)
             self._create_research_topic(feature_dir, "code-db-indexes", done=True, include_detail=True)
@@ -428,6 +481,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "research handoff", "session")
+            self._write_coder_inputs(feature_dir, plan_name="plan_1.md")
 
             self._create_research_topic(feature_dir, "code-incomplete-topic", done=False, include_detail=True)
 
@@ -443,6 +497,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "preference capture", "session")
+            self._write_confirmation_inputs(feature_dir)
 
             product_prompt = build_product_manager_prompt(files)
             architect_prompt = build_architect_prompt(files)
@@ -517,6 +572,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "cross-prompt regression", "session")
+            self._write_confirmation_inputs(feature_dir)
             status_output = " M agentmux/workflow/prompts.py\n?? tests/test_project_prompt_extensions_requirements.py\n"
 
             product_prompt = build_product_manager_prompt(files)
@@ -557,6 +613,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "preference capture", "session")
+            self._write_confirmation_inputs(feature_dir)
 
             with patch(
                 "agentmux.workflow.prompts.subprocess.run",
@@ -587,6 +644,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
             files = create_feature_files(project_dir, feature_dir, "confirmation guidance", "session")
+            self._write_confirmation_inputs(feature_dir)
             status_output = " M agentmux/workflow/prompts.py\n?? tests/test_project_prompt_extensions_requirements.py\n"
 
             with patch(

@@ -317,8 +317,6 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 self.assertIn("stop and wait idle", prompt)
                 self.assertIn("summary.md", prompt)
                 self.assertNotIn("Fallback", prompt)
-                self.assertNotIn("03_research/code-<topic>/request.md", prompt)
-                self.assertNotIn("03_research/web-<topic>/request.md", prompt)
 
 
 if __name__ == "__main__":

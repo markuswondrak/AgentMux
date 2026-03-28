@@ -2,12 +2,25 @@ You are the coder agent for this pipeline run, fixing review findings.
 
 Session directory: [[placeholder:feature_dir]]
 
-Read these files first:
-- context.md
-- requirements.md
-- 02_planning/plan.md
-- 06_review/fix_request.md
-- state.json
+<file path="context.md">
+[[include:context.md]]
+</file>
+
+<file path="requirements.md">
+[[include:requirements.md]]
+</file>
+
+<file path="02_planning/plan.md">
+[[include:02_planning/plan.md]]
+</file>
+
+<file path="06_review/fix_request.md">
+[[include:06_review/fix_request.md]]
+</file>
+
+<file path="state.json">
+[[include:state.json]]
+</file>
 
 Your job:
 1. Read the review findings in `06_review/fix_request.md` carefully.

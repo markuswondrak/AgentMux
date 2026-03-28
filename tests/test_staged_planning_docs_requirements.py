@@ -27,13 +27,15 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         self.assertIn("technical debt", text.lower())
         self.assertNotIn("empty file-set intersection should be treated as parallelizable", text.lower())
 
-    def test_prompts_doc_covers_two_stage_template_rendering(self) -> None:
+    def test_prompts_doc_covers_three_stage_template_rendering(self) -> None:
         text = self._read_doc("docs/prompts.md")
         self.assertIn("[[shared:", text)
         self.assertIn("[[placeholder:", text)
-        self.assertIn("two-stage", text.lower())
+        self.assertIn("[[include:", text)
+        self.assertIn("three-stage", text.lower())
         self.assertIn("template loading", text.lower())
         self.assertIn("render", text.lower())
+        self.assertIn("session include expansion", text.lower())
 
     def test_prompts_doc_covers_coder_tdd_phase_and_atomic_contract(self) -> None:
         text = self._read_doc("docs/prompts.md")
