@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import shutil
 import subprocess
@@ -426,7 +427,8 @@ class ExitMessagingTests(unittest.TestCase):
                 _ = product_manager
                 (feature_dir / "orchestrator.log").write_text("background log\n", encoding="utf-8")
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
+            stdout_buffer = io.StringIO()
+            with patch("sys.stdout", stdout_buffer), patch.object(app, "ensure_dependencies", return_value=None), patch(
                 "agentmux.pipeline.application.load_layered_config", return_value=loaded
             ), patch(
                 "agentmux.pipeline.application.tmux_session_exists", return_value=False
@@ -461,10 +463,10 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertEqual(str(feature_dir / "orchestrator.log"), state["interruption_log_path"])
             self.assertIn("Ctrl-C", state["interruption_cause"])
 
-            printed = "\n".join(messages)
-            self.assertIn("Run canceled by user", printed)
-            self.assertIn(state["interruption_resume_command"], printed)
-            self.assertIn(state["interruption_log_path"], printed)
+            captured = stdout_buffer.getvalue()
+            self.assertIn("Run canceled by user", captured)
+            self.assertIn(state["interruption_resume_command"], captured)
+            self.assertIn(state["interruption_log_path"], captured)
 
     def test_run_called_process_error_persists_failed_state_and_prints_recovery_message(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -474,7 +476,8 @@ class ExitMessagingTests(unittest.TestCase):
             args = self._main_args()
             loaded = self._loaded_config()
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
+            stdout_buffer = io.StringIO()
+            with patch("sys.stdout", stdout_buffer), patch.object(app, "ensure_dependencies", return_value=None), patch(
                 "agentmux.pipeline.application.load_layered_config", return_value=loaded
             ), patch(
                 "agentmux.pipeline.application.tmux_session_exists", return_value=False
@@ -513,9 +516,9 @@ class ExitMessagingTests(unittest.TestCase):
             )
             self.assertIn("exit code 1", state["interruption_cause"])
 
-            printed = "\n".join(messages)
-            self.assertIn("Run failed unexpectedly", printed)
-            self.assertIn(state["interruption_resume_command"], printed)
+            captured = stdout_buffer.getvalue()
+            self.assertIn("Run failed unexpectedly", captured)
+            self.assertIn(state["interruption_resume_command"], captured)
 
     def test_run_reports_background_orchestrator_failure_from_persisted_state(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -543,7 +546,8 @@ class ExitMessagingTests(unittest.TestCase):
                 )
                 write_state(state_path, state)
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
+            stdout_buffer = io.StringIO()
+            with patch("sys.stdout", stdout_buffer), patch.object(app, "ensure_dependencies", return_value=None), patch(
                 "agentmux.pipeline.application.load_layered_config", return_value=loaded
             ), patch(
                 "agentmux.pipeline.application.tmux_session_exists", return_value=False
@@ -566,13 +570,13 @@ class ExitMessagingTests(unittest.TestCase):
 
             feature_dir = project_dir / ".agentmux" / ".sessions" / "demo"
             state = json.loads((feature_dir / "state.json").read_text(encoding="utf-8"))
-            printed = "\n".join(messages)
+            captured = stdout_buffer.getvalue()
 
             self.assertEqual(1, result)
             self.assertEqual("run_failed", state["last_event"])
-            self.assertIn(state["interruption_cause"], printed)
-            self.assertIn(state["interruption_resume_command"], printed)
-            self.assertIn(state["interruption_log_path"], printed)
+            self.assertIn(state["interruption_cause"], captured)
+            self.assertIn(state["interruption_resume_command"], captured)
+            self.assertIn(state["interruption_log_path"], captured)
 
     def test_run_treats_removed_feature_directory_as_success_after_attach_returns(self) -> None:
         with tempfile.TemporaryDirectory() as td:

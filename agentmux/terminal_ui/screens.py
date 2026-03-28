@@ -114,7 +114,13 @@ def _clear_screen() -> None:
         sys.stdout.flush()
 
 
-def goodbye_canceled(feature_name: str, feature_dir: str, resume_command: str, console: Any | None = None) -> None:
+def goodbye_canceled(
+    feature_name: str,
+    feature_dir: str,
+    resume_command: str,
+    log_path: str | None = None,
+    console: Any | None = None,
+) -> None:
     _clear_screen()
     output = _console(console)
     render_logo(output)
@@ -123,13 +129,27 @@ def goodbye_canceled(feature_name: str, feature_dir: str, resume_command: str, c
     output.print(f"[bold]Feature:[/bold] {feature_name}")
     output.print(f"[bold]Feature directory:[/bold] {feature_dir}")
     output.print(f"[bold]Resume:[/bold] [bold yellow]{resume_command}[/bold yellow]")
+    if log_path:
+        output.print(f"[dim]Diagnostics log: {log_path}[/dim]")
 
 
-def goodbye_error(feature_name: str, feature_dir: str, error_reason: str, console: Any | None = None) -> None:
+def goodbye_error(
+    feature_name: str,
+    feature_dir: str,
+    error_reason: str,
+    resume_command: str | None = None,
+    log_path: str | None = None,
+    console: Any | None = None,
+) -> None:
     _clear_screen()
     output = _console(console)
+    render_logo(output)
     output.print("[bold red]Pipeline failed.[/bold red]")
     output.print("[red]Run failed unexpectedly.[/red]")
     output.print(f"[bold]Feature:[/bold] {feature_name}")
     output.print(f"[bold]Reason:[/bold] {error_reason}")
     output.print(f"[bold]Feature directory:[/bold] {feature_dir}")
+    if resume_command:
+        output.print(f"[bold]Resume:[/bold] [bold red]{resume_command}[/bold red]")
+    if log_path:
+        output.print(f"[dim]Diagnostics log: {log_path}[/dim]")

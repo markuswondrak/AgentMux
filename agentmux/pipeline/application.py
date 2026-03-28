@@ -313,9 +313,9 @@ class PipelineApplication:
     def _show_failure_screen(self, report, feature_dir: Path) -> int:
         feature_name = feature_slug_from_dir(feature_dir)
         if report.category == "canceled":
-            goodbye_canceled(feature_name, str(feature_dir), report.resume_command)
+            goodbye_canceled(feature_name, str(feature_dir), report.resume_command, log_path=report.log_path)
             return 130
-        goodbye_error(feature_name, str(feature_dir), report.cause)
+        goodbye_error(feature_name, str(feature_dir), report.cause, resume_command=report.resume_command, log_path=report.log_path)
         return 1
 
     def _start_background_orchestrator(self, feature_dir: Path, keep_session: bool, product_manager: bool) -> None:
