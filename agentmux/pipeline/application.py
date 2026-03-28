@@ -228,7 +228,6 @@ class PipelineApplication:
                     completion.get("pr_url"),
                     completion.get("branch_name") or "",
                     elapsed_seconds,
-                    console=self.ui,
                 )
                 return 0
             raise SystemExit(
@@ -248,10 +247,10 @@ class PipelineApplication:
                 self.interruptions.persist(files, report)
             feature_name = feature_slug_from_dir(feature_dir)
             if report.category == "canceled":
-                goodbye_canceled(feature_name, str(feature_dir), report.resume_command, console=self.ui)
+                goodbye_canceled(feature_name, str(feature_dir), report.resume_command)
                 self.ui.print(self.interruptions.render(report))
                 return 130
-            goodbye_error(feature_name, str(feature_dir), report.cause, console=self.ui)
+            goodbye_error(feature_name, str(feature_dir), report.cause)
             self.ui.print(self.interruptions.render(report))
             return 130 if report.category == "canceled" else 1
         return 0
@@ -275,7 +274,6 @@ class PipelineApplication:
             welcome_screen(
                 feature_description or feature_slug_from_dir(feature_dir),
                 session_name,
-                console=self.ui,
             )
             subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
             return self._post_attach_result(
@@ -294,7 +292,6 @@ class PipelineApplication:
                 feature_slug_from_dir(feature_dir),
                 str(feature_dir),
                 report.resume_command,
-                console=self.ui,
             )
             self.ui.print(self.interruptions.render(report))
             return 130
@@ -315,10 +312,10 @@ class PipelineApplication:
             self.interruptions.persist(files, report)
             feature_name = feature_slug_from_dir(feature_dir)
             if report.category == "canceled":
-                goodbye_canceled(feature_name, str(feature_dir), report.resume_command, console=self.ui)
+                goodbye_canceled(feature_name, str(feature_dir), report.resume_command)
                 self.ui.print(self.interruptions.render(report))
                 return 130
-            goodbye_error(feature_name, str(feature_dir), report.cause, console=self.ui)
+            goodbye_error(feature_name, str(feature_dir), report.cause)
             self.ui.print(self.interruptions.render(report))
             return 130 if report.category == "canceled" else 1
         except Exception as exc:
@@ -335,7 +332,6 @@ class PipelineApplication:
                 feature_slug_from_dir(feature_dir),
                 str(feature_dir),
                 report.cause,
-                console=self.ui,
             )
             self.ui.print(self.interruptions.render(report))
             return 1
