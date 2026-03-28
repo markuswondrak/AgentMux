@@ -17,7 +17,7 @@ from ..sessions import PreparedSession, PromptInput, SessionCreateRequest, Sessi
 from ..sessions.state_store import feature_slug_from_dir, load_runtime_files, load_state, write_state
 from ..shared.models import WorkflowSettings
 from ..terminal_ui.console import ConsoleUI
-from ..terminal_ui.screens import goodbye_canceled, goodbye_error, goodbye_success, welcome_screen
+from ..terminal_ui.screens import goodbye_canceled, goodbye_error, goodbye_success
 from ..workflow.interruptions import InterruptionService
 from ..workflow.orchestrator import PipelineOrchestrator
 
@@ -270,11 +270,7 @@ class PipelineApplication:
                 initial_role=initial_role,
             )
             self._start_background_orchestrator(feature_dir, args.keep_session, prepared.product_manager)
-            feature_description = _read_initial_request_line(files.requirements)
-            welcome_screen(
-                feature_description or feature_slug_from_dir(feature_dir),
-                session_name,
-            )
+            self.ui.print("agentmux: pipeline starting up…")
             subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
             return self._post_attach_result(
                 files=files,

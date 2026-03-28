@@ -151,7 +151,7 @@ class ApplicationScreenWiringTests(unittest.TestCase):
         )
         return PreparedSession(feature_dir=feature_dir, files=files, product_manager=False)
 
-    def test_launch_attached_session_renders_welcome_screen_before_attach(self) -> None:
+    def test_launch_attached_session_shows_startup_message_before_attach(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             messages: list[str] = []
@@ -163,7 +163,7 @@ class ApplicationScreenWiringTests(unittest.TestCase):
                 app,
                 "_start_background_orchestrator",
                 return_value=None,
-            ), patch("agentmux.pipeline.application.welcome_screen") as welcome_mock, patch(
+            ), patch(
                 "agentmux.pipeline.application.subprocess.run",
                 return_value=None,
             ), patch.object(
@@ -174,10 +174,7 @@ class ApplicationScreenWiringTests(unittest.TestCase):
                 result = app._launch_attached_session(args, prepared, agents={}, session_name="agentmux-demo")
 
             self.assertEqual(0, result)
-            self.assertEqual("First line summary.", welcome_mock.call_args.args[0])
-            self.assertEqual("agentmux-demo", welcome_mock.call_args.args[1])
-            self.assertFalse(any(message.startswith("Feature directory:") for message in messages))
-            self.assertFalse(any(message.startswith("tmux session:") for message in messages))
+            self.assertTrue(any("starting up" in msg for msg in messages))
 
     def test_post_attach_result_success_reads_last_completion_summary(self) -> None:
         with tempfile.TemporaryDirectory() as td:

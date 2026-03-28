@@ -106,7 +106,16 @@ def goodbye_success(
     output.print("[bold green]Done.[/bold green]")
 
 
+def _clear_screen() -> None:
+    import sys
+
+    if sys.stdout.isatty():
+        sys.stdout.write("\033[2J\033[H")
+        sys.stdout.flush()
+
+
 def goodbye_canceled(feature_name: str, feature_dir: str, resume_command: str, console: Any | None = None) -> None:
+    _clear_screen()
     output = _console(console)
     render_logo(output)
     output.print("[bold yellow]Pipeline cancelled.[/bold yellow]")
@@ -117,8 +126,8 @@ def goodbye_canceled(feature_name: str, feature_dir: str, resume_command: str, c
 
 
 def goodbye_error(feature_name: str, feature_dir: str, error_reason: str, console: Any | None = None) -> None:
+    _clear_screen()
     output = _console(console)
-    render_logo(output)
     output.print("[bold red]Pipeline failed.[/bold red]")
     output.print("[red]Run failed unexpectedly.[/red]")
     output.print(f"[bold]Feature:[/bold] {feature_name}")
