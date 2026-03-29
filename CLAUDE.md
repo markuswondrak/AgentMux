@@ -20,16 +20,26 @@ agentmux "feature" --name <slug>                     # Custom feature directory 
 agentmux "feature" --config <path>                   # Explicit config override
 agentmux "feature" --keep-session                    # Keep tmux session after completion
 agentmux "feature" --product-manager                 # Run PM phase before architect planning
-agentmux --issue <number-or-url>                     # Bootstrap from GitHub issue title/body
+
+# Bootstrap from GitHub issue
+agentmux issue <number-or-url>                       # Bootstrap from GitHub issue title/body
+agentmux issue <number-or-url> --name <slug>         # Custom feature directory name
+agentmux issue <number-or-url> --product-manager     # Run PM phase before architect planning
 
 # Resume an interrupted pipeline
-agentmux --resume                                    # Interactive selection from existing sessions
-agentmux --resume <feature-dir-or-name>             # Resume specific session by name or path
+agentmux resume                                      # Interactive selection from existing sessions
+agentmux resume <feature-dir-or-name>                # Resume specific session by name or path
+agentmux resume <session> --keep-session             # Keep tmux session after completion
 
 # Session management commands
 agentmux sessions                                    # List all sessions with phase, status, and timestamp
 agentmux clean                                       # Remove all sessions (prompts for confirmation)
 agentmux clean --force                               # Remove all sessions without confirmation
+
+# Shell tab completion
+agentmux completions bash                            # Print bash completion script
+agentmux completions zsh                             # Print zsh completion script
+# Enable with: eval "$(agentmux completions bash)" in your .bashrc
 ```
 
 ### Project Initialization

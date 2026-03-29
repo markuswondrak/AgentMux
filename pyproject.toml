@@ -13,6 +13,7 @@ dependencies = [
   "questionary>=2.0.0",
   "rich>=13.0.0",
   "mcp>=1.0.0",
+  "shtab>=1.6.0",
 ]
 
 [project.scripts]

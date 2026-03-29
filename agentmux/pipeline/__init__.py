@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
+"""CLI entry point for agentmux pipeline."""
+
 from __future__ import annotations
 
-import argparse
-import sys
-from pathlib import Path
-
 from .application import PipelineApplication
+from .cli import DEFAULT_CONFIG_HINT, build_parser, main
 
-DEFAULT_CONFIG_HINT = ".agentmux/config.yaml"
+__all__ = ["main", "DEFAULT_CONFIG_HINT", "PipelineApplication", "build_parser"]
+
+# Re-export for backward compatibility
+# The actual implementation has been moved to cli.py
 
 
-def parse_init_args(argv: list[str]) -> argparse.Namespace:
+def parse_init_args(argv: list):
+    """Backward compatibility - init args are now handled by cli module."""
+    import argparse
+
     parser = argparse.ArgumentParser(prog="agentmux init")
     parser.add_argument(
         "--defaults",
@@ -20,59 +25,10 @@ def parse_init_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Orchestrates a local tmux-based architect/coder/reviewer pipeline.",
-    )
-    parser.add_argument(
-        "prompt",
-        nargs="?",
-        help="Feature description as free text, or path to a .md file.",
-    )
-    parser.add_argument(
-        "--name",
-        help="Optional feature slug. Defaults to timestamp plus a slug derived from the prompt.",
-    )
-    parser.add_argument(
-        "--config",
-        help=(
-            "Optional config override. Without this flag the loader resolves "
-            f"built-in defaults, ~/.config/agentmux/config.yaml, then {DEFAULT_CONFIG_HINT} "
-            "in the project."
-        ),
-    )
-    parser.add_argument(
-        "--keep-session",
-        action="store_true",
-        help="Keep the tmux session running after completion.",
-    )
-    parser.add_argument(
-        "--product-manager",
-        action="store_true",
-        help="Enable product-management phase before planning.",
-    )
-    parser.add_argument(
-        "--orchestrate",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
-        "--resume",
-        nargs="?",
-        const=True,
-        default=None,
-        help="Resume an interrupted pipeline session. Use with no value for interactive selection, or pass a feature dir/name.",
-    )
-    parser.add_argument(
-        "--issue",
-        help="GitHub issue number or URL to bootstrap requirements and slug.",
-    )
-    args = parser.parse_args()
-    if not args.orchestrate and not args.prompt and not args.resume and not args.issue:
-        parser.error("the following arguments are required: prompt")
-    return args
+def parse_clean_args(argv: list):
+    """Backward compatibility - clean args are now handled by cli module."""
+    import argparse
 
-
-def parse_clean_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="agentmux clean")
     parser.add_argument(
         "--force",
@@ -82,39 +38,178 @@ def parse_clean_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main() -> int:
-    if len(sys.argv) > 1 and sys.argv[1] == "init":
-        from .init_command import run_init
+class _BackwardCompatibleNamespace:
+    """Wrapper to provide backward compatibility for old-style args.
 
-        init_args = parse_init_args(sys.argv[2:])
-        return run_init(defaults_mode=bool(init_args.defaults))
+    Maps new subcommand structure to old attribute names:
+    - resume subcommand -> args.resume (True or session name)
+    - issue subcommand -> args.issue (issue value)
+    - run subcommand -> args.prompt (prompt value)
+    """
 
-    if len(sys.argv) > 1 and sys.argv[1] == "sessions":
-        config_path = None
-        # Check for --config flag
-        for i, arg in enumerate(sys.argv[2:], start=2):
-            if arg == "--config" and i + 1 < len(sys.argv):
-                config_path = Path(sys.argv[i + 1]).resolve()
-                break
-        app = PipelineApplication(Path.cwd().resolve(), config_path=config_path)
-        return app.run_sessions()
+    def __init__(self, args):
+        self._args = args
+        self._command = getattr(args, "command", None)
 
-    if len(sys.argv) > 1 and sys.argv[1] == "clean":
-        clean_args = parse_clean_args(sys.argv[2:])
-        config_path = None
-        # Check for --config flag
-        for i, arg in enumerate(sys.argv[2:], start=2):
-            if arg == "--config" and i + 1 < len(sys.argv):
-                config_path = Path(sys.argv[i + 1]).resolve()
-                break
-        app = PipelineApplication(Path.cwd().resolve(), config_path=config_path)
-        return app.run_clean(force=bool(clean_args.force))
+    def __getattr__(self, name):
+        # Map old attribute names to new structure
+        if name == "resume":
+            if self._command == "resume":
+                # resume subcommand: session attribute becomes resume
+                session = getattr(self._args, "session", None)
+                return session if session else True
+            return None
+        elif name == "issue":
+            if self._command == "issue":
+                # issue subcommand: number_or_url attribute becomes issue
+                return getattr(self._args, "number_or_url", None)
+            return None
+        elif name == "prompt":
+            if self._command == "run":
+                # run subcommand: prompt attribute
+                return getattr(self._args, "prompt", None)
+            return None
+        elif name == "orchestrate":
+            return getattr(self._args, "orchestrate", None)
+        elif name == "name":
+            return getattr(self._args, "name", None)
+        elif name == "config":
+            return getattr(self._args, "config", None)
+        elif name == "keep_session":
+            return getattr(self._args, "keep_session", False)
+        elif name == "product_manager":
+            return getattr(self._args, "product_manager", False)
+        elif name == "defaults":
+            return getattr(self._args, "defaults", False)
+        elif name == "force":
+            return getattr(self._args, "force", False)
+        elif name == "shell":
+            return getattr(self._args, "shell", None)
+        elif name == "session":
+            return getattr(self._args, "session", None)
+        elif name == "number_or_url":
+            return getattr(self._args, "number_or_url", None)
+        elif name == "handler":
+            return getattr(self._args, "handler", None)
+        elif name == "command":
+            return self._command
 
-    args = parse_args()
-    config_path = Path(args.config).resolve() if args.config else None
-    app = PipelineApplication(Path.cwd().resolve(), config_path=config_path)
-    return app.run(args)
+        # Fallback to underlying args
+        return getattr(self._args, name, None)
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def parse_args():
+    """Backward compatibility - returns parsed args for the old-style main workflow.
+
+    Note: This function is deprecated. Use build_parser() for new code.
+    """
+    import sys
+    from .cli import build_parser as _build_parser
+
+    # Save original argv for restoration
+    original_argv = sys.argv.copy()
+
+    try:
+        # For backward compatibility, handle the old --resume and --issue flags
+        # These have been moved to subcommands
+        known_commands = {
+            "init",
+            "sessions",
+            "clean",
+            "completions",
+            "resume",
+            "issue",
+            "run",
+        }
+
+        # Check if first arg after program is a known subcommand
+        if len(sys.argv) > 1 and sys.argv[1] in known_commands:
+            parser = _build_parser()
+            args = parser.parse_args()
+            return _BackwardCompatibleNamespace(args)
+
+        # Check for old-style --resume or --issue flags and convert them
+        if "--resume" in sys.argv:
+            idx = sys.argv.index("--resume")
+            sys.argv.pop(idx)  # Remove --resume
+            sys.argv.insert(1, "resume")  # Add 'resume' subcommand
+            # Check if there's a value that should be the session
+            # If the next arg doesn't start with '-', it's the session value
+            if idx < len(sys.argv) and not sys.argv[idx].startswith("-"):
+                pass  # Session value is already in the right place
+            parser = _build_parser()
+            args = parser.parse_args()
+            return _BackwardCompatibleNamespace(args)
+
+        if "--issue" in sys.argv:
+            idx = sys.argv.index("--issue")
+            issue_value = sys.argv.pop(idx + 1)  # Get the issue value
+            sys.argv.pop(idx)  # Remove --issue
+            # Remove any prompt that was before --issue (old CLI allowed this)
+            # The new issue subcommand doesn't take a prompt
+            # Check if there's a bare argument at index 1 (the prompt)
+            if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+                # This is a prompt argument from the old CLI, remove it
+                sys.argv.pop(1)
+            sys.argv.insert(1, "issue")  # Add 'issue' subcommand
+            sys.argv.insert(2, issue_value)  # Add issue value
+            parser = _build_parser()
+            args = parser.parse_args()
+            return _BackwardCompatibleNamespace(args)
+
+        # For bare prompts (no subcommand, no flags), inject 'run' subcommand
+        # similar to what main() does
+        if (
+            len(sys.argv) > 1
+            and sys.argv[1] not in known_commands
+            and not sys.argv[1].startswith("-")
+        ):
+            sys.argv.insert(1, "run")
+            parser = _build_parser()
+            args = parser.parse_args()
+            return _BackwardCompatibleNamespace(args)
+
+        # Default case: just parse normally
+        parser = _build_parser()
+        args = parser.parse_args()
+        return _BackwardCompatibleNamespace(args)
+
+    finally:
+        # Restore original argv
+        sys.argv = original_argv
+
+    # Check for old-style --resume or --issue flags and convert them
+    if "--resume" in sys.argv:
+        idx = sys.argv.index("--resume")
+        sys.argv.pop(idx)  # Remove --resume
+        sys.argv.insert(1, "resume")  # Add 'resume' subcommand
+        # Check if there's a value that should be the session
+        # If the next arg doesn't start with '-', it's the session value
+        if idx < len(sys.argv) and not sys.argv[idx].startswith("-"):
+            pass  # Session value is already in the right place
+        parser = _build_parser()
+        return parser.parse_args()
+
+    if "--issue" in sys.argv:
+        idx = sys.argv.index("--issue")
+        issue_value = sys.argv.pop(idx + 1)  # Get the issue value
+        sys.argv.pop(idx)  # Remove --issue
+        sys.argv.insert(1, "issue")  # Add 'issue' subcommand
+        sys.argv.insert(2, issue_value)  # Add issue value
+        parser = _build_parser()
+        return parser.parse_args()
+
+    # For bare prompts (no subcommand, no flags), inject 'run' subcommand
+    # similar to what main() does
+    if (
+        len(sys.argv) > 1
+        and sys.argv[1] not in known_commands
+        and not sys.argv[1].startswith("-")
+    ):
+        sys.argv.insert(1, "run")
+        parser = _build_parser()
+        return parser.parse_args()
+
+    # Default case: just parse normally
+    parser = _build_parser()
+    return parser.parse_args()

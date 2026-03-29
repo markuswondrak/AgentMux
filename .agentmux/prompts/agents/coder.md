@@ -1,3 +1,1 @@
-- Prefer extracting repeated prompt instructions into shared fragments/helpers instead of duplicating them across multiple prompt templates.
-
 - Prefer subcommands over `--flags` for CLI actions that represent distinct operations (e.g. `resume`, `issue`). Reserve flags for modifiers that parameterize an existing command.
