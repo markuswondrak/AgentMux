@@ -49,13 +49,15 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 ),
             }
 
-            updated = setup_mcp(
-                agents,
-                [self._server()],
-                ["architect", "product-manager"],
-                feature_dir,
-                project_dir,
-            )
+            env_without_pythonpath = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+            with patch.dict(os.environ, env_without_pythonpath, clear=True):
+                updated = setup_mcp(
+                    agents,
+                    [self._server()],
+                    ["architect", "product-manager"],
+                    feature_dir,
+                    project_dir,
+                )
 
             self.assertEqual(str(project_dir), updated["architect"].env["PYTHONPATH"])
             self.assertEqual(

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import tempfile
 import unittest
 from pathlib import Path
@@ -125,17 +124,6 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                     completion=CompletionSettings(skip_final_approval=True),
                 ),
             )
-            args = argparse.Namespace(
-                prompt="ship mcp",
-                name="demo",
-                config=None,
-                keep_session=False,
-                product_manager=False,
-                orchestrate=None,
-                resume=None,
-                issue=None,
-            )
-
             app = application.PipelineApplication(project_dir)
 
             with patch.object(app, "ensure_dependencies", return_value=None), patch(
@@ -160,7 +148,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 "agentmux.pipeline.application.PipelineApplication._start_background_orchestrator",
                 return_value=None,
             ), patch("agentmux.pipeline.application.subprocess.run", return_value=None):
-                result = app.run(args)
+                result = app.run_prompt("ship mcp", name="demo", keep_session=False, product_manager=False)
 
             self.assertEqual(0, result)
             setup_mock.assert_called_once()
@@ -189,17 +177,6 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                     completion=CompletionSettings(skip_final_approval=True),
                 ),
             )
-            args = argparse.Namespace(
-                prompt=None,
-                name=None,
-                config=None,
-                keep_session=False,
-                product_manager=False,
-                orchestrate=str(feature_dir),
-                resume=None,
-                issue=None,
-            )
-
             app = application.PipelineApplication(project_dir)
 
             with patch.object(app, "ensure_dependencies", return_value=None), patch(
@@ -221,7 +198,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 "agentmux.pipeline.application.PipelineOrchestrator.run",
                 return_value=0,
             ) as orchestrate_mock:
-                result = app.run(args)
+                result = app.run_orchestrate(feature_dir, keep_session=False)
 
             self.assertEqual(0, result)
             setup_mock.assert_called_once()
@@ -251,17 +228,6 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                     completion=CompletionSettings(skip_final_approval=True),
                 ),
             )
-            args = argparse.Namespace(
-                prompt=None,
-                name=None,
-                config=None,
-                keep_session=False,
-                product_manager=False,
-                orchestrate=str(feature_dir),
-                resume=None,
-                issue=None,
-            )
-
             app = application.PipelineApplication(project_dir)
 
             with patch.object(app, "ensure_dependencies", return_value=None), patch(
@@ -280,7 +246,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 "agentmux.pipeline.application.PipelineOrchestrator.run",
                 return_value=0,
             ):
-                result = app.run(args)
+                result = app.run_orchestrate(feature_dir, keep_session=False)
 
             self.assertEqual(0, result)
             settings = create_context_mock.call_args.kwargs["workflow_settings"]
