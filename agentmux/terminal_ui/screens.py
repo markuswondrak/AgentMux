@@ -4,6 +4,8 @@ import re
 import textwrap
 from typing import Any
 
+from .colors import RICH_PRIMARY, RICH_SECONDARY
+
 try:
     from rich.console import Console
 except ImportError:  # pragma: no cover - optional at import time in this environment
@@ -30,30 +32,30 @@ def _console(console: Any | None) -> Any:
 def render_logo(console: Any | None = None) -> None:
     output = _console(console)
     output.print("[blue]╭──────────────────────────────────────────────╮[/blue]")
-    output.print("[blue]│[/blue]   [bold cyan]█████╗  ██████╗ ███████╗███╗   ██╗████████╗[/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   [/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   [/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold cyan][blue]│[/blue]")
-    output.print("[blue]│[/blue]  [bold cyan]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold cyan][blue]│[/blue]")
+    output.print(f"[blue]│[/blue]   [bold {RICH_PRIMARY}]█████╗  ██████╗ ███████╗███╗   ██╗████████╗[/bold {RICH_PRIMARY}][blue]│[/blue]")
+    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/bold {RICH_PRIMARY}][blue]│[/blue]")
+    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]")
+    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]")
+    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]")
+    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold {RICH_PRIMARY}][blue]│[/blue]")
     output.print("[blue]├──────────────────────────────┬───────────────┤[/blue]")
     output.print(
-        "[blue]│[/blue] [bold cyan]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold cyan][blue]│[/blue]   [dim][ ]──┐[/dim]      [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold {RICH_SECONDARY}][blue]│[/blue]   [dim][ ]──┐[/dim]      [blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold cyan]████╗ ████║██║   ██║╚██╗██╔╝ [/bold cyan][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]████╗ ████║██║   ██║╚██╗██╔╝ [/bold {RICH_SECONDARY}][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold cyan]██╔████╔██║██║   ██║ ╚███╔╝  [/bold cyan][blue]│[/blue] [dim]──[ ]──◆──[ ] [/dim][blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]██╔████╔██║██║   ██║ ╚███╔╝  [/bold {RICH_SECONDARY}][blue]│[/blue] [dim]──[ ]──◆──[ ] [/dim][blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold cyan]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold cyan][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold {RICH_SECONDARY}][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold cyan]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold cyan][blue]│[/blue]   [dim][ ]──┘[/dim]      [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold {RICH_SECONDARY}][blue]│[/blue]   [dim][ ]──┘[/dim]      [blue]│[/blue]"
     )
     output.print(
-        "[blue]│[/blue] [bold cyan]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold cyan][blue]│[/blue]               [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold {RICH_SECONDARY}][blue]│[/blue]               [blue]│[/blue]"
     )
     output.print("[blue]╰──────────────────────────────┴───────────────╯[/blue]")
 
@@ -76,7 +78,7 @@ def _wrapped_lines(text: str, width: int = 76) -> list[str]:
 def welcome_screen(feature_description: str, session_name: str, console: Any | None = None) -> None:
     output = _console(console)
     render_logo(output)
-    output.print("[bold cyan]Welcome to AGENTMUX[/bold cyan]")
+    output.print(f"[bold {RICH_SECONDARY}]Welcome to AGENTMUX[/bold {RICH_SECONDARY}]")
     output.print("[bold]Feature:[/bold]")
     for line in _wrapped_lines(feature_description):
         output.print(f"  {line}")

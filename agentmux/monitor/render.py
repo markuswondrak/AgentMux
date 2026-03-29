@@ -19,6 +19,7 @@ from .state_reader import (
     read_monitor_log_entries,
     trim_model,
 )
+from agentmux.terminal_ui.colors import PRIMARY, SECONDARY
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -26,16 +27,13 @@ DIM = "\033[2m"
 GREEN = "\033[92m"
 YELLOW = "\033[33m"
 RED = "\033[31m"
-CYAN = "\033[36m"
-MAGENTA = "\033[35m"
-DODGER_BLUE = "\033[38;2;30;144;255m"
 WHITE = "\033[97m"
 
 MONITOR_HEADER_LOGO = [
-    (CYAN, "╭───────────╮"),
-    (CYAN, "│ ▄▀█ █▀▄▀█ │"),
-    (DODGER_BLUE, "│ █▀█ █ ▀ █ │"),
-    (DODGER_BLUE, "╰───────────╯"),
+    (PRIMARY, "╭───────────╮"),
+    (PRIMARY, "│ ▄▀█ █▀▄▀█ │"),
+    (SECONDARY, "│ █▀█ █ ▀ █ │"),
+    (SECONDARY, "╰───────────╯"),
 ]
 
 _ANSI_RE = re.compile(r"\033\[[0-9;]*m")
@@ -442,7 +440,7 @@ def _render_implementing_progress(width: int, progress: dict[str, object]) -> li
         _compose_line(
             width,
             prefix_plain=" │   ",
-            prefix_rendered=f" {CYAN}│{RESET}   ",
+            prefix_rendered=f" {SECONDARY}│{RESET}   ",
             left_plain=f"› groups: {completed}/{total} done",
             left_rendered=f"{DIM}› groups: {completed}/{total} done{RESET}",
         )
@@ -458,7 +456,7 @@ def _render_implementing_progress(width: int, progress: dict[str, object]) -> li
             _compose_line(
                 width,
                 prefix_plain=" │   ",
-                prefix_rendered=f" {CYAN}│{RESET}   ",
+                prefix_rendered=f" {SECONDARY}│{RESET}   ",
                 left_plain=f"› active: {active_text}",
                 left_rendered=f"{DIM}› active: {active_text}{RESET}",
             )
@@ -477,7 +475,7 @@ def _render_implementing_progress(width: int, progress: dict[str, object]) -> li
             _compose_line(
                 width,
                 prefix_plain=" │   ",
-                prefix_rendered=f" {CYAN}│{RESET}   ",
+                prefix_rendered=f" {SECONDARY}│{RESET}   ",
                 left_plain=f"› {summary_text}",
                 left_rendered=f"{DIM}› {summary_text}{RESET}",
             )
@@ -517,9 +515,9 @@ def _render_pipeline_section(
                 _compose_line(
                     width,
                     prefix_plain=gutter_plain,
-                    prefix_rendered=f" {CYAN}│{RESET} ",
+                    prefix_rendered=f" {SECONDARY}│{RESET} ",
                     left_plain=f"▶ {stage_label}",
-                    left_rendered=f"{BOLD}{CYAN}▶ {stage_label}{RESET}",
+                    left_rendered=f"{BOLD}{SECONDARY}▶ {stage_label}{RESET}",
                 )
             )
             if last_event:
@@ -527,7 +525,7 @@ def _render_pipeline_section(
                     _compose_line(
                         width,
                         prefix_plain=" │   ",
-                        prefix_rendered=f" {CYAN}│{RESET}   ",
+                        prefix_rendered=f" {SECONDARY}│{RESET}   ",
                         left_plain=f"› {format_event(last_event)}",
                         left_rendered=f"{DIM}› {format_event(last_event)}{RESET}",
                     )
@@ -537,7 +535,7 @@ def _render_pipeline_section(
                     _compose_line(
                         width,
                         prefix_plain=" │   ",
-                        prefix_rendered=f" {CYAN}│{RESET}   ",
+                        prefix_rendered=f" {SECONDARY}│{RESET}   ",
                         left_plain=f"› iter {review_iter}",
                         left_rendered=f"{DIM}› iter {review_iter}{RESET}",
                     )
@@ -550,7 +548,7 @@ def _render_pipeline_section(
                     _compose_line(
                         width,
                         prefix_plain=" │   ",
-                        prefix_rendered=f" {CYAN}│{RESET}   ",
+                        prefix_rendered=f" {SECONDARY}│{RESET}   ",
                         left_plain=f"› {subplan_count} subplans",
                         left_rendered=f"{DIM}› {subplan_count} subplans{RESET}",
                     )
@@ -583,9 +581,9 @@ def _render_pipeline_section(
             _compose_line(
                 width,
                 prefix_plain=gutter_plain,
-                prefix_rendered=f" {CYAN}│{RESET} ",
+                prefix_rendered=f" {SECONDARY}│{RESET} ",
                 left_plain=f"▶ {status_label}",
-                left_rendered=f"{BOLD}{CYAN}▶ {status_label}{RESET}",
+                left_rendered=f"{BOLD}{SECONDARY}▶ {status_label}{RESET}",
             )
         )
         if last_event:
@@ -593,7 +591,7 @@ def _render_pipeline_section(
                 _compose_line(
                     width,
                     prefix_plain=" │   ",
-                    prefix_rendered=f" {CYAN}│{RESET}   ",
+                    prefix_rendered=f" {SECONDARY}│{RESET}   ",
                     left_plain=f"› {format_event(last_event)}",
                     left_rendered=f"{DIM}› {format_event(last_event)}{RESET}",
                 )
@@ -603,7 +601,7 @@ def _render_pipeline_section(
                 _compose_line(
                     width,
                     prefix_plain=" │   ",
-                    prefix_rendered=f" {CYAN}│{RESET}   ",
+                    prefix_rendered=f" {SECONDARY}│{RESET}   ",
                     left_plain=f"› cause: {interruption_cause}",
                     left_rendered=f"{DIM}› cause: {interruption_cause}{RESET}",
                 )
@@ -629,7 +627,7 @@ def _render_agents_section(
                     prefix_plain=" ",
                     prefix_rendered=" ",
                     left_plain=f"● {display_name}",
-                    left_rendered=f"{CYAN}●{RESET} {BOLD}{display_name}{RESET}",
+                    left_rendered=f"{SECONDARY}●{RESET} {BOLD}{display_name}{RESET}",
                     right_plain="[ WORKING ]",
                     right_rendered=f"{GREEN}[ WORKING ]{RESET}",
                 )

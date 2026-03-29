@@ -11,6 +11,7 @@ import yaml
 
 from ..configuration import load_builtin_catalog, load_layered_config
 from ..integrations.mcp import McpServerSpec, ensure_mcp_config
+from ..terminal_ui.colors import QUESTIONARY_SECONDARY
 from ..terminal_ui.screens import render_logo
 
 try:
@@ -39,9 +40,9 @@ INIT_STYLE = Style(
     [
         ("qmark", "fg:ansigreen bold"),
         ("question", "bold"),
-        ("answer", "fg:ansicyan bold"),
-        ("pointer", "fg:ansicyan bold"),
-        ("highlighted", "fg:ansicyan bold"),
+        ("answer", f"fg:{QUESTIONARY_SECONDARY} bold"),
+        ("pointer", f"fg:{QUESTIONARY_SECONDARY} bold"),
+        ("highlighted", f"fg:{QUESTIONARY_SECONDARY} bold"),
         ("selected", "fg:ansigreen"),
         ("separator", "fg:ansiyellow"),
         ("instruction", "fg:ansiyellow"),

@@ -44,7 +44,7 @@ class InitRequirementsTests(unittest.TestCase):
         render_logo(console)
 
         rendered = "\n".join(
-            re.sub(r"\[/?(?:blue|bold cyan|bold magenta|dim)\]", "", line)
+            re.sub(r"\[/?(?:blue|bold cyan|bold bright_cyan|bold magenta|dim)\]", "", line)
             for line in console.lines
         )
         expected = "\n".join(
