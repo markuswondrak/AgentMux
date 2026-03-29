@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import re
+import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from ..shared.models import RuntimeFiles
-from .state_store import create_feature_files, infer_resume_phase, load_runtime_files, load_state, now_iso, write_state
+from .state_store import (
+    create_feature_files,
+    infer_resume_phase,
+    load_runtime_files,
+    load_state,
+    now_iso,
+    write_state,
+)
 
 
 @dataclass(frozen=True)
@@ -115,7 +123,9 @@ class SessionService:
         )
 
     def create(self, request: SessionCreateRequest) -> PreparedSession:
-        feature_name = request.feature_name or self._timestamped_feature_name(request.prompt.slug_source)
+        feature_name = request.feature_name or self._timestamped_feature_name(
+            request.prompt.slug_source
+        )
         feature_dir = self.root_dir() / feature_name
         files = create_feature_files(
             self.project_dir,
@@ -140,6 +150,32 @@ class SessionService:
     def _timestamped_feature_name(self, slug_source: str) -> str:
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         return f"{timestamp}-{slugify(slug_source)}"
+
+    def remove_all_sessions(self, kill_tmux: bool = True) -> int:
+        """Remove all session directories and optionally kill active tmux sessions.
+
+        Returns the count of removed sessions.
+        """
+        # Lazy imports to avoid circular import issues
+        from ..runtime.tmux_control import kill_agentmux_session, tmux_session_exists
+
+        sessions = self.list_resumable_sessions()
+        count = 0
+
+        for session in sessions:
+            feature_dir = session.feature_dir
+            session_name = f"agentmux-{feature_dir.name}"
+
+            if kill_tmux and tmux_session_exists(session_name):
+                kill_agentmux_session(session_name)
+
+            try:
+                shutil.rmtree(feature_dir)
+                count += 1
+            except OSError:
+                pass  # Directory might already be removed
+
+        return count
 
 
 def slugify(text: str, max_words: int = 8, max_length: int = 48) -> str:

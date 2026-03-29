@@ -33,6 +33,7 @@ def now_iso() -> str:
 
 def load_state(state_path: Path) -> dict[str, Any]:
     import time
+
     for attempt in range(5):
         text = state_path.read_text(encoding="utf-8").strip()
         if text:
@@ -115,22 +116,27 @@ def create_feature_files(
         Path(__file__).resolve().parent.parent / "prompts" / "context.md"
     ).read_text(encoding="utf-8")
     files.context.write_text(
-        _context_template.format_map({"session_name": session_name, "feature_dir": feature_dir}),
+        _context_template.format_map(
+            {"session_name": session_name, "feature_dir": feature_dir}
+        ),
         encoding="utf-8",
     )
     files.requirements.write_text(
-        "\n".join([
-            "# Requirements",
-            "",
-            "## Initial Request",
-            "",
-            prompt.strip(),
-            "",
-            "## Clarifications",
-            "",
-            "_Architect fills this in if clarification is needed._",
-            "",
-        ]) + "\n",
+        "\n".join(
+            [
+                "# Requirements",
+                "",
+                "## Initial Request",
+                "",
+                prompt.strip(),
+                "",
+                "## Clarifications",
+                "",
+                "_Architect fills this in if clarification is needed._",
+                "",
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
     state = {
@@ -181,7 +187,9 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
                 if str(status) != "dispatched"
             }
 
-    product_management_done = feature_dir / SESSION_DIR_NAMES["product_management"] / "done"
+    product_management_done = (
+        feature_dir / SESSION_DIR_NAMES["product_management"] / "done"
+    )
     if bool(state.get("product_manager")) and not product_management_done.exists():
         return "product_management"
 
@@ -204,7 +212,10 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
             plan_meta = json.loads(plan_meta_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             plan_meta = {}
-        if bool(plan_meta.get("needs_design")) and not (feature_dir / SESSION_DIR_NAMES["design"] / "design.md").exists():
+        if (
+            bool(plan_meta.get("needs_design"))
+            and not (feature_dir / SESSION_DIR_NAMES["design"] / "design.md").exists()
+        ):
             return "designing"
 
     subplan_count_raw = state.get("subplan_count")
@@ -215,13 +226,18 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
     if subplan_count < 0:
         subplan_count = 0
 
-    fixing_iteration = (review_dir / "fix_request.md").exists() and int(state.get("review_iteration", 0)) > 0
+    fixing_iteration = (review_dir / "fix_request.md").exists() and int(
+        state.get("review_iteration", 0)
+    ) > 0
     if fixing_iteration:
         done_complete = (implementation_dir / "done_1").exists()
         if not done_complete:
             return "fixing"
     elif subplan_count > 0:
-        done_complete = all((implementation_dir / f"done_{index}").exists() for index in range(1, subplan_count + 1))
+        done_complete = all(
+            (implementation_dir / f"done_{index}").exists()
+            for index in range(1, subplan_count + 1)
+        )
     else:
         done_complete = any(implementation_dir.glob("done_*"))
 
@@ -242,14 +258,16 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
 def cleanup_feature_dir(feature_dir: Path) -> None:
     try:
         shutil.rmtree(feature_dir)
-        print(f"Cleaned up feature directory: {feature_dir}")
+        print(f"Cleaned up session: {feature_dir.name}")
     except FileNotFoundError:
-        print(f"Feature directory already removed: {feature_dir}")
+        print(f"Session already removed: {feature_dir.name}")
     except OSError as exc:
-        print(f"Failed to clean up feature directory {feature_dir}: {exc}")
+        print(f"Failed to clean up session {feature_dir.name}: {exc}")
 
 
-def commit_changes(project_dir: Path, commit_message: str, commit_files: list[str]) -> str | None:
+def commit_changes(
+    project_dir: Path, commit_message: str, commit_files: list[str]
+) -> str | None:
     if not commit_message.strip():
         print("Warning: commit_message is empty; skipping commit.")
         return None

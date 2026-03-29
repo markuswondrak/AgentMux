@@ -25,6 +25,11 @@ agentmux --issue <number-or-url>                     # Bootstrap from GitHub iss
 # Resume an interrupted pipeline
 agentmux --resume                                    # Interactive selection from existing sessions
 agentmux --resume <feature-dir-or-name>             # Resume specific session by name or path
+
+# Session management commands
+agentmux sessions                                    # List all sessions with phase, status, and timestamp
+agentmux clean                                       # Remove all sessions (prompts for confirmation)
+agentmux clean --force                               # Remove all sessions without confirmation
 ```
 
 ### Project Initialization

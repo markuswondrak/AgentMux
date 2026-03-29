@@ -119,8 +119,12 @@ class InterruptionReport:
 
 
 class InterruptionService:
-    def report_from_state(self, state: dict[str, Any], feature_dir: Path, *, files=None) -> InterruptionReport | None:
-        raw_category = normalize_interruption_category(state.get("interruption_category"))
+    def report_from_state(
+        self, state: dict[str, Any], feature_dir: Path, *, files=None
+    ) -> InterruptionReport | None:
+        raw_category = normalize_interruption_category(
+            state.get("interruption_category")
+        )
         raw_cause = self._coalesce_text(state.get("interruption_cause", ""))
         raw_resume = str(state.get("interruption_resume_command", "")).strip()
         raw_log_value = state.get("interruption_log_path")
@@ -138,13 +142,19 @@ class InterruptionService:
             return None
 
         if not raw_cause:
-            raw_cause = fallback_cause_from_event(last_event) if last_event else fallback_cause_for_category(category)
+            raw_cause = (
+                fallback_cause_from_event(last_event)
+                if last_event
+                else fallback_cause_for_category(category)
+            )
         if not raw_resume:
             raw_resume = self._resume_command(feature_dir)
         if raw_log is None and files is not None:
             raw_log = self._log_path(files)
 
-        canonical_event = canonical_interruption_event(last_event) or canonical_event_for_category(category)
+        canonical_event = canonical_interruption_event(
+            last_event
+        ) or canonical_event_for_category(category)
         return InterruptionReport(
             category=category,
             cause=raw_cause,
@@ -153,10 +163,14 @@ class InterruptionService:
             last_event=canonical_event,
         )
 
-    def build_canceled(self, feature_dir: Path, cause: str, *, files=None) -> InterruptionReport:
+    def build_canceled(
+        self, feature_dir: Path, cause: str, *, files=None
+    ) -> InterruptionReport:
         return self._build_report(feature_dir, "canceled", cause, files=files)
 
-    def build_failed(self, feature_dir: Path, cause: str, *, files=None) -> InterruptionReport:
+    def build_failed(
+        self, feature_dir: Path, cause: str, *, files=None
+    ) -> InterruptionReport:
         return self._build_report(feature_dir, "failed", cause, files=files)
 
     def persist(self, files, report: InterruptionReport) -> None:
@@ -190,7 +204,9 @@ class InterruptionService:
             message = f"{message} {stderr}"
         return message
 
-    def summarize_exception(self, exc: Exception, *, context: str = "The pipeline crashed unexpectedly.") -> str:
+    def summarize_exception(
+        self, exc: Exception, *, context: str = "The pipeline crashed unexpectedly."
+    ) -> str:
         detail = self._coalesce_text(str(exc))
         if detail:
             return f"{context} {exc.__class__.__name__}: {detail}"
@@ -204,7 +220,9 @@ class InterruptionService:
         *,
         files=None,
     ) -> InterruptionReport:
-        normalized_cause = self._coalesce_text(cause) or fallback_cause_for_category(category)
+        normalized_cause = self._coalesce_text(cause) or fallback_cause_for_category(
+            category
+        )
         return InterruptionReport(
             category=category,
             cause=normalized_cause,
@@ -214,7 +232,7 @@ class InterruptionService:
         )
 
     def _resume_command(self, feature_dir: Path) -> str:
-        return f"agentmux --resume {shlex.quote(str(feature_dir))}"
+        return f"agentmux --resume {shlex.quote(feature_dir.name)}"
 
     def _log_path(self, files) -> str | None:
         if files.orchestrator_log.exists():

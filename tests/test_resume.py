@@ -68,7 +68,9 @@ class ResumeCliAndSessionTests(unittest.TestCase):
 
             sessions = service.list_resumable_sessions()
 
-            self.assertEqual([newer, older], [session.feature_dir for session in sessions])
+            self.assertEqual(
+                [newer, older], [session.feature_dir for session in sessions]
+            )
 
     def test_session_service_root_uses_agentmux_sessions_directory(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -84,7 +86,10 @@ class ResumeCliAndSessionTests(unittest.TestCase):
         self.assertIn("No resumable sessions found", str(ctx.exception))
 
     def test_console_ui_auto_selects_single(self) -> None:
-        session = SessionRecord(Path("/tmp/s1"), {"phase": "planning", "updated_at": "2026-01-01T10:00:00+01:00"})
+        session = SessionRecord(
+            Path("/tmp/s1"),
+            {"phase": "planning", "updated_at": "2026-01-01T10:00:00+01:00"},
+        )
         selected = ConsoleUI(output_fn=lambda _message: None).select_session([session])
         self.assertEqual(session.feature_dir, selected)
 
@@ -92,15 +97,25 @@ class ResumeCliAndSessionTests(unittest.TestCase):
         sessions = [
             SessionRecord(
                 Path("/tmp/s1"),
-                {"phase": "planning", "last_event": "x", "updated_at": "2026-01-01T10:00:00+01:00"},
+                {
+                    "phase": "planning",
+                    "last_event": "x",
+                    "updated_at": "2026-01-01T10:00:00+01:00",
+                },
             ),
             SessionRecord(
                 Path("/tmp/s2"),
-                {"phase": "failed", "last_event": "y", "updated_at": "2026-01-01T11:00:00+01:00"},
+                {
+                    "phase": "failed",
+                    "last_event": "y",
+                    "updated_at": "2026-01-01T11:00:00+01:00",
+                },
             ),
         ]
         input_mock = Mock(side_effect=["bad", "3", "2"])
-        selected = ConsoleUI(input_fn=input_mock, output_fn=lambda _message: None).select_session(sessions)
+        selected = ConsoleUI(
+            input_fn=input_mock, output_fn=lambda _message: None
+        ).select_session(sessions)
         self.assertEqual(Path("/tmp/s2"), selected)
 
 
@@ -124,19 +139,29 @@ class InferResumePhaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
-            self._write_json(feature_dir / PLANNING_DIR / "plan_meta.json", '{"needs_design": true}')
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan", encoding="utf-8"
+            )
+            self._write_json(
+                feature_dir / PLANNING_DIR / "plan_meta.json", '{"needs_design": true}'
+            )
             state = {"phase": "failed"}
             self.assertEqual("designing", infer_resume_phase(feature_dir, state))
 
-    def test_failed_fix_iteration_with_incomplete_done_markers_resumes_fixing(self) -> None:
+    def test_failed_fix_iteration_with_incomplete_done_markers_resumes_fixing(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
-            (feature_dir / REVIEW_DIR / "fix_request.md").write_text("fix this", encoding="utf-8")
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan", encoding="utf-8"
+            )
+            (feature_dir / REVIEW_DIR / "fix_request.md").write_text(
+                "fix this", encoding="utf-8"
+            )
             state = {"phase": "failed", "review_iteration": 1, "subplan_count": 2}
             self.assertEqual("fixing", infer_resume_phase(feature_dir, state))
 
@@ -146,9 +171,15 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
-            (feature_dir / REVIEW_DIR / "fix_request.md").write_text("fix this", encoding="utf-8")
-            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan", encoding="utf-8"
+            )
+            (feature_dir / REVIEW_DIR / "fix_request.md").write_text(
+                "fix this", encoding="utf-8"
+            )
+            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
+                "", encoding="utf-8"
+            )
             state = {"phase": "failed", "review_iteration": 1, "subplan_count": 2}
             self.assertEqual("reviewing", infer_resume_phase(feature_dir, state))
 
@@ -157,8 +188,12 @@ class InferResumePhaseTests(unittest.TestCase):
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
-            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan", encoding="utf-8"
+            )
+            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
+                "", encoding="utf-8"
+            )
             state = {"phase": "failed", "subplan_count": 2}
             self.assertEqual("implementing", infer_resume_phase(feature_dir, state))
 
@@ -167,40 +202,60 @@ class InferResumePhaseTests(unittest.TestCase):
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
-            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan", encoding="utf-8"
+            )
+            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
+                "", encoding="utf-8"
+            )
             state = {"phase": "failed", "subplan_count": 1}
             self.assertEqual("reviewing", infer_resume_phase(feature_dir, state))
 
-    def test_failed_review_pass_resumes_completing_even_when_docs_metadata_is_true(self) -> None:
+    def test_failed_review_pass_resumes_completing_even_when_docs_metadata_is_true(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan", encoding="utf-8"
+            )
             self._write_json(
                 feature_dir / PLANNING_DIR / "plan_meta.json",
                 '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md"]}',
             )
-            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
-            (feature_dir / REVIEW_DIR / "review.md").write_text("Verdict: pass\n", encoding="utf-8")
+            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
+                "", encoding="utf-8"
+            )
+            (feature_dir / REVIEW_DIR / "review.md").write_text(
+                "Verdict: pass\n", encoding="utf-8"
+            )
             state = {"phase": "failed", "subplan_count": 1}
             self.assertEqual("completing", infer_resume_phase(feature_dir, state))
 
-    def test_failed_review_pass_without_docs_requirement_resumes_completing(self) -> None:
+    def test_failed_review_pass_without_docs_requirement_resumes_completing(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "plan.md").write_text("# Plan", encoding="utf-8")
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan", encoding="utf-8"
+            )
             self._write_json(
                 feature_dir / PLANNING_DIR / "plan_meta.json",
                 '{"needs_design": false, "needs_docs": false, "doc_files": []}',
             )
-            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text("", encoding="utf-8")
-            (feature_dir / REVIEW_DIR / "review.md").write_text("Verdict: pass\n", encoding="utf-8")
+            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
+                "", encoding="utf-8"
+            )
+            (feature_dir / REVIEW_DIR / "review.md").write_text(
+                "Verdict: pass\n", encoding="utf-8"
+            )
             state = {"phase": "failed", "subplan_count": 1}
             self.assertEqual("completing", infer_resume_phase(feature_dir, state))
 
@@ -239,20 +294,27 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                 agents={},
             )
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config",
-                return_value=loaded,
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists",
-                return_value=False,
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
-                return_value=None,
-            ), patch.object(
-                app.sessions,
-                "list_resumable_sessions",
-                return_value=[],
-            ), self.assertRaises(SystemExit) as ctx:
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch.object(
+                    app.sessions,
+                    "list_resumable_sessions",
+                    return_value=[],
+                ),
+                self.assertRaises(SystemExit) as ctx,
+            ):
                 app.run(args)
 
             self.assertIn("No resumable sessions found", str(ctx.exception))
@@ -261,7 +323,9 @@ class ResumeApplicationFlowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             app = application.PipelineApplication(project_dir)
-            feature_dir = project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            )
             feature_dir.mkdir(parents=True)
             initial_state = {
                 "feature_dir": str(feature_dir),
@@ -293,29 +357,38 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                 agents={},
             )
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config",
-                return_value=loaded,
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists",
-                return_value=False,
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
-                return_value=None,
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
-                return_value={},
-            ), patch(
-                "agentmux.pipeline.application.TmuxRuntimeFactory.create",
-                return_value=object(),
-            ) as create_mock, patch.object(
-                app,
-                "_start_background_orchestrator",
-                return_value=None,
-            ) as start_mock, patch(
-                "agentmux.pipeline.application.subprocess.run",
-                return_value=None,
-            ) as attach_mock:
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value={},
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ) as create_mock,
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ) as start_mock,
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ) as attach_mock,
+            ):
                 result = app.run(args)
 
             self.assertEqual(0, result)
@@ -324,7 +397,9 @@ class ResumeApplicationFlowTests(unittest.TestCase):
             attach_mock.assert_called_once_with(
                 ["tmux", "attach-session", "-t", "multi-agent-mvp"], check=True
             )
-            updated_state = json.loads((feature_dir / "state.json").read_text(encoding="utf-8"))
+            updated_state = json.loads(
+                (feature_dir / "state.json").read_text(encoding="utf-8")
+            )
             self.assertEqual("planning", updated_state["phase"])
             self.assertEqual("resumed", updated_state["last_event"])
             self.assertEqual({"b": "done"}, updated_state["research_tasks"])
@@ -332,7 +407,9 @@ class ResumeApplicationFlowTests(unittest.TestCase):
 
 
 class InterruptionReportStateTests(unittest.TestCase):
-    def test_report_from_state_uses_default_cause_for_unknown_failed_event(self) -> None:
+    def test_report_from_state_uses_default_cause_for_unknown_failed_event(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             service = InterruptionService()
@@ -399,7 +476,9 @@ class ExitMessagingTests(unittest.TestCase):
             max_review_iterations=3,
             github=GitHubConfig(),
             agents={
-                "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
+                "architect": AgentConfig(
+                    role="architect", cli="claude", model="opus", args=[]
+                ),
             },
         )
 
@@ -419,33 +498,57 @@ class ExitMessagingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             messages: list[str] = []
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=messages.append))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=messages.append)
+            )
             args = self._main_args()
             loaded = self._loaded_config()
 
-            def write_log(feature_dir: Path, _keep_session: bool, product_manager: bool) -> None:
+            def write_log(
+                feature_dir: Path, _keep_session: bool, product_manager: bool
+            ) -> None:
                 _ = product_manager
-                (feature_dir / "orchestrator.log").write_text("background log\n", encoding="utf-8")
+                (feature_dir / "orchestrator.log").write_text(
+                    "background log\n", encoding="utf-8"
+                )
 
             stdout_buffer = io.StringIO()
-            with patch("sys.stdout", stdout_buffer), patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config", return_value=loaded
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists", return_value=False
-            ), patch(
-                "agentmux.integrations.github.check_gh_available", return_value=False
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents", return_value=loaded.agents
-            ), patch(
-                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
-            ), patch.object(
-                app,
-                "_start_background_orchestrator",
-                side_effect=write_log,
-            ), patch(
-                "agentmux.pipeline.application.subprocess.run", side_effect=KeyboardInterrupt
+            with (
+                patch("sys.stdout", stdout_buffer),
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.integrations.github.check_gh_available",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    side_effect=write_log,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    side_effect=KeyboardInterrupt,
+                ),
             ):
                 result = app.run(args)
 
@@ -457,10 +560,12 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertEqual("run_canceled", state["last_event"])
             self.assertEqual("canceled", state["interruption_category"])
             self.assertEqual(
-                f"agentmux --resume {feature_dir}",
+                f"agentmux --resume {feature_dir.name}",
                 state["interruption_resume_command"],
             )
-            self.assertEqual(str(feature_dir / "orchestrator.log"), state["interruption_log_path"])
+            self.assertEqual(
+                str(feature_dir / "orchestrator.log"), state["interruption_log_path"]
+            )
             self.assertIn("Ctrl-C", state["interruption_cause"])
 
             captured = stdout_buffer.getvalue()
@@ -468,37 +573,58 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertIn(state["interruption_resume_command"], captured)
             self.assertIn(state["interruption_log_path"], captured)
 
-    def test_run_called_process_error_persists_failed_state_and_prints_recovery_message(self) -> None:
+    def test_run_called_process_error_persists_failed_state_and_prints_recovery_message(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             messages: list[str] = []
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=messages.append))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=messages.append)
+            )
             args = self._main_args()
             loaded = self._loaded_config()
 
             stdout_buffer = io.StringIO()
-            with patch("sys.stdout", stdout_buffer), patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config", return_value=loaded
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists", return_value=False
-            ), patch(
-                "agentmux.integrations.github.check_gh_available", return_value=False
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents", return_value=loaded.agents
-            ), patch(
-                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
-            ), patch.object(
-                app,
-                "_start_background_orchestrator",
-                return_value=None,
-            ), patch(
-                "agentmux.pipeline.application.subprocess.run",
-                side_effect=subprocess.CalledProcessError(
-                    returncode=1,
-                    cmd=["tmux", "attach-session", "-t", "session-x"],
-                    stderr="failed to connect",
+            with (
+                patch("sys.stdout", stdout_buffer),
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.integrations.github.check_gh_available",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    side_effect=subprocess.CalledProcessError(
+                        returncode=1,
+                        cmd=["tmux", "attach-session", "-t", "session-x"],
+                        stderr="failed to connect",
+                    ),
                 ),
             ):
                 result = app.run(args)
@@ -511,7 +637,7 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertEqual("run_failed", state["last_event"])
             self.assertEqual("failed", state["interruption_category"])
             self.assertEqual(
-                f"agentmux --resume {feature_dir}",
+                f"agentmux --resume {feature_dir.name}",
                 state["interruption_resume_command"],
             )
             self.assertIn("exit code 1", state["interruption_cause"])
@@ -520,15 +646,21 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertIn("Run failed unexpectedly", captured)
             self.assertIn(state["interruption_resume_command"], captured)
 
-    def test_run_reports_background_orchestrator_failure_from_persisted_state(self) -> None:
+    def test_run_reports_background_orchestrator_failure_from_persisted_state(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             messages: list[str] = []
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=messages.append))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=messages.append)
+            )
             args = self._main_args()
             loaded = self._loaded_config()
 
-            def set_failed_state(feature_dir: Path, _keep_session: bool, product_manager: bool) -> None:
+            def set_failed_state(
+                feature_dir: Path, _keep_session: bool, product_manager: bool
+            ) -> None:
                 _ = product_manager
                 log_path = feature_dir / "orchestrator.log"
                 log_path.write_text("crash details\n", encoding="utf-8")
@@ -547,24 +679,41 @@ class ExitMessagingTests(unittest.TestCase):
                 write_state(state_path, state)
 
             stdout_buffer = io.StringIO()
-            with patch("sys.stdout", stdout_buffer), patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config", return_value=loaded
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists", return_value=False
-            ), patch(
-                "agentmux.integrations.github.check_gh_available", return_value=False
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents", return_value=loaded.agents
-            ), patch(
-                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
-            ), patch.object(
-                app,
-                "_start_background_orchestrator",
-                side_effect=set_failed_state,
-            ), patch(
-                "agentmux.pipeline.application.subprocess.run", return_value=None
+            with (
+                patch("sys.stdout", stdout_buffer),
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.integrations.github.check_gh_available",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    side_effect=set_failed_state,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run", return_value=None
+                ),
             ):
                 result = app.run(args)
 
@@ -578,36 +727,58 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertIn(state["interruption_resume_command"], captured)
             self.assertIn(state["interruption_log_path"], captured)
 
-    def test_run_treats_removed_feature_directory_as_success_after_attach_returns(self) -> None:
+    def test_run_treats_removed_feature_directory_as_success_after_attach_returns(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             messages: list[str] = []
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=messages.append))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=messages.append)
+            )
             args = self._main_args()
             loaded = self._loaded_config()
 
-            def cleanup_feature_dir(feature_dir: Path, _keep_session: bool, product_manager: bool) -> None:
+            def cleanup_feature_dir(
+                feature_dir: Path, _keep_session: bool, product_manager: bool
+            ) -> None:
                 _ = product_manager
                 shutil.rmtree(feature_dir)
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config", return_value=loaded
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists", return_value=False
-            ), patch(
-                "agentmux.integrations.github.check_gh_available", return_value=False
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents", return_value=loaded.agents
-            ), patch(
-                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
-            ), patch.object(
-                app,
-                "_start_background_orchestrator",
-                side_effect=cleanup_feature_dir,
-            ), patch(
-                "agentmux.pipeline.application.subprocess.run", return_value=None
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.integrations.github.check_gh_available",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    side_effect=cleanup_feature_dir,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run", return_value=None
+                ),
             ):
                 result = app.run(args)
 
@@ -615,36 +786,59 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertEqual(0, result)
             self.assertFalse(feature_dir.exists())
 
-    def test_run_fails_cleanly_when_state_is_missing_but_feature_directory_remains(self) -> None:
+    def test_run_fails_cleanly_when_state_is_missing_but_feature_directory_remains(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=lambda _message: None))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=lambda _message: None)
+            )
             args = self._main_args()
             loaded = self._loaded_config()
 
-            def remove_state_only(feature_dir: Path, _keep_session: bool, product_manager: bool) -> None:
+            def remove_state_only(
+                feature_dir: Path, _keep_session: bool, product_manager: bool
+            ) -> None:
                 _ = product_manager
                 (feature_dir / "state.json").unlink()
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config", return_value=loaded
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists", return_value=False
-            ), patch(
-                "agentmux.integrations.github.check_gh_available", return_value=False
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents", return_value=loaded.agents
-            ), patch(
-                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
-            ), patch.object(
-                app,
-                "_start_background_orchestrator",
-                side_effect=remove_state_only,
-            ), patch(
-                "agentmux.pipeline.application.subprocess.run", return_value=None
-            ), self.assertRaises(SystemExit) as ctx:
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.integrations.github.check_gh_available",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    side_effect=remove_state_only,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run", return_value=None
+                ),
+                self.assertRaises(SystemExit) as ctx,
+            ):
                 app.run(args)
 
             self.assertIn("Session state missing after tmux exited", str(ctx.exception))
@@ -655,7 +849,9 @@ class ProjectDirInferenceTests(unittest.TestCase):
     def test_infer_project_dir_from_agentmux_sessions_path(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            feature_dir = project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            )
             self.assertEqual(project_dir, infer_project_dir(feature_dir))
 
 

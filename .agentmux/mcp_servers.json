@@ -3,12 +3,9 @@
     "agentmux-research": {
       "type": "stdio",
       "command": "/home/markus/.local/share/pipx/venvs/agentmux/bin/python",
-      "args": [
-        "-m",
-        "agentmux.integrations.mcp_research_server"
-      ],
+      "args": ["-m", "agentmux.integrations.mcp_research_server"],
       "env": {
-        "PYTHONPATH": "/home/markus/workspace/multi-agent-system"
+        "PYTHONPATH": "/home/markus/workspace/agentmux"
       }
     }
   }

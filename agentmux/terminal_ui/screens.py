@@ -32,12 +32,24 @@ def _console(console: Any | None) -> Any:
 def render_logo(console: Any | None = None) -> None:
     output = _console(console)
     output.print("[blue]╭──────────────────────────────────────────────╮[/blue]")
-    output.print(f"[blue]│[/blue]   [bold {RICH_PRIMARY}]█████╗  ██████╗ ███████╗███╗   ██╗████████╗[/bold {RICH_PRIMARY}][blue]│[/blue]")
-    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/bold {RICH_PRIMARY}][blue]│[/blue]")
-    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]")
-    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]")
-    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]")
-    output.print(f"[blue]│[/blue]  [bold {RICH_PRIMARY}]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold {RICH_PRIMARY}][blue]│[/blue]")
+    output.print(
+        f"[blue]│[/blue]   [bold {RICH_PRIMARY}]█████╗  ██████╗ ███████╗███╗   ██╗████████╗[/bold {RICH_PRIMARY}][blue]│[/blue]"
+    )
+    output.print(
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/bold {RICH_PRIMARY}][blue]│[/blue]"
+    )
+    output.print(
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]"
+    )
+    output.print(
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]"
+    )
+    output.print(
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]"
+    )
+    output.print(
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold {RICH_PRIMARY}][blue]│[/blue]"
+    )
     output.print("[blue]├──────────────────────────────┬───────────────┤[/blue]")
     output.print(
         f"[blue]│[/blue] [bold {RICH_SECONDARY}]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold {RICH_SECONDARY}][blue]│[/blue]   [dim][ ]──┐[/dim]      [blue]│[/blue]"
@@ -75,7 +87,9 @@ def _wrapped_lines(text: str, width: int = 76) -> list[str]:
     return textwrap.wrap(normalized, width=width) or [normalized]
 
 
-def welcome_screen(feature_description: str, session_name: str, console: Any | None = None) -> None:
+def welcome_screen(
+    feature_description: str, session_name: str, console: Any | None = None
+) -> None:
     output = _console(console)
     render_logo(output)
     output.print(f"[bold {RICH_SECONDARY}]Welcome to AGENTMUX[/bold {RICH_SECONDARY}]")
@@ -118,7 +132,7 @@ def _clear_screen() -> None:
 
 def goodbye_canceled(
     feature_name: str,
-    feature_dir: str,
+    session_id: str,
     resume_command: str,
     log_path: str | None = None,
     console: Any | None = None,
@@ -129,7 +143,7 @@ def goodbye_canceled(
     output.print("[bold yellow]Pipeline cancelled.[/bold yellow]")
     output.print("[yellow]Run canceled by user (Ctrl-C).[/yellow]")
     output.print(f"[bold]Feature:[/bold] {feature_name}")
-    output.print(f"[bold]Feature directory:[/bold] {feature_dir}")
+    output.print(f"[bold]Session:[/bold] {session_id}")
     output.print(f"[bold]Resume:[/bold] [bold yellow]{resume_command}[/bold yellow]")
     if log_path:
         output.print(f"[dim]Diagnostics log: {log_path}[/dim]")
@@ -137,7 +151,7 @@ def goodbye_canceled(
 
 def goodbye_error(
     feature_name: str,
-    feature_dir: str,
+    session_id: str,
     error_reason: str,
     resume_command: str | None = None,
     log_path: str | None = None,
@@ -150,7 +164,7 @@ def goodbye_error(
     output.print("[red]Run failed unexpectedly.[/red]")
     output.print(f"[bold]Feature:[/bold] {feature_name}")
     output.print(f"[bold]Reason:[/bold] {error_reason}")
-    output.print(f"[bold]Feature directory:[/bold] {feature_dir}")
+    output.print(f"[bold]Session:[/bold] {session_id}")
     if resume_command:
         output.print(f"[bold]Resume:[/bold] [bold red]{resume_command}[/bold red]")
     if log_path:

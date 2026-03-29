@@ -9,6 +9,7 @@ build/
 
 # Multi-agent working directory
 .agentmux/.sessions
+.agentmux/.last_completion.json
 .claude/
 
 # OS

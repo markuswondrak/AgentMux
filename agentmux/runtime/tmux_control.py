@@ -27,11 +27,16 @@ def run_command(
 def build_agent_command(agent: AgentConfig) -> str:
     env_prefix = ""
     if agent.env:
-        env_items = [f"{shlex.quote(str(key))}={shlex.quote(str(value))}" for key, value in agent.env.items()]
+        env_items = [
+            f"{shlex.quote(str(key))}={shlex.quote(str(value))}"
+            for key, value in agent.env.items()
+        ]
         env_prefix = f"env {' '.join(env_items)} "
     extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
-    return env_prefix + f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}" + (
-        f" {extra_args}" if extra_args else ""
+    return (
+        env_prefix
+        + f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}"
+        + (f" {extra_args}" if extra_args else "")
     )
 
 
@@ -148,10 +153,20 @@ def set_pane_identity(
     display_label: str | None = None,
 ) -> None:
     visible_label = (display_label or role).strip()
-    run_command(["tmux", "select-pane", "-t", pane_id, "-T", visible_label], check=False)
+    run_command(
+        ["tmux", "select-pane", "-t", pane_id, "-T", visible_label], check=False
+    )
     run_command(["tmux", "set-option", "-p", "-t", pane_id, "@role", role], check=False)
     run_command(
-        ["tmux", "set-option", "-p", "-t", pane_id, "@pane_label", (display_label or "").strip()],
+        [
+            "tmux",
+            "set-option",
+            "-p",
+            "-t",
+            pane_id,
+            "@pane_label",
+            (display_label or "").strip(),
+        ],
         check=False,
     )
 
@@ -239,6 +254,7 @@ def _enforce_monitor_min_width(session_name: str) -> None:
     )
     _log_layout(session_name)
 
+
 def _find_any_hidden_pane(session_name: str) -> str | None:
     for pane_id in _list_window_panes(session_name, "_hidden"):
         if tmux_pane_exists(pane_id):
@@ -316,7 +332,9 @@ class ContentZone:
             if not placeholder:
                 return
             _log(f"ContentZone.show: swap-pane -s {pane_id} -t {placeholder}")
-            run_command(["tmux", "swap-pane", "-s", pane_id, "-t", placeholder], check=False)
+            run_command(
+                ["tmux", "swap-pane", "-s", pane_id, "-t", placeholder], check=False
+            )
         else:
             keep = pane_id if pane_id in self._visible else self._visible[-1]
             for other in list(self._visible):
@@ -324,7 +342,9 @@ class ContentZone:
                     self._park(other)
             if keep != pane_id:
                 _log(f"ContentZone.show: swap-pane -s {pane_id} -t {keep}")
-                run_command(["tmux", "swap-pane", "-s", pane_id, "-t", keep], check=False)
+                run_command(
+                    ["tmux", "swap-pane", "-s", pane_id, "-t", keep], check=False
+                )
 
         self._visible = [pane_id]
         self._enforce_invariant()
@@ -369,7 +389,9 @@ class ContentZone:
             if not placeholder:
                 return
             _log(f"ContentZone.hide: swap-pane -s {placeholder} -t {pane_id}")
-            run_command(["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False)
+            run_command(
+                ["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False
+            )
             self._visible = []
         else:
             self._park(pane_id)
@@ -392,7 +414,9 @@ class ContentZone:
         placeholder = self._require_placeholder()
         if placeholder:
             _log(f"ContentZone.hide_all: swap-pane -s {placeholder} -t {keep}")
-            run_command(["tmux", "swap-pane", "-s", placeholder, "-t", keep], check=False)
+            run_command(
+                ["tmux", "swap-pane", "-s", placeholder, "-t", keep], check=False
+            )
             self._visible = []
             self._enforce_invariant()
             _enforce_monitor_min_width(self._session)
@@ -414,7 +438,9 @@ class ContentZone:
 
     def _park(self, pane_id: str) -> None:
         _log(f"ContentZone: break-pane -d -s {pane_id} -n _hidden")
-        run_command(["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False)
+        run_command(
+            ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
+        )
 
     def _require_placeholder(self) -> str | None:
         if self._placeholder and tmux_pane_exists(self._placeholder):
@@ -439,12 +465,17 @@ class ContentZone:
         for pane_id in reversed(self._visible):
             if tmux_pane_exists(pane_id) and _pane_in_window(pane_id, MAIN_WINDOW):
                 _log(f"ContentZone: swap-pane -s {placeholder} -t {pane_id}")
-                run_command(["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False)
+                run_command(
+                    ["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False
+                )
                 return
         control = _find_control_pane(self._session)
         if control:
             _log(f"ContentZone: join-pane -h -s {placeholder} -t {control}")
-            run_command(["tmux", "join-pane", "-h", "-s", placeholder, "-t", control], check=False)
+            run_command(
+                ["tmux", "join-pane", "-h", "-s", placeholder, "-t", control],
+                check=False,
+            )
             _enforce_monitor_min_width(self._session)
 
     def _enforce_invariant(self) -> None:
@@ -526,7 +557,9 @@ def tmux_new_session(
     run_command(["tmux", "select-pane", "-t", control_pane, "-T", ""])
     run_command(["tmux", "set-option", "-p", "-t", control_pane, "@role", ""])
     run_command(["tmux", "set-option", "-p", "-t", control_pane, "@pane_label", ""])
-    run_command(["tmux", "set-environment", "-t", session_name, "CONTROL_PANE", control_pane])
+    run_command(
+        ["tmux", "set-environment", "-t", session_name, "CONTROL_PANE", control_pane]
+    )
 
     # Create primary pane (right side)
     primary_agent = agents[primary_role]
@@ -607,11 +640,11 @@ def create_agent_pane(
     agent_cmd = build_agent_command(agent)
     split_target = _find_any_hidden_pane(session_name)
     if not split_target:
-        raise RuntimeError(f"No pane available to seed hidden pane creation for {session_name}")
+        raise RuntimeError(
+            f"No pane available to seed hidden pane creation for {session_name}"
+        )
 
-    _log(
-        f"create_agent_pane: Creating {agent_name} hidden at {split_target}"
-    )
+    _log(f"create_agent_pane: Creating {agent_name} hidden at {split_target}")
     result = run_command(
         [
             "tmux",
@@ -628,7 +661,9 @@ def create_agent_pane(
     pane_id = result.stdout.strip()
     set_pane_identity(pane_id, role=agent.role, display_label=display_label)
     if _pane_in_window(pane_id, MAIN_WINDOW):
-        run_command(["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False)
+        run_command(
+            ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
+        )
 
     accept_trust_prompt(pane_id, snippet=trust_snippet)
     time.sleep(0.5)  # let the CLI tool finish starting up before sending keys
@@ -645,6 +680,12 @@ def kill_agent_pane(pane_id: str | None, session_name: str | None = None) -> Non
 
 def tmux_kill_session(session_name: str) -> None:
     run_command(["tmux", "kill-session", "-t", session_name], check=False)
+
+
+def kill_agentmux_session(session_name: str) -> bool:
+    """Kill a tmux session by name. Return True on success, False on failure."""
+    result = run_command(["tmux", "kill-session", "-t", session_name], check=False)
+    return result.returncode == 0
 
 
 # ---------------------------------------------------------------------------

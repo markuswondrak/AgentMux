@@ -72,12 +72,43 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def parse_clean_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="agentmux clean")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Skip confirmation prompt.",
+    )
+    return parser.parse_args(argv)
+
+
 def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "init":
         from .init_command import run_init
 
         init_args = parse_init_args(sys.argv[2:])
         return run_init(defaults_mode=bool(init_args.defaults))
+
+    if len(sys.argv) > 1 and sys.argv[1] == "sessions":
+        config_path = None
+        # Check for --config flag
+        for i, arg in enumerate(sys.argv[2:], start=2):
+            if arg == "--config" and i + 1 < len(sys.argv):
+                config_path = Path(sys.argv[i + 1]).resolve()
+                break
+        app = PipelineApplication(Path.cwd().resolve(), config_path=config_path)
+        return app.run_sessions()
+
+    if len(sys.argv) > 1 and sys.argv[1] == "clean":
+        clean_args = parse_clean_args(sys.argv[2:])
+        config_path = None
+        # Check for --config flag
+        for i, arg in enumerate(sys.argv[2:], start=2):
+            if arg == "--config" and i + 1 < len(sys.argv):
+                config_path = Path(sys.argv[i + 1]).resolve()
+                break
+        app = PipelineApplication(Path.cwd().resolve(), config_path=config_path)
+        return app.run_clean(force=bool(clean_args.force))
 
     args = parse_args()
     config_path = Path(args.config).resolve() if args.config else None

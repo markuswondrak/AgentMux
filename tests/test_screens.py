@@ -95,25 +95,28 @@ class ScreenRenderingTests(unittest.TestCase):
         self.assertIn("abc1234", rendered)
         self.assertNotIn("PR:", rendered)
 
-    def test_goodbye_canceled_contains_resume_command_and_feature_directory(self) -> None:
+    def test_goodbye_canceled_contains_resume_command_and_session_id(self) -> None:
         console = _CaptureConsole()
         goodbye_canceled(
             feature_name="add-welcome-and-goodbye-screen",
-            feature_dir="/tmp/.agentmux/.sessions/20260328-082756-add-welcome-and-goodbye-screen",
+            session_id="20260328-082756-add-welcome-and-goodbye-screen",
             resume_command="agentmux --resume 20260328-082756-add-welcome-and-goodbye-screen",
             console=console,
         )
 
         rendered = console.rendered_text()
         self.assertIn("Pipeline cancelled.", rendered)
-        self.assertIn("agentmux --resume 20260328-082756-add-welcome-and-goodbye-screen", rendered)
-        self.assertIn("/tmp/.agentmux/.sessions/20260328-082756-add-welcome-and-goodbye-screen", rendered)
+        self.assertIn(
+            "agentmux --resume 20260328-082756-add-welcome-and-goodbye-screen", rendered
+        )
+        self.assertIn("Session:", rendered)
+        self.assertIn("20260328-082756-add-welcome-and-goodbye-screen", rendered)
 
-    def test_goodbye_error_contains_failure_reason_and_feature_directory(self) -> None:
+    def test_goodbye_error_contains_failure_reason_and_session_id(self) -> None:
         console = _CaptureConsole()
         goodbye_error(
             feature_name="add-welcome-and-goodbye-screen",
-            feature_dir="/tmp/.agentmux/.sessions/20260328-082756-add-welcome-and-goodbye-screen",
+            session_id="20260328-082756-add-welcome-and-goodbye-screen",
             error_reason="tmux attach failed with exit code 1",
             console=console,
         )
@@ -121,11 +124,17 @@ class ScreenRenderingTests(unittest.TestCase):
         rendered = console.rendered_text()
         self.assertIn("Pipeline failed.", rendered)
         self.assertIn("tmux attach failed with exit code 1", rendered)
-        self.assertIn("/tmp/.agentmux/.sessions/20260328-082756-add-welcome-and-goodbye-screen", rendered)
+        self.assertIn("Session:", rendered)
+        self.assertIn("20260328-082756-add-welcome-and-goodbye-screen", rendered)
 
-    def test_screen_functions_fallback_to_plain_text_when_rich_is_unavailable(self) -> None:
+    def test_screen_functions_fallback_to_plain_text_when_rich_is_unavailable(
+        self,
+    ) -> None:
         output = io.StringIO()
-        with patch("agentmux.terminal_ui.screens.Console", None), patch("sys.stdout", output):
+        with (
+            patch("agentmux.terminal_ui.screens.Console", None),
+            patch("sys.stdout", output),
+        ):
             welcome_screen("Ship welcome screen.", "agentmux-demo")
             goodbye_success("demo", "abc123", None, "feature/demo", 3)
             goodbye_canceled("demo", "/tmp/feature", "agentmux --resume demo")
@@ -141,37 +150,54 @@ class ScreenRenderingTests(unittest.TestCase):
 
 
 class ApplicationScreenWiringTests(unittest.TestCase):
-    def _make_prepared_session(self, project_dir: Path, prompt: str = "Ship welcome screen.\nExtra details.") -> PreparedSession:
-        feature_dir = project_dir / ".agentmux" / ".sessions" / "20260328-082756-demo-feature"
+    def _make_prepared_session(
+        self, project_dir: Path, prompt: str = "Ship welcome screen.\nExtra details."
+    ) -> PreparedSession:
+        feature_dir = (
+            project_dir / ".agentmux" / ".sessions" / "20260328-082756-demo-feature"
+        )
         files = create_feature_files(
             project_dir=project_dir,
             feature_dir=feature_dir,
             prompt=prompt,
             session_name="agentmux-20260328-082756-demo-feature",
         )
-        return PreparedSession(feature_dir=feature_dir, files=files, product_manager=False)
+        return PreparedSession(
+            feature_dir=feature_dir, files=files, product_manager=False
+        )
 
     def test_launch_attached_session_shows_startup_message_before_attach(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             messages: list[str] = []
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=messages.append))
-            prepared = self._make_prepared_session(project_dir, prompt="First line summary.\nSecond line details.")
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=messages.append)
+            )
+            prepared = self._make_prepared_session(
+                project_dir, prompt="First line summary.\nSecond line details."
+            )
             args = SimpleNamespace(keep_session=False)
 
-            with patch.object(app.runtime_factory, "create", return_value=object()), patch.object(
-                app,
-                "_start_background_orchestrator",
-                return_value=None,
-            ), patch(
-                "agentmux.pipeline.application.subprocess.run",
-                return_value=None,
-            ), patch.object(
-                app,
-                "_post_attach_result",
-                return_value=0,
+            with (
+                patch.object(app.runtime_factory, "create", return_value=object()),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ),
+                patch.object(
+                    app,
+                    "_post_attach_result",
+                    return_value=0,
+                ),
             ):
-                result = app._launch_attached_session(args, prepared, agents={}, session_name="agentmux-demo")
+                result = app._launch_attached_session(
+                    args, prepared, agents={}, session_name="agentmux-demo"
+                )
 
             self.assertEqual(0, result)
             self.assertTrue(any("starting up" in msg for msg in messages))
@@ -197,16 +223,24 @@ class ApplicationScreenWiringTests(unittest.TestCase):
             )
 
             with patch("agentmux.pipeline.application.goodbye_success") as goodbye_mock:
-                result = app._post_attach_result(files=prepared.files, feature_dir=prepared.feature_dir, elapsed_seconds=95)
+                result = app._post_attach_result(
+                    files=prepared.files,
+                    feature_dir=prepared.feature_dir,
+                    elapsed_seconds=95,
+                )
 
             self.assertEqual(0, result)
             self.assertEqual("demo-feature", goodbye_mock.call_args.args[0])
             self.assertEqual("abc1234", goodbye_mock.call_args.args[1])
-            self.assertEqual("https://github.com/acme/repo/pull/7", goodbye_mock.call_args.args[2])
+            self.assertEqual(
+                "https://github.com/acme/repo/pull/7", goodbye_mock.call_args.args[2]
+            )
             self.assertEqual("feature/demo-feature", goodbye_mock.call_args.args[3])
             self.assertEqual(95, goodbye_mock.call_args.args[4])
 
-    def test_post_attach_result_success_falls_back_when_completion_summary_is_missing(self) -> None:
+    def test_post_attach_result_success_falls_back_when_completion_summary_is_missing(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             app = application.PipelineApplication(project_dir)
@@ -214,7 +248,11 @@ class ApplicationScreenWiringTests(unittest.TestCase):
             shutil.rmtree(prepared.feature_dir)
 
             with patch("agentmux.pipeline.application.goodbye_success") as goodbye_mock:
-                result = app._post_attach_result(files=prepared.files, feature_dir=prepared.feature_dir, elapsed_seconds=12)
+                result = app._post_attach_result(
+                    files=prepared.files,
+                    feature_dir=prepared.feature_dir,
+                    elapsed_seconds=12,
+                )
 
             self.assertEqual(0, result)
             self.assertEqual("demo-feature", goodbye_mock.call_args.args[0])
@@ -223,64 +261,93 @@ class ApplicationScreenWiringTests(unittest.TestCase):
             self.assertEqual("", goodbye_mock.call_args.args[3])
             self.assertEqual(12, goodbye_mock.call_args.args[4])
 
-    def test_launch_attached_session_renders_canceled_screen_on_keyboard_interrupt(self) -> None:
+    def test_launch_attached_session_renders_canceled_screen_on_keyboard_interrupt(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=lambda _message: None))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=lambda _message: None)
+            )
             prepared = self._make_prepared_session(project_dir)
             args = SimpleNamespace(keep_session=False)
 
-            with patch.object(app.runtime_factory, "create", side_effect=KeyboardInterrupt), patch(
-                "agentmux.pipeline.application.goodbye_canceled"
-            ) as goodbye_mock:
-                result = app._launch_attached_session(args, prepared, agents={}, session_name="agentmux-demo")
+            with (
+                patch.object(
+                    app.runtime_factory, "create", side_effect=KeyboardInterrupt
+                ),
+                patch("agentmux.pipeline.application.goodbye_canceled") as goodbye_mock,
+            ):
+                result = app._launch_attached_session(
+                    args, prepared, agents={}, session_name="agentmux-demo"
+                )
 
             self.assertEqual(130, result)
             self.assertEqual("demo-feature", goodbye_mock.call_args.args[0])
-            self.assertEqual(str(prepared.feature_dir), goodbye_mock.call_args.args[1])
+            self.assertEqual(prepared.feature_dir.name, goodbye_mock.call_args.args[1])
             self.assertIn("agentmux --resume", goodbye_mock.call_args.args[2])
 
-    def test_launch_attached_session_renders_error_screen_on_subprocess_failure(self) -> None:
+    def test_launch_attached_session_renders_error_screen_on_subprocess_failure(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=lambda _message: None))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=lambda _message: None)
+            )
             prepared = self._make_prepared_session(project_dir)
             args = SimpleNamespace(keep_session=False)
 
-            with patch.object(app.runtime_factory, "create", return_value=object()), patch.object(
-                app,
-                "_start_background_orchestrator",
-                return_value=None,
-            ), patch(
-                "agentmux.pipeline.application.subprocess.run",
-                side_effect=subprocess.CalledProcessError(
-                    returncode=1,
-                    cmd=["tmux", "attach-session", "-t", "agentmux-demo"],
-                    stderr="attach failed",
+            with (
+                patch.object(app.runtime_factory, "create", return_value=object()),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
                 ),
-            ), patch("agentmux.pipeline.application.goodbye_error") as goodbye_mock:
-                result = app._launch_attached_session(args, prepared, agents={}, session_name="agentmux-demo")
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    side_effect=subprocess.CalledProcessError(
+                        returncode=1,
+                        cmd=["tmux", "attach-session", "-t", "agentmux-demo"],
+                        stderr="attach failed",
+                    ),
+                ),
+                patch("agentmux.pipeline.application.goodbye_error") as goodbye_mock,
+            ):
+                result = app._launch_attached_session(
+                    args, prepared, agents={}, session_name="agentmux-demo"
+                )
 
             self.assertEqual(1, result)
             self.assertEqual("demo-feature", goodbye_mock.call_args.args[0])
-            self.assertEqual(str(prepared.feature_dir), goodbye_mock.call_args.args[1])
+            self.assertEqual(prepared.feature_dir.name, goodbye_mock.call_args.args[1])
             self.assertIn("attach failed", goodbye_mock.call_args.args[2])
 
-    def test_launch_attached_session_renders_error_screen_on_unexpected_exception(self) -> None:
+    def test_launch_attached_session_renders_error_screen_on_unexpected_exception(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=lambda _message: None))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=lambda _message: None)
+            )
             prepared = self._make_prepared_session(project_dir)
             args = SimpleNamespace(keep_session=False)
 
-            with patch.object(app.runtime_factory, "create", side_effect=RuntimeError("boom")), patch(
-                "agentmux.pipeline.application.goodbye_error"
-            ) as goodbye_mock:
-                result = app._launch_attached_session(args, prepared, agents={}, session_name="agentmux-demo")
+            with (
+                patch.object(
+                    app.runtime_factory, "create", side_effect=RuntimeError("boom")
+                ),
+                patch("agentmux.pipeline.application.goodbye_error") as goodbye_mock,
+            ):
+                result = app._launch_attached_session(
+                    args, prepared, agents={}, session_name="agentmux-demo"
+                )
 
             self.assertEqual(1, result)
             self.assertEqual("demo-feature", goodbye_mock.call_args.args[0])
-            self.assertEqual(str(prepared.feature_dir), goodbye_mock.call_args.args[1])
+            self.assertEqual(prepared.feature_dir.name, goodbye_mock.call_args.args[1])
             self.assertIn("boom", goodbye_mock.call_args.args[2])
 
 

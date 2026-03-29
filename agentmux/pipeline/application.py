@@ -14,8 +14,18 @@ from ..integrations.mcp import McpAgentPreparer
 from ..runtime import TmuxRuntimeFactory
 from ..runtime.file_events import ensure_watchdog_available
 from ..runtime.tmux_control import list_agentmux_sessions, tmux_session_exists
-from ..sessions import PreparedSession, PromptInput, SessionCreateRequest, SessionService
-from ..sessions.state_store import feature_slug_from_dir, load_runtime_files, load_state, write_state
+from ..sessions import (
+    PreparedSession,
+    PromptInput,
+    SessionCreateRequest,
+    SessionService,
+)
+from ..sessions.state_store import (
+    feature_slug_from_dir,
+    load_runtime_files,
+    load_state,
+    write_state,
+)
 from ..shared.models import WorkflowSettings
 from ..terminal_ui.console import ConsoleUI
 from ..terminal_ui.screens import goodbye_canceled, goodbye_error, goodbye_success
@@ -78,7 +88,12 @@ def _read_last_completion(project_dir: Path) -> dict[str, str | None]:
 
 
 class PipelineApplication:
-    def __init__(self, project_dir: Path, config_path: Path | None = None, ui: ConsoleUI | None = None) -> None:
+    def __init__(
+        self,
+        project_dir: Path,
+        config_path: Path | None = None,
+        ui: ConsoleUI | None = None,
+    ) -> None:
         self.project_dir = project_dir
         self.config_path = config_path
         self.ui = ui or ConsoleUI()
@@ -89,7 +104,9 @@ class PipelineApplication:
 
     def run(self, args) -> int:
         self.ensure_dependencies()
-        loaded = load_layered_config(self.project_dir, explicit_config_path=self.config_path)
+        loaded = load_layered_config(
+            self.project_dir, explicit_config_path=self.config_path
+        )
         if args.orchestrate:
             return self._run_background_orchestrator(args, loaded)
         return self._run_launcher(args, loaded)
@@ -107,7 +124,11 @@ class PipelineApplication:
         feature_dir = Path(args.orchestrate).resolve()
         agents = self._mcp_preparer().prepare_feature_agents(loaded.agents, feature_dir)
         if getattr(loaded, "compression_enabled", False):
-            from agentmux.integrations.compression import inject_compression_env, read_proxy_port
+            from agentmux.integrations.compression import (
+                inject_compression_env,
+                read_proxy_port,
+            )
+
             port = read_proxy_port(feature_dir)
             if port is not None:
                 agents = inject_compression_env(agents, port)
@@ -177,27 +198,41 @@ class PipelineApplication:
             state = load_state(prepared.files.state)
             state["session_name"] = session_name
             write_state(prepared.files.state, state)
-            existing_sessions = [name for name in list_agentmux_sessions() if name != session_name]
+            existing_sessions = [
+                name for name in list_agentmux_sessions() if name != session_name
+            ]
             if existing_sessions:
                 with prepared.files.orchestrator_log.open("a", encoding="utf-8") as _f:
-                    _f.write(f"Warning: Other agentmux session(s) running: {', '.join(existing_sessions)}\n")
+                    _f.write(
+                        f"Warning: Other agentmux session(s) running: {', '.join(existing_sessions)}\n"
+                    )
 
         agents = mcp.prepare_feature_agents(loaded.agents, prepared.feature_dir)
         if getattr(loaded, "compression_enabled", False):
-            from agentmux.integrations.compression import inject_compression_env, start_compression_proxy
+            from agentmux.integrations.compression import (
+                inject_compression_env,
+                start_compression_proxy,
+            )
+
             port = start_compression_proxy(prepared.feature_dir)
             agents = inject_compression_env(agents, port)
-        return self._launch_attached_session(args, prepared, agents, session_name=session_name)
+        return self._launch_attached_session(
+            args, prepared, agents, session_name=session_name
+        )
 
     def _prepare_session(self, args, loaded) -> PreparedSession:
         if args.resume:
             if args.resume is True:
-                selected = self.ui.select_session(self.sessions.list_resumable_sessions())
+                selected = self.ui.select_session(
+                    self.sessions.list_resumable_sessions()
+                )
             else:
                 selected = self.sessions.resolve_resume_target(str(args.resume))
             return self.sessions.prepare_resumed_session(selected)
 
-        github = GitHubBootstrapper(self.project_dir, loaded.github, output=self.ui.print)
+        github = GitHubBootstrapper(
+            self.project_dir, loaded.github, output=self.ui.print
+        )
         issue_arg = getattr(args, "issue", None)
         if issue_arg:
             issue = github.resolve_issue(str(issue_arg))
@@ -214,7 +249,9 @@ class PipelineApplication:
             )
             branch_name = f"{loaded.github.branch_prefix}{feature_slug_from_dir(prepared.feature_dir)}"
             if not create_branch(self.project_dir, branch_name):
-                self.ui.print("Warning: Could not create feature branch now; will retry at completion.")
+                self.ui.print(
+                    "Warning: Could not create feature branch now; will retry at completion."
+                )
             return prepared
 
         gh_available = github.detect_pr_availability()
@@ -229,12 +266,15 @@ class PipelineApplication:
             )
         )
 
-    def _post_attach_result(self, *, files, feature_dir: Path, elapsed_seconds: float = 0.0) -> int:
+    def _post_attach_result(
+        self, *, files, feature_dir: Path, elapsed_seconds: float = 0.0
+    ) -> int:
         if not files.state.exists():
             if not feature_dir.exists():
                 completion = _read_last_completion(self.project_dir)
                 goodbye_success(
-                    completion.get("feature_name") or feature_slug_from_dir(feature_dir),
+                    completion.get("feature_name")
+                    or feature_slug_from_dir(feature_dir),
                     completion.get("commit_hash") or "",
                     completion.get("pr_url"),
                     completion.get("branch_name") or "",
@@ -248,7 +288,9 @@ class PipelineApplication:
 
         post_attach_state = load_state(files.state)
         if str(post_attach_state.get("phase")) == "failed":
-            report = self.interruptions.report_from_state(post_attach_state, feature_dir, files=files)
+            report = self.interruptions.report_from_state(
+                post_attach_state, feature_dir, files=files
+            )
             if report is None:
                 report = self.interruptions.build_failed(
                     feature_dir,
@@ -259,10 +301,16 @@ class PipelineApplication:
             return self._show_failure_screen(report, feature_dir)
         return 0
 
-    def _launch_attached_session(self, args, prepared: PreparedSession, agents, session_name: str) -> int:
+    def _launch_attached_session(
+        self, args, prepared: PreparedSession, agents, session_name: str
+    ) -> int:
         files = prepared.files
         feature_dir = prepared.feature_dir
-        initial_role = "product-manager" if prepared.product_manager and "product-manager" in agents else "architect"
+        initial_role = (
+            "product-manager"
+            if prepared.product_manager and "product-manager" in agents
+            else "architect"
+        )
         start_time = time.time()
 
         try:
@@ -275,7 +323,9 @@ class PipelineApplication:
                         config_path=self.config_path,
                         initial_role=initial_role,
                     )
-            self._start_background_orchestrator(feature_dir, args.keep_session, prepared.product_manager)
+            self._start_background_orchestrator(
+                feature_dir, args.keep_session, prepared.product_manager
+            )
             self.ui.print("agentmux: pipeline starting up…")
             subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
             return self._post_attach_result(
@@ -298,7 +348,9 @@ class PipelineApplication:
                 raise SystemExit(f"Command failed: {command}\n{stderr}") from exc
 
             state = load_state(files.state)
-            report = self.interruptions.report_from_state(state, feature_dir, files=files)
+            report = self.interruptions.report_from_state(
+                state, feature_dir, files=files
+            )
             if report is None:
                 report = self.interruptions.build_failed(
                     feature_dir,
@@ -321,13 +373,27 @@ class PipelineApplication:
 
     def _show_failure_screen(self, report, feature_dir: Path) -> int:
         feature_name = feature_slug_from_dir(feature_dir)
+        session_id = feature_dir.name
         if report.category == "canceled":
-            goodbye_canceled(feature_name, str(feature_dir), report.resume_command, log_path=report.log_path)
+            goodbye_canceled(
+                feature_name,
+                session_id,
+                report.resume_command,
+                log_path=report.log_path,
+            )
             return 130
-        goodbye_error(feature_name, str(feature_dir), report.cause, resume_command=report.resume_command, log_path=report.log_path)
+        goodbye_error(
+            feature_name,
+            session_id,
+            report.cause,
+            resume_command=report.resume_command,
+            log_path=report.log_path,
+        )
         return 1
 
-    def _start_background_orchestrator(self, feature_dir: Path, keep_session: bool, product_manager: bool) -> None:
+    def _start_background_orchestrator(
+        self, feature_dir: Path, keep_session: bool, product_manager: bool
+    ) -> None:
         command = [
             sys.executable,
             "-u",
@@ -359,3 +425,27 @@ class PipelineApplication:
             interactive=self.ui.is_interactive(),
             output=self.ui.stdout,
         )
+
+    def run_sessions(self) -> int:
+        """List all sessions with their phase, status, and updated timestamp."""
+        sessions = self.sessions.list_resumable_sessions()
+        active_tmux = list_agentmux_sessions()
+        self.ui.print_session_list(sessions, active_tmux)
+        return 0
+
+    def run_clean(self, force: bool) -> int:
+        """Remove all session directories and kill active tmux sessions."""
+        sessions = self.sessions.list_resumable_sessions()
+        count = len(sessions)
+
+        if count == 0:
+            self.ui.print("No sessions to remove.")
+            return 0
+
+        if not force:
+            if not self.ui.confirm_clean(count):
+                return 0
+
+        removed = self.sessions.remove_all_sessions(kill_tmux=True)
+        self.ui.print(f"Removed {removed} session(s).")
+        return 0

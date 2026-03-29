@@ -38,7 +38,9 @@ class ConsoleUI:
             phase = session.state.get("phase", "unknown")
             last_event = session.state.get("last_event", "n/a")
             updated_at = str(session.state.get("updated_at", "n/a"))
-            updated_label = updated_at[:16].replace("T", " ") if updated_at != "n/a" else "n/a"
+            updated_label = (
+                updated_at[:16].replace("T", " ") if updated_at != "n/a" else "n/a"
+            )
             self.print(
                 f"  {index}) {session.feature_dir.name:<36} "
                 f"phase: {phase:<12} last_event: {last_event} (updated: {updated_label})"
@@ -53,3 +55,39 @@ class ConsoleUI:
             if 1 <= session_index <= len(sessions):
                 return sessions[session_index - 1].feature_dir
             self.print("Invalid selection. Try again.")
+
+    def print_session_list(
+        self, sessions: list[SessionRecord], active_tmux_sessions: list[str]
+    ) -> None:
+        """Print a tabular list of sessions with ID, phase, status, and updated timestamp."""
+        if not sessions:
+            self.print("No sessions found.")
+            return
+
+        # Header
+        self.print(f"{'ID':<38} {'phase':<14} {'status':<10} {'updated'}")
+
+        for session in sessions:
+            session_id = session.feature_dir.name
+            phase = session.state.get("phase", "unknown")
+            updated_at = str(session.state.get("updated_at", "n/a"))
+            updated_label = (
+                updated_at[:16].replace("T", " ") if updated_at != "n/a" else "n/a"
+            )
+
+            # Check if session has an active tmux session
+            tmux_name = f"agentmux-{session_id}"
+            status = "running" if tmux_name in active_tmux_sessions else "stopped"
+
+            self.print(f"{session_id:<38} {phase:<14} {status:<10} {updated_label}")
+
+    def confirm_clean(self, session_count: int) -> bool:
+        """Prompt user for confirmation before cleaning sessions.
+
+        Returns True only if user enters 'y' or 'yes' (case-insensitive).
+        """
+        prompt = (
+            f"Remove {session_count} session(s) and kill active tmux sessions? [y/N] "
+        )
+        response = self.input_fn(prompt).strip().lower()
+        return response in ("y", "yes")
