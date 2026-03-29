@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 import time
+import types
 from pathlib import Path
 from typing import Any
 
@@ -101,15 +102,6 @@ class PipelineApplication:
         self.sessions = SessionService(project_dir)
         self.runtime_factory = TmuxRuntimeFactory()
         self.orchestrator = PipelineOrchestrator(self.interruptions)
-
-    def run(self, args) -> int:
-        self.ensure_dependencies()
-        loaded = load_layered_config(
-            self.project_dir, explicit_config_path=self.config_path
-        )
-        if args.orchestrate:
-            return self._run_background_orchestrator(args, loaded)
-        return self._run_launcher(args, loaded)
 
     def ensure_dependencies(self) -> None:
         ensure_watchdog_available()
@@ -449,3 +441,38 @@ class PipelineApplication:
         removed = self.sessions.remove_all_sessions(kill_tmux=True)
         self.ui.print(f"Removed {removed} session(s).")
         return 0
+
+    def run_prompt(self, prompt, *, name=None, keep_session=False, product_manager=False) -> int:
+        self.ensure_dependencies()
+        loaded = load_layered_config(self.project_dir, explicit_config_path=self.config_path)
+        args = types.SimpleNamespace(
+            prompt=prompt, name=name, keep_session=keep_session,
+            product_manager=product_manager, resume=None, issue=None, orchestrate=None,
+        )
+        return self._run_launcher(args, loaded)
+
+    def run_resume(self, session=None, *, keep_session=False) -> int:
+        self.ensure_dependencies()
+        loaded = load_layered_config(self.project_dir, explicit_config_path=self.config_path)
+        args = types.SimpleNamespace(
+            resume=session if session else True, issue=None,
+            prompt=None, name=None, product_manager=False,
+            orchestrate=None, keep_session=keep_session,
+        )
+        return self._run_launcher(args, loaded)
+
+    def run_issue(self, number_or_url, *, name=None, keep_session=False, product_manager=False) -> int:
+        self.ensure_dependencies()
+        loaded = load_layered_config(self.project_dir, explicit_config_path=self.config_path)
+        args = types.SimpleNamespace(
+            issue=number_or_url, resume=None, prompt=None,
+            name=name, product_manager=product_manager,
+            orchestrate=None, keep_session=keep_session,
+        )
+        return self._run_launcher(args, loaded)
+
+    def run_orchestrate(self, feature_dir, *, keep_session=False) -> int:
+        self.ensure_dependencies()
+        loaded = load_layered_config(self.project_dir, explicit_config_path=self.config_path)
+        args = types.SimpleNamespace(orchestrate=str(feature_dir), keep_session=keep_session)
+        return self._run_background_orchestrator(args, loaded)

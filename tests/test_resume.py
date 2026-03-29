@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import io
 import json
 import shutil
@@ -12,7 +11,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import agentmux.pipeline.application as application
-import agentmux.pipeline as pipeline
 from agentmux.configuration import infer_project_dir
 from agentmux.terminal_ui.console import ConsoleUI
 from agentmux.workflow.interruptions import InterruptionService
@@ -26,18 +24,6 @@ REVIEW_DIR = SESSION_DIR_NAMES["review"]
 
 
 class ResumeCliAndSessionTests(unittest.TestCase):
-    def test_parse_args_allows_resume_without_prompt(self) -> None:
-        with patch("sys.argv", ["pipeline.py", "--resume"]):
-            args = pipeline.parse_args()
-        self.assertTrue(args.resume)
-        self.assertIsNone(args.prompt)
-
-    def test_parse_args_accepts_resume_with_value(self) -> None:
-        with patch("sys.argv", ["pipeline.py", "--resume", "20260101-120000-demo"]):
-            args = pipeline.parse_args()
-        self.assertEqual("20260101-120000-demo", args.resume)
-        self.assertIsNone(args.prompt)
-
     def test_list_resumable_sessions_sorts_by_updated_at_desc(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
@@ -277,16 +263,6 @@ class ResumeApplicationFlowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             app = application.PipelineApplication(project_dir)
-            args = argparse.Namespace(
-                prompt=None,
-                name=None,
-                config=None,
-                keep_session=False,
-                product_manager=False,
-                orchestrate=None,
-                resume=True,
-                issue=None,
-            )
             loaded = SimpleNamespace(
                 session_name="multi-agent-mvp",
                 max_review_iterations=3,
@@ -315,7 +291,7 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                 ),
                 self.assertRaises(SystemExit) as ctx,
             ):
-                app.run(args)
+                app.run_resume()
 
             self.assertIn("No resumable sessions found", str(ctx.exception))
 
@@ -340,16 +316,6 @@ class ResumeApplicationFlowTests(unittest.TestCase):
             }
             write_state(feature_dir / "state.json", initial_state)
 
-            args = argparse.Namespace(
-                prompt=None,
-                name=None,
-                config=None,
-                keep_session=False,
-                product_manager=False,
-                orchestrate=None,
-                resume="20260101-120000-demo",
-                issue=None,
-            )
             loaded = SimpleNamespace(
                 session_name="multi-agent-mvp",
                 max_review_iterations=3,
@@ -389,7 +355,7 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                     return_value=None,
                 ) as attach_mock,
             ):
-                result = app.run(args)
+                result = app.run_resume(session="20260101-120000-demo")
 
             self.assertEqual(0, result)
             create_mock.assert_called_once()
@@ -482,17 +448,8 @@ class ExitMessagingTests(unittest.TestCase):
             },
         )
 
-    def _main_args(self) -> argparse.Namespace:
-        return argparse.Namespace(
-            prompt="ship feature",
-            name="demo",
-            config=None,
-            keep_session=False,
-            product_manager=False,
-            orchestrate=None,
-            resume=None,
-            issue=None,
-        )
+    def _run_main(self, app: application.PipelineApplication) -> int:
+        return app.run_prompt("ship feature", name="demo")
 
     def test_run_ctrl_c_persists_canceled_state_and_prints_resume_message(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -501,7 +458,7 @@ class ExitMessagingTests(unittest.TestCase):
             app = application.PipelineApplication(
                 project_dir, ui=ConsoleUI(output_fn=messages.append)
             )
-            args = self._main_args()
+
             loaded = self._loaded_config()
 
             def write_log(
@@ -550,7 +507,7 @@ class ExitMessagingTests(unittest.TestCase):
                     side_effect=KeyboardInterrupt,
                 ),
             ):
-                result = app.run(args)
+                result = self._run_main(app)
 
             feature_dir = project_dir / ".agentmux" / ".sessions" / "demo"
             state = json.loads((feature_dir / "state.json").read_text(encoding="utf-8"))
@@ -582,7 +539,7 @@ class ExitMessagingTests(unittest.TestCase):
             app = application.PipelineApplication(
                 project_dir, ui=ConsoleUI(output_fn=messages.append)
             )
-            args = self._main_args()
+
             loaded = self._loaded_config()
 
             stdout_buffer = io.StringIO()
@@ -627,7 +584,7 @@ class ExitMessagingTests(unittest.TestCase):
                     ),
                 ),
             ):
-                result = app.run(args)
+                result = self._run_main(app)
 
             feature_dir = project_dir / ".agentmux" / ".sessions" / "demo"
             state = json.loads((feature_dir / "state.json").read_text(encoding="utf-8"))
@@ -655,7 +612,7 @@ class ExitMessagingTests(unittest.TestCase):
             app = application.PipelineApplication(
                 project_dir, ui=ConsoleUI(output_fn=messages.append)
             )
-            args = self._main_args()
+
             loaded = self._loaded_config()
 
             def set_failed_state(
@@ -715,7 +672,7 @@ class ExitMessagingTests(unittest.TestCase):
                     "agentmux.pipeline.application.subprocess.run", return_value=None
                 ),
             ):
-                result = app.run(args)
+                result = self._run_main(app)
 
             feature_dir = project_dir / ".agentmux" / ".sessions" / "demo"
             state = json.loads((feature_dir / "state.json").read_text(encoding="utf-8"))
@@ -736,7 +693,7 @@ class ExitMessagingTests(unittest.TestCase):
             app = application.PipelineApplication(
                 project_dir, ui=ConsoleUI(output_fn=messages.append)
             )
-            args = self._main_args()
+
             loaded = self._loaded_config()
 
             def cleanup_feature_dir(
@@ -780,7 +737,7 @@ class ExitMessagingTests(unittest.TestCase):
                     "agentmux.pipeline.application.subprocess.run", return_value=None
                 ),
             ):
-                result = app.run(args)
+                result = self._run_main(app)
 
             feature_dir = project_dir / ".agentmux" / ".sessions" / "demo"
             self.assertEqual(0, result)
@@ -794,7 +751,7 @@ class ExitMessagingTests(unittest.TestCase):
             app = application.PipelineApplication(
                 project_dir, ui=ConsoleUI(output_fn=lambda _message: None)
             )
-            args = self._main_args()
+
             loaded = self._loaded_config()
 
             def remove_state_only(
@@ -839,7 +796,7 @@ class ExitMessagingTests(unittest.TestCase):
                 ),
                 self.assertRaises(SystemExit) as ctx,
             ):
-                app.run(args)
+                self._run_main(app)
 
             self.assertIn("Session state missing after tmux exited", str(ctx.exception))
             self.assertIn("state.json", str(ctx.exception))

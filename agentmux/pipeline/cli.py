@@ -71,47 +71,39 @@ def handle_resume(args: argparse.Namespace, project_dir: Path) -> int:
     """Handle the resume command."""
     config_path = Path(args.config).resolve() if getattr(args, "config", None) else None
     app = PipelineApplication(project_dir, config_path=config_path)
-
-    # Create a namespace that mimics the old args structure
-    class ResumeArgs:
-        def __init__(self, args):
-            self.resume = args.session if args.session else True
-            self.config = getattr(args, "config", None)
-            self.keep_session = bool(getattr(args, "keep_session", False))
-            self.product_manager = False
-            self.orchestrate = None
-            self.prompt = None
-            self.issue = None
-            self.name = None
-
-    return app.run(ResumeArgs(args))
+    return app.run_resume(
+        session=getattr(args, "session", None),
+        keep_session=bool(getattr(args, "keep_session", False)),
+    )
 
 
 def handle_issue(args: argparse.Namespace, project_dir: Path) -> int:
     """Handle the issue command."""
     config_path = Path(args.config).resolve() if getattr(args, "config", None) else None
     app = PipelineApplication(project_dir, config_path=config_path)
-
-    # Create a namespace that mimics the old args structure
-    class IssueArgs:
-        def __init__(self, args):
-            self.issue = args.number_or_url
-            self.name = getattr(args, "name", None)
-            self.config = getattr(args, "config", None)
-            self.keep_session = bool(getattr(args, "keep_session", False))
-            self.product_manager = bool(getattr(args, "product_manager", False))
-            self.orchestrate = None
-            self.resume = None
-            self.prompt = None
-
-    return app.run(IssueArgs(args))
+    return app.run_issue(
+        args.number_or_url,
+        name=getattr(args, "name", None),
+        keep_session=bool(getattr(args, "keep_session", False)),
+        product_manager=bool(getattr(args, "product_manager", False)),
+    )
 
 
 def handle_run(args: argparse.Namespace, project_dir: Path) -> int:
     """Handle the default run command (prompt-based workflow)."""
     config_path = Path(args.config).resolve() if getattr(args, "config", None) else None
     app = PipelineApplication(project_dir, config_path=config_path)
-    return app.run(args)
+    if args.orchestrate:
+        return app.run_orchestrate(
+            Path(args.orchestrate),
+            keep_session=bool(getattr(args, "keep_session", False)),
+        )
+    return app.run_prompt(
+        args.prompt,
+        name=getattr(args, "name", None),
+        keep_session=bool(getattr(args, "keep_session", False)),
+        product_manager=bool(getattr(args, "product_manager", False)),
+    )
 
 
 # Command registry
