@@ -75,6 +75,7 @@ class MonitorLogEntry:
     sort_order: int
     message: str
     phase_event: bool
+    relative_path: str = ""
 
 
 def load_runtime_registry(runtime_state_path: Path) -> dict[str, str | None]:
@@ -100,7 +101,15 @@ def get_role_states(session_name: str, runtime_state_path: Path) -> dict[str, st
 
     try:
         result_all = subprocess.run(
-            ["tmux", "list-panes", "-t", session_name, "-a", "-F", "#{pane_id} #{pane_dead}"],
+            [
+                "tmux",
+                "list-panes",
+                "-t",
+                session_name,
+                "-a",
+                "-F",
+                "#{pane_id} #{pane_dead}",
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -112,7 +121,14 @@ def get_role_states(session_name: str, runtime_state_path: Path) -> dict[str, st
         }
 
         result_pipeline = subprocess.run(
-            ["tmux", "list-panes", "-t", f"{session_name}:pipeline", "-F", "#{pane_id} #{pane_dead}"],
+            [
+                "tmux",
+                "list-panes",
+                "-t",
+                f"{session_name}:pipeline",
+                "-F",
+                "#{pane_id} #{pane_dead}",
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -154,7 +170,9 @@ def get_role_labels(state_path: Path, runtime_state_path: Path) -> dict[str, str
         if "_" in role_key:
             role, suffix = role_key.split("_", 1)
             task_id = int(suffix) if suffix.isdigit() else suffix
-        labels[role_key] = role_display_label(feature_dir, role, task_id=task_id, state=state)
+        labels[role_key] = role_display_label(
+            feature_dir, role, task_id=task_id, state=state
+        )
     return labels
 
 
@@ -181,7 +199,7 @@ def status_color(status: str) -> str:
 def trim_model(model: str, cli: str) -> str:
     prefix = f"{cli}-"
     if model.lower().startswith(prefix.lower()):
-        model = model[len(prefix):]
+        model = model[len(prefix) :]
     return model
 
 
@@ -199,7 +217,10 @@ def parse_timestamped_log_line(line: str) -> tuple[str, str] | None:
 
 
 def should_render_file_event(relative_path: str) -> bool:
-    return any(fnmatch.fnmatch(relative_path, pattern) for pattern in MONITOR_FILE_EVENT_PATTERNS)
+    return any(
+        fnmatch.fnmatch(relative_path, pattern)
+        for pattern in MONITOR_FILE_EVENT_PATTERNS
+    )
 
 
 def read_status_log_entries(log_path: Path) -> list[MonitorLogEntry]:
@@ -247,6 +268,7 @@ def read_created_file_log_entries(log_path: Path) -> list[MonitorLogEntry]:
                 sort_order=1,
                 message=f"+ {relative_path}",
                 phase_event=False,
+                relative_path=relative_path,
             )
         )
     return entries
@@ -264,7 +286,9 @@ def read_monitor_log_entries(
         entries.extend(read_created_file_log_entries(created_files_log_path))
     if not entries:
         return []
-    ordered = sorted(entries, key=lambda entry: (entry.timestamp, entry.sort_order, entry.message))
+    ordered = sorted(
+        entries, key=lambda entry: (entry.timestamp, entry.sort_order, entry.message)
+    )
     return ordered[-n:]
 
 

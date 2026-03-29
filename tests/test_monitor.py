@@ -52,7 +52,9 @@ class MonitorTests(unittest.TestCase):
             self.assertIn("beschreibung des features", output)
             self.assertIn("▶ implementing", output)
 
-    def test_state_reader_no_longer_lists_removed_docs_phase_or_event_markers(self) -> None:
+    def test_state_reader_no_longer_lists_removed_docs_phase_or_event_markers(
+        self,
+    ) -> None:
         self.assertNotIn("documenting", OPTIONAL_PHASES)
         self.assertNotIn("documenting", PIPELINE_STATES)
         self.assertNotIn("docs_written", EVENT_LABELS)
@@ -97,7 +99,9 @@ class MonitorTests(unittest.TestCase):
             self.assertNotIn("fixing", output)
             self.assertNotIn("documenting", output)
 
-    def test_render_shows_active_optional_phase_in_cyan_at_natural_position(self) -> None:
+    def test_render_shows_active_optional_phase_in_cyan_at_natural_position(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             state_path = feature_dir / "state.json"
@@ -113,7 +117,9 @@ class MonitorTests(unittest.TestCase):
 
             self.assertIn("▶ designing", stripped)
             self.assertLess(stripped.index("✓ planning"), stripped.index("▶ designing"))
-            self.assertLess(stripped.index("▶ designing"), stripped.index("· implementing"))
+            self.assertLess(
+                stripped.index("▶ designing"), stripped.index("· implementing")
+            )
 
     def test_render_formats_last_event_label(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -209,7 +215,9 @@ class MonitorTests(unittest.TestCase):
             self.assertIn("› active: g2 parallel · 3 plans", output)
             self.assertIn("› done: g1 · queued: g3, g4", output)
 
-    def test_render_implementing_reads_root_level_implementation_progress_fields(self) -> None:
+    def test_render_implementing_reads_root_level_implementation_progress_fields(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             state_path = feature_dir / "state.json"
@@ -236,7 +244,9 @@ class MonitorTests(unittest.TestCase):
             self.assertIn("› done: g1 · queued: g3", output)
             self.assertNotIn("› 4 subplans", output)
 
-    def test_render_implementing_staged_details_remain_readable_when_narrow(self) -> None:
+    def test_render_implementing_staged_details_remain_readable_when_narrow(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             state_path = feature_dir / "state.json"
@@ -274,8 +284,12 @@ class MonitorTests(unittest.TestCase):
             runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
             (feature_dir / "02_planning").mkdir(parents=True, exist_ok=True)
             (feature_dir / "04_design").mkdir(parents=True, exist_ok=True)
-            (feature_dir / "02_planning" / "plan.md").write_text("# plan\n", encoding="utf-8")
-            (feature_dir / "04_design" / "design.md").write_text("# design\n", encoding="utf-8")
+            (feature_dir / "02_planning" / "plan.md").write_text(
+                "# plan\n", encoding="utf-8"
+            )
+            (feature_dir / "04_design" / "design.md").write_text(
+                "# design\n", encoding="utf-8"
+            )
 
             output = self._strip_ansi(self._render(feature_dir, width=15, height=24))
 
@@ -288,7 +302,9 @@ class MonitorTests(unittest.TestCase):
             feature_dir = Path(td)
             state_path = feature_dir / "state.json"
             runtime_state_path = feature_dir / "runtime_state.json"
-            research_dir = feature_dir / SESSION_DIR_NAMES["research"] / "code-auth-module"
+            research_dir = (
+                feature_dir / SESSION_DIR_NAMES["research"] / "code-auth-module"
+            )
 
             state_path.write_text(
                 '{"phase": "planning", "research_tasks": {"auth-module": "dispatched"}}',
@@ -308,10 +324,19 @@ class MonitorTests(unittest.TestCase):
             feature_dir = Path(td)
             log_path = feature_dir / "status_log.txt"
 
-            with patch("agentmux.monitor.time.strftime", side_effect=["2026-03-21 11:20:05", "2026-03-21 11:20:08"]):
-                prev = monitor.append_status_change(log_path, prev_status=None, status="planning")
-                prev = monitor.append_status_change(log_path, prev_status=prev, status="planning")
-                prev = monitor.append_status_change(log_path, prev_status=prev, status="implementing")
+            with patch(
+                "agentmux.monitor.time.strftime",
+                side_effect=["2026-03-21 11:20:05", "2026-03-21 11:20:08"],
+            ):
+                prev = monitor.append_status_change(
+                    log_path, prev_status=None, status="planning"
+                )
+                prev = monitor.append_status_change(
+                    log_path, prev_status=prev, status="planning"
+                )
+                prev = monitor.append_status_change(
+                    log_path, prev_status=prev, status="implementing"
+                )
 
             self.assertEqual("implementing", prev)
             lines = log_path.read_text(encoding="utf-8").splitlines()
@@ -329,7 +354,10 @@ class MonitorTests(unittest.TestCase):
             state_path = feature_dir / "state.json"
             runtime_state_path = feature_dir / "runtime_state.json"
             state_path.write_text('{"phase": "reviewing"}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {"architect": "%1", "reviewer": "%2", "coder": "%3"}}', encoding="utf-8")
+            runtime_state_path.write_text(
+                '{"primary": {"architect": "%1", "reviewer": "%2", "coder": "%3"}}',
+                encoding="utf-8",
+            )
 
             agents = {
                 "architect": {"cli": "claude", "model": "opus"},
@@ -339,9 +367,15 @@ class MonitorTests(unittest.TestCase):
 
             with patch(
                 "agentmux.monitor.render_module.get_role_states",
-                return_value={"architect": "inactive", "reviewer": "working", "coder": "idle"},
+                return_value={
+                    "architect": "inactive",
+                    "reviewer": "working",
+                    "coder": "idle",
+                },
             ):
-                with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
+                with patch(
+                    "agentmux.monitor.render_module.time.time", return_value=0.0
+                ):
                     output = self._strip_ansi(
                         monitor.render(
                             session_name="session-x",
@@ -367,13 +401,18 @@ class MonitorTests(unittest.TestCase):
             runtime_state_path = feature_dir / "runtime_state.json"
             planning_dir = feature_dir / "02_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
-            (planning_dir / "plan_2.md").write_text("## Sub-plan 2: API wiring\n", encoding="utf-8")
+            (planning_dir / "plan_2.md").write_text(
+                "## Sub-plan 2: API wiring\n", encoding="utf-8"
+            )
             (planning_dir / "execution_plan.json").write_text(
                 '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", "plans": [{"file": "plan_2.md", "name": "API wiring"}]}]}',
                 encoding="utf-8",
             )
             state_path.write_text('{"phase": "implementing"}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {"coder": "%2"}, "parallel": {"coder": {"2": "%2"}}}', encoding="utf-8")
+            runtime_state_path.write_text(
+                '{"primary": {"coder": "%2"}, "parallel": {"coder": {"2": "%2"}}}',
+                encoding="utf-8",
+            )
 
             agents = {
                 "coder": {"cli": "codex", "model": "gpt-5.3-codex"},
@@ -383,7 +422,9 @@ class MonitorTests(unittest.TestCase):
                 "agentmux.monitor.render_module.get_role_states",
                 return_value={"coder_2": "working"},
             ):
-                with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
+                with patch(
+                    "agentmux.monitor.render_module.time.time", return_value=0.0
+                ):
                     output = self._strip_ansi(
                         monitor.render(
                             session_name="session-x",
@@ -405,8 +446,12 @@ class MonitorTests(unittest.TestCase):
             feature_dir.mkdir(parents=True, exist_ok=True)
             state_path = feature_dir / "state.json"
             runtime_state_path = feature_dir / "runtime_state.json"
-            state_path.write_text('{"phase": "reviewing", "review_iteration": 1}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {"reviewer": "%4", "designer": "%5"}}', encoding="utf-8")
+            state_path.write_text(
+                '{"phase": "reviewing", "review_iteration": 1}', encoding="utf-8"
+            )
+            runtime_state_path.write_text(
+                '{"primary": {"reviewer": "%4", "designer": "%5"}}', encoding="utf-8"
+            )
 
             agents = {
                 "reviewer": {"cli": "claude", "model": "sonnet"},
@@ -417,7 +462,9 @@ class MonitorTests(unittest.TestCase):
                 "agentmux.monitor.render_module.get_role_states",
                 return_value={"reviewer": "working", "designer": "idle"},
             ):
-                with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
+                with patch(
+                    "agentmux.monitor.render_module.time.time", return_value=0.0
+                ):
                     output = self._strip_ansi(
                         monitor.render(
                             session_name="session-x",
@@ -538,8 +585,14 @@ class MonitorTests(unittest.TestCase):
             self.assertNotIn("context.md", output)
             self.assertNotIn("architect_prompt.md", output)
             self.assertNotIn("code-auth/request.md", output)
-            self.assertLess(output.index("11:20 > planning"), output.index("11:20 + 02_planning/plan.md"))
-            self.assertLess(output.index("11:20 + 02_planning/plan.md"), output.index("11:20 > implementing"))
+            self.assertLess(
+                output.index("11:20 > planning"),
+                output.index("11:20 + 02_planning/plan.md"),
+            )
+            self.assertLess(
+                output.index("11:20 + 02_planning/plan.md"),
+                output.index("11:20 > implementing"),
+            )
 
     def test_render_shows_allowed_created_file_entries_without_status_log(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -573,7 +626,9 @@ class MonitorTests(unittest.TestCase):
             self.assertIn(" LOG", output)
             self.assertIn("11:20 + 06_review/review.md", output)
 
-    def test_render_failed_state_shows_clean_failure_classification_and_cause(self) -> None:
+    def test_render_failed_state_shows_clean_failure_classification_and_cause(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             state_path = feature_dir / "state.json"
@@ -590,7 +645,9 @@ class MonitorTests(unittest.TestCase):
             output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
 
             self.assertIn("› run failed unexpectedly", output)
-            self.assertIn("› cause: Background orchestrator exited unexpectedly.", output)
+            self.assertIn(
+                "› cause: Background orchestrator exited unexpectedly.", output
+            )
 
     def test_render_unknown_interruption_event_falls_back_to_raw_label(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -616,8 +673,12 @@ class MonitorTests(unittest.TestCase):
             )
 
             results = [
-                CompletedProcess(args=[], returncode=0, stdout="%1 1\n%2 0\n", stderr=""),
-                CompletedProcess(args=[], returncode=0, stdout="%1 1\n%2 0\n", stderr=""),
+                CompletedProcess(
+                    args=[], returncode=0, stdout="%1 1\n%2 0\n", stderr=""
+                ),
+                CompletedProcess(
+                    args=[], returncode=0, stdout="%1 1\n%2 0\n", stderr=""
+                ),
             ]
 
             with patch("agentmux.monitor.subprocess.run", side_effect=results):
@@ -625,6 +686,121 @@ class MonitorTests(unittest.TestCase):
 
             self.assertEqual("inactive", states["architect"])
             self.assertEqual("working", states["reviewer"])
+
+    def test_render_file_log_entries_contain_osc8_hyperlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            status_log_path = feature_dir / "status_log.txt"
+            created_files_log_path = feature_dir / "created_files.log"
+
+            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            created_files_log_path.write_text(
+                "2026-03-21 11:20:08  02_planning/plan.md\n",
+                encoding="utf-8",
+            )
+
+            with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
+                output = monitor.render(
+                    session_name="session-x",
+                    state_path=state_path,
+                    runtime_state_path=runtime_state_path,
+                    agents={},
+                    width=60,
+                    height=24,
+                    start_time=0.0,
+                    log_path=status_log_path,
+                )
+
+            # Raw output should contain OSC 8 hyperlink sequences
+            self.assertIn("\033]8;;file://", output)
+            # Should contain the absolute path to the file
+            self.assertIn("02_planning/plan.md", output)
+
+    def test_render_phase_log_entries_do_not_contain_osc8_hyperlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            status_log_path = feature_dir / "status_log.txt"
+            created_files_log_path = feature_dir / "created_files.log"
+
+            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            status_log_path.write_text(
+                "2026-03-21 11:20:05  planning\n", encoding="utf-8"
+            )
+            created_files_log_path.write_text(
+                "2026-03-21 11:20:08  02_planning/plan.md\n",
+                encoding="utf-8",
+            )
+
+            with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
+                output = monitor.render(
+                    session_name="session-x",
+                    state_path=state_path,
+                    runtime_state_path=runtime_state_path,
+                    agents={},
+                    width=60,
+                    height=24,
+                    start_time=0.0,
+                    log_path=status_log_path,
+                )
+
+            # Split output to find phase event lines vs file event lines
+            lines = output.split("\n")
+            phase_line = ""
+            file_line = ""
+            for line in lines:
+                if "> planning" in line:
+                    phase_line = line
+                # Look for file entry line by checking for the relative path in the line
+                # (accounting for OSC 8 escape sequences that may wrap it)
+                if "02_planning/plan.md" in line and "+ " in line:
+                    file_line = line
+
+            # Phase events should NOT contain OSC 8
+            self.assertNotIn("\033]8;;", phase_line)
+
+            # File events SHOULD contain OSC 8
+            self.assertIn("\033]8;;", file_line)
+
+    def test_strip_ansi_removes_osc8_sequences(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            status_log_path = feature_dir / "status_log.txt"
+            created_files_log_path = feature_dir / "created_files.log"
+
+            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            created_files_log_path.write_text(
+                "2026-03-21 11:20:08  02_planning/plan.md\n",
+                encoding="utf-8",
+            )
+
+            with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
+                output = monitor.render(
+                    session_name="session-x",
+                    state_path=state_path,
+                    runtime_state_path=runtime_state_path,
+                    agents={},
+                    width=60,
+                    height=24,
+                    start_time=0.0,
+                    log_path=status_log_path,
+                )
+
+            stripped = self._strip_ansi(output)
+
+            # Stripped output should not contain OSC 8 sequences
+            self.assertNotIn("\033]8;;", stripped)
+            self.assertNotIn("\033\\", stripped)
+            # But should still contain the visible path text
+            self.assertIn("02_planning/plan.md", stripped)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from .state_reader import (
     trim_model,
 )
 from agentmux.terminal_ui.colors import PRIMARY, SECONDARY
+from agentmux.terminal_ui.hyperlinks import OSC8_RE, file_hyperlink
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -36,7 +37,7 @@ MONITOR_HEADER_LOGO = [
     (SECONDARY, "╰───────────╯"),
 ]
 
-_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+_ANSI_RE = re.compile(rf"\033\[[0-9;]*m|{OSC8_RE}")
 
 
 def get_terminal_size() -> tuple[int, int]:
@@ -119,7 +120,9 @@ def _wrap_feature_lines(text: str, width: int, *, max_lines: int = 4) -> list[st
     clean = " ".join(text.split())
     if not clean:
         return [""] * max_lines
-    wrapped = textwrap.wrap(clean, width=width, break_long_words=True, break_on_hyphens=False)
+    wrapped = textwrap.wrap(
+        clean, width=width, break_long_words=True, break_on_hyphens=False
+    )
     if len(wrapped) > max_lines:
         head = wrapped[: max_lines - 1]
         tail = " ".join(wrapped[max_lines - 1 :])
@@ -136,22 +139,36 @@ def _render_feature_header(width: int, state_path: Path) -> list[str]:
     text_width = width - logo_width - gap
 
     if text_width >= 10:
-        feature_lines = _wrap_feature_lines(feature_request, text_width, max_lines=len(MONITOR_HEADER_LOGO))
+        feature_lines = _wrap_feature_lines(
+            feature_request, text_width, max_lines=len(MONITOR_HEADER_LOGO)
+        )
         rows: list[str] = []
         for (color, logo_row), feature_line in zip(MONITOR_HEADER_LOGO, feature_lines):
             padded_logo = logo_row + (" " * max(0, logo_width - _vlen(logo_row)))
             logo_text = f"{BOLD}{color}{padded_logo}{RESET}"
-            rows.append(f"{logo_text}{' ' * gap}{feature_line}" if feature_line else logo_text)
+            rows.append(
+                f"{logo_text}{' ' * gap}{feature_line}" if feature_line else logo_text
+            )
         return rows
 
     if width >= logo_width:
-        rows = [f"{BOLD}{color}{logo_row}{RESET}" for color, logo_row in MONITOR_HEADER_LOGO]
+        rows = [
+            f"{BOLD}{color}{logo_row}{RESET}" for color, logo_row in MONITOR_HEADER_LOGO
+        ]
         if feature_request:
-            rows.extend(line for line in _wrap_feature_lines(feature_request, width, max_lines=2) if line)
+            rows.extend(
+                line
+                for line in _wrap_feature_lines(feature_request, width, max_lines=2)
+                if line
+            )
         return rows
 
     if feature_request:
-        return [line for line in _wrap_feature_lines(feature_request, max(1, width), max_lines=2) if line]
+        return [
+            line
+            for line in _wrap_feature_lines(feature_request, max(1, width), max_lines=2)
+            if line
+        ]
     return []
 
 
@@ -245,7 +262,9 @@ def _normalize_groups(raw: object) -> list[dict[str, object]]:
                         _first_present(item, ("mode", "execution_mode", "group_mode"))
                     ),
                     "plan_ids": _extract_str_list(
-                        _first_present(item, ("plan_ids", "plans", "plan_files", "plan_refs"))
+                        _first_present(
+                            item, ("plan_ids", "plans", "plan_files", "plan_refs")
+                        )
                     ),
                 }
             )
@@ -269,7 +288,12 @@ def _normalize_active_index(raw: object, *, total: int) -> int | None:
 
 def _extract_execution_progress(state: dict[str, object]) -> dict[str, object] | None:
     root_candidates: list[dict[str, object]] = []
-    for key in ("execution_progress", "implementing_progress", "implementation_progress", "staged_execution"):
+    for key in (
+        "execution_progress",
+        "implementing_progress",
+        "implementation_progress",
+        "staged_execution",
+    ):
         value = state.get(key)
         if isinstance(value, dict):
             root_candidates.append(value)
@@ -321,8 +345,21 @@ def _extract_execution_progress(state: dict[str, object]) -> dict[str, object] |
         "group_id",
         "execution_group_id",
     )
-    groups_keys = ("groups", "execution_groups", "implementation_groups", "schedule", "execution_schedule")
-    signal_keys = total_keys + completed_keys + active_index_keys + active_mode_keys + active_plan_keys + groups_keys
+    groups_keys = (
+        "groups",
+        "execution_groups",
+        "implementation_groups",
+        "schedule",
+        "execution_schedule",
+    )
+    signal_keys = (
+        total_keys
+        + completed_keys
+        + active_index_keys
+        + active_mode_keys
+        + active_plan_keys
+        + groups_keys
+    )
 
     for raw in root_candidates:
         if not any(key in raw for key in signal_keys):
@@ -335,7 +372,9 @@ def _extract_execution_progress(state: dict[str, object]) -> dict[str, object] |
         if total is None or total <= 0:
             continue
 
-        active_index_key, active_index_raw = _first_present_with_key(raw, active_index_keys)
+        active_index_key, active_index_raw = _first_present_with_key(
+            raw, active_index_keys
+        )
         if active_index_key == "implementation_group_index":
             parsed_active_index = _extract_int(active_index_raw)
             if parsed_active_index is None:
@@ -365,14 +404,21 @@ def _extract_execution_progress(state: dict[str, object]) -> dict[str, object] |
             active_index = None
 
         synthetic_ids = [f"g{i}" for i in range(1, total + 1)]
-        group_ids = [str(g.get("id", f"g{i + 1}")).strip() or f"g{i + 1}" for i, g in enumerate(groups)]
+        group_ids = [
+            str(g.get("id", f"g{i + 1}")).strip() or f"g{i + 1}"
+            for i, g in enumerate(groups)
+        ]
         if len(group_ids) < total:
             group_ids.extend(synthetic_ids[len(group_ids) : total])
         elif len(group_ids) > total:
             group_ids = group_ids[:total]
 
         active_group = _extract_str(_first_present(raw, active_group_keys))
-        if not active_group and active_index is not None and active_index < len(group_ids):
+        if (
+            not active_group
+            and active_index is not None
+            and active_index < len(group_ids)
+        ):
             active_group = group_ids[active_index]
         elif not active_group and active_index is not None:
             active_group = f"g{active_index + 1}"
@@ -382,7 +428,11 @@ def _extract_execution_progress(state: dict[str, object]) -> dict[str, object] |
             active_mode = _normalize_group_mode(groups[active_index].get("mode"))
 
         active_plan_ids = _extract_str_list(_first_present(raw, active_plan_keys))
-        if not active_plan_ids and active_index is not None and active_index < len(groups):
+        if (
+            not active_plan_ids
+            and active_index is not None
+            and active_index < len(groups)
+        ):
             active_plan_ids = _extract_str_list(groups[active_index].get("plan_ids"))
 
         completed_group_ids: list[str] = []
@@ -494,7 +544,11 @@ def _render_pipeline_section(
     subplan_count: int,
 ) -> list[str]:
     lines = [_section_title("PIPELINE"), ""]
-    display_stages = [stage for stage in PIPELINE_STATES if stage not in OPTIONAL_PHASES or stage == status]
+    display_stages = [
+        stage
+        for stage in PIPELINE_STATES
+        if stage not in OPTIONAL_PHASES or stage == status
+    ]
     gutter_plain = " │ "
 
     try:
@@ -540,7 +594,9 @@ def _render_pipeline_section(
                         left_rendered=f"{DIM}› iter {review_iter}{RESET}",
                     )
                 )
-            progress = _extract_execution_progress(state) if stage == "implementing" else None
+            progress = (
+                _extract_execution_progress(state) if stage == "implementing" else None
+            )
             if progress is not None:
                 lines.extend(_render_implementing_progress(width, progress))
             elif subplan_count > 1:
@@ -656,7 +712,9 @@ def _render_agents_section(
         if role == "coder":
             parallel_keys = sorted(
                 [key for key in role_states if key.startswith("coder_")],
-                key=lambda key: int(key.split("_")[1]) if key.split("_")[1].isdigit() else 0,
+                key=lambda key: int(key.split("_")[1])
+                if key.split("_")[1].isdigit()
+                else 0,
             )
             if parallel_keys:
                 for coder_key in parallel_keys:
@@ -668,9 +726,15 @@ def _render_agents_section(
                         cfg,
                     )
             elif role_states.get("coder", "inactive") != "inactive":
-                _agent_row(role_labels.get("coder", "coder"), role_states.get("coder", "inactive"), cfg)
+                _agent_row(
+                    role_labels.get("coder", "coder"),
+                    role_states.get("coder", "inactive"),
+                    cfg,
+                )
         elif role_states.get(role, "inactive") != "inactive":
-            _agent_row(role_labels.get(role, role), role_states.get(role, "inactive"), cfg)
+            _agent_row(
+                role_labels.get(role, role), role_states.get(role, "inactive"), cfg
+            )
 
     if lines[-1] == "":
         lines.pop()
@@ -687,7 +751,9 @@ def _render_research_section(width: int, state: dict, feature_dir: Path) -> list
     all_tasks = [("c", topic, f"code-{topic}/done") for topic in code_tasks] + [
         ("w", topic, f"web-{topic}/done") for topic in web_tasks
     ]
-    done_count = sum(1 for _, _, marker in all_tasks if (research_dir / marker).exists())
+    done_count = sum(
+        1 for _, _, marker in all_tasks if (research_dir / marker).exists()
+    )
     rows = [_section_title(f"RESEARCH {done_count}/{len(all_tasks)}"), ""]
     pulse_on = int(time.time()) % 2 == 0
     for type_prefix, topic, marker in all_tasks:
@@ -696,9 +762,13 @@ def _render_research_section(width: int, state: dict, feature_dir: Path) -> list
         if done:
             rows.append(f" {GREEN}✓{RESET} {DIM}{type_prefix}·{RESET} {slug}")
         elif pulse_on:
-            rows.append(f" {YELLOW}{_spinner_frame()}{RESET} {DIM}{type_prefix}·{RESET} {BOLD}{slug}{RESET}")
+            rows.append(
+                f" {YELLOW}{_spinner_frame()}{RESET} {DIM}{type_prefix}·{RESET} {BOLD}{slug}{RESET}"
+            )
         else:
-            rows.append(f" {DIM}{_spinner_frame()}{RESET} {DIM}{type_prefix}· {slug}{RESET}")
+            rows.append(
+                f" {DIM}{_spinner_frame()}{RESET} {DIM}{type_prefix}· {slug}{RESET}"
+            )
     return rows
 
 
@@ -741,7 +811,9 @@ def render(
         )
     )
 
-    agent_rows = _render_agents_section(width, agents=agents, role_states=role_states, role_labels=role_labels)
+    agent_rows = _render_agents_section(
+        width, agents=agents, role_states=role_states, role_labels=role_labels
+    )
     if agent_rows:
         body.append("")
         body.extend(agent_rows)
@@ -762,13 +834,23 @@ def render(
         reserved = len(body) + len(footer)
         available_for_log = height - reserved - 1
         if available_for_log >= 2:
-            entries = read_monitor_log_entries(log_path, created_files_log_path, max(1, available_for_log - 2))
+            entries = read_monitor_log_entries(
+                log_path, created_files_log_path, max(1, available_for_log - 2)
+            )
             if entries:
                 log_rows = [_section_title("LOG"), ""]
                 max_message = max(1, width - 8)
+                feature_dir = state_path.parent
                 for entry in entries:
                     message = _truncate_text(entry.message, max_message)
-                    rendered = f"{WHITE}{message}{RESET}" if entry.phase_event else message
+                    # Wrap file paths in OSC 8 hyperlinks for IDE Ctrl-click support
+                    if entry.relative_path and message.startswith("+ "):
+                        visible_path = message[2:]  # Strip "+ " prefix
+                        abs_path = feature_dir / entry.relative_path
+                        message = f"+ {file_hyperlink(abs_path, visible_path)}"
+                    rendered = (
+                        f"{WHITE}{message}{RESET}" if entry.phase_event else message
+                    )
                     log_rows.append(f" {DIM}{entry.time_str}{RESET} {rendered}")
 
     lines = list(body)

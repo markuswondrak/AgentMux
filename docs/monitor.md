@@ -1,6 +1,6 @@
 # Monitor Display
 
-> Related source files: `agentmux/monitor/__init__.py`, `agentmux/monitor/state_reader.py`, `agentmux/monitor/render.py`, `agentmux/terminal_ui/layout.py`
+> Related source files: `agentmux/monitor/__init__.py`, `agentmux/monitor/state_reader.py`, `agentmux/monitor/render.py`, `agentmux/terminal_ui/layout.py`, `agentmux/terminal_ui/hyperlinks.py`
 
 The control pane renders a live status box with the following sections:
 
@@ -25,6 +25,7 @@ The control pane renders a live status box with the following sections:
   - Phase-transition entries are rendered in white for contrast
   - Includes workflow artifacts such as `plan.md`, `tasks.md`, research `summary.md` / `detail.md` / `done`, `design.md`, review handoff files, implementation `done_*`, and completion artifacts
   - Excludes runtime noise such as `context.md`, prompt files, request files, temp files, and other orchestration internals
+  - File path entries are wrapped in OSC 8 terminal hyperlinks with `file://` URLs for IDE Ctrl-click support; the visible text shows the relative path while the hyperlink target is the absolute path on disk
 
 ## Key constants
 
