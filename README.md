@@ -7,9 +7,7 @@
 AgentMux orchestrates a structured workflow across multiple AI agents by driving existing CLI tools like `claude`, `codex`, `gemini`, and `opencode` through tmux. The pipeline owns the workflow; the agents execute focused role prompts against a shared file protocol.
 
 ---
-
-<img width="1393" height="1075" alt="image" src="https://github.com/user-attachments/assets/094e01e5-8946-4b53-83bc-910a4c49968b" />
-
+<img width="1595" height="1071" alt="agentmux" src="https://github.com/user-attachments/assets/806e0fe8-decc-4869-80be-35f99f03481b" />
 ---
 
 ## How it works
