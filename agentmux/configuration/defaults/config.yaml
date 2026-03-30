@@ -84,13 +84,13 @@ launchers:
     model_flag: --model
     trust_snippet:
     role_args:
-      architect: [--agent, plan]
-      product-manager: [--agent, plan]
-      reviewer: [--agent, build]
-      coder: [--agent, build]
-      designer: [--agent, build]
-      code-researcher: [--agent, build]
-      web-researcher: [--agent, build]
+      architect: [--agent, architect]
+      product-manager: [--agent, product-manager]
+      reviewer: [--agent, reviewer]
+      coder: [--agent, coder]
+      designer: [--agent, designer]
+      code-researcher: [--agent, code-researcher]
+      web-researcher: [--agent, web-researcher]
 
 profiles:
   claude:
@@ -119,7 +119,7 @@ profiles:
 
   opencode:
     max:
-      model: opencode-go/kimi-k2.5
+      model: opencode-go/glm-5
     standard:
       model: opencode-go/kimi-k2.5
     low:
