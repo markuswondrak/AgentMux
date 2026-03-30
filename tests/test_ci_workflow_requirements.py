@@ -7,10 +7,16 @@ import yaml
 
 
 class CIWorkflowRequirementsTests(unittest.TestCase):
-    def test_requirements_include_pytest_dependency(self) -> None:
+    def test_requirements_dev_include_pytest_dependency(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
-        requirements = (repo_root / "requirements.txt").read_text(encoding="utf-8")
-        self.assertIn("pytest>=8.0.0", requirements)
+        requirements_dev = (repo_root / "requirements-dev.txt").read_text(
+            encoding="utf-8"
+        )
+        # Check for pytest in dev requirements (either pinned == or minimum >=)
+        self.assertTrue(
+            "pytest==" in requirements_dev or "pytest>=" in requirements_dev,
+            "pytest dependency not found in requirements-dev.txt",
+        )
 
     def test_github_actions_workflow_runs_tests_on_push_and_pull_requests(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -43,9 +49,10 @@ class CIWorkflowRequirementsTests(unittest.TestCase):
                 for step in steps
             )
         )
+        # CI should install from requirements-dev.txt which includes test dependencies
         self.assertTrue(
             any(
-                "python -m pip install -r requirements.txt" in step.get("run", "")
+                "python -m pip install -r requirements-dev.txt" in step.get("run", "")
                 for step in steps
             )
         )

@@ -13,6 +13,7 @@ dependencies = [
   "questionary>=2.0.0",
   "rich>=13.0.0",
   "mcp>=1.0.0",
+  "shtab>=1.6.0",
 ]
 
 [project.scripts]
@@ -23,3 +24,6 @@ include = ["agentmux*"]
 
 [tool.setuptools.package-data]
 agentmux = ["prompts/**/*.md", "configuration/defaults/*.yaml"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]

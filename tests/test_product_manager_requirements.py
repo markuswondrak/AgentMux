@@ -86,8 +86,9 @@ class ProductManagerRequirementsTests(unittest.TestCase):
         return ctx, files.state
 
     def test_parse_args_accepts_product_manager_flag(self) -> None:
-        with patch("sys.argv", ["pipeline.py", "ship feature", "--product-manager"]):
-            args = pipeline.parse_args()
+        from agentmux.pipeline.cli import build_parser
+        with patch("sys.argv", ["agentmux", "run", "ship feature", "--product-manager"]):
+            args = build_parser().parse_args()
         self.assertTrue(args.product_manager)
 
     def test_load_config_parses_optional_product_manager(self) -> None:

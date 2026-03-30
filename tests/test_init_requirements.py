@@ -71,8 +71,8 @@ class InitRequirementsTests(unittest.TestCase):
 
     def test_pipeline_main_routes_init_subcommand_before_parse_args(self) -> None:
         with patch("sys.argv", ["agentmux", "init", "--defaults"]), patch(
-            "agentmux.pipeline.parse_args",
-            side_effect=AssertionError("parse_args should not run for init subcommand"),
+            "agentmux.pipeline.application.PipelineApplication.__init__",
+            side_effect=AssertionError("PipelineApplication should not be constructed for init subcommand"),
         ), patch("agentmux.pipeline.init_command.run_init", return_value=0) as run_init_mock:
             result = pipeline.main()
 

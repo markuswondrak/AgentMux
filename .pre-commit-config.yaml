@@ -1,0 +1,12 @@
+repos:
+  - repo: https://github.com/jazzband/pip-tools
+    rev: 7.5.3
+    hooks:
+      - id: pip-compile
+        name: pip-compile-production
+        files: ^(pyproject\.toml|requirements\.txt)$
+        args: [--output-file=requirements.txt, pyproject.toml]
+      - id: pip-compile
+        name: pip-compile-dev
+        files: ^(pyproject\.toml|requirements-dev\.txt)$
+        args: [--extra=dev, --output-file=requirements-dev.txt, pyproject.toml]

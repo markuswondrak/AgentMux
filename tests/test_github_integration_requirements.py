@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import json
 import subprocess
 import tempfile
@@ -231,24 +230,15 @@ class PipelineIssueTriggerTests(unittest.TestCase):
         )
 
     def test_parse_args_accepts_issue_flag(self) -> None:
-        with patch("sys.argv", ["pipeline.py", "ship feature", "--issue", "42"]):
-            args = pipeline.parse_args()
-        self.assertEqual("42", args.issue)
+        from agentmux.pipeline.cli import build_parser
+        with patch("sys.argv", ["agentmux", "issue", "42"]):
+            args = build_parser().parse_args()
+        self.assertEqual("42", args.number_or_url)
 
     def test_main_fails_fast_when_issue_used_and_gh_missing(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             app = application.PipelineApplication(project_dir)
-            args = argparse.Namespace(
-                prompt="ignored",
-                name=None,
-                config=None,
-                keep_session=False,
-                product_manager=False,
-                orchestrate=None,
-                resume=None,
-                issue="42",
-            )
 
             with patch.object(app, "ensure_dependencies", return_value=None), patch(
                 "agentmux.pipeline.application.load_layered_config", return_value=self._loaded_config()
@@ -259,7 +249,7 @@ class PipelineIssueTriggerTests(unittest.TestCase):
             ), patch(
                 "agentmux.integrations.github.check_gh_available", return_value=False
             ), self.assertRaises(SystemExit) as ctx:
-                app.run(args)
+                app.run_issue("42", keep_session=False, product_manager=False)
 
         self.assertIn("gh CLI is required for --issue", str(ctx.exception))
 
@@ -267,16 +257,6 @@ class PipelineIssueTriggerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=lambda _message: None))
-            args = argparse.Namespace(
-                prompt="local prompt",
-                name=None,
-                config=None,
-                keep_session=False,
-                product_manager=False,
-                orchestrate=None,
-                resume=None,
-                issue="https://github.com/acme/demo/issues/42",
-            )
 
             with patch.object(app, "ensure_dependencies", return_value=None), patch(
                 "agentmux.pipeline.application.load_layered_config", return_value=self._loaded_config()
@@ -304,7 +284,7 @@ class PipelineIssueTriggerTests(unittest.TestCase):
                 "agentmux.pipeline.application.subprocess.run", return_value=None
             ):
                 datetime_mock.now.return_value.strftime.return_value = "20260322-203228"
-                result = app.run(args)
+                result = app.run_issue("https://github.com/acme/demo/issues/42", keep_session=False, product_manager=False)
 
             self.assertEqual(0, result)
             feature_dir = project_dir / ".agentmux" / ".sessions" / "20260322-203228-fix-api-auth-flow"
@@ -322,16 +302,6 @@ class PipelineIssueTriggerTests(unittest.TestCase):
             project_dir = Path(td)
             messages: list[str] = []
             app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=messages.append))
-            args = argparse.Namespace(
-                prompt="normal run",
-                name="demo",
-                config=None,
-                keep_session=False,
-                product_manager=False,
-                orchestrate=None,
-                resume=None,
-                issue=None,
-            )
 
             with patch.object(app, "ensure_dependencies", return_value=None), patch(
                 "agentmux.pipeline.application.load_layered_config", return_value=self._loaded_config()
@@ -351,7 +321,7 @@ class PipelineIssueTriggerTests(unittest.TestCase):
             ), patch(
                 "agentmux.pipeline.application.subprocess.run", return_value=None
             ):
-                result = app.run(args)
+                result = app.run_prompt("normal run", name="demo", keep_session=False, product_manager=False)
 
             self.assertEqual(0, result)
             state = json.loads(
