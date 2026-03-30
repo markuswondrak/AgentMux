@@ -558,6 +558,10 @@ def tmux_new_session(
     run_command(["tmux", "set-option", "-p", "-t", control_pane, "@role", ""])
     run_command(["tmux", "set-option", "-p", "-t", control_pane, "@pane_label", ""])
     run_command(
+        ["tmux", "set-option", "-p", "-t", control_pane, "allow-passthrough", "on"],
+        check=False,
+    )
+    run_command(
         ["tmux", "set-environment", "-t", session_name, "CONTROL_PANE", control_pane]
     )
 

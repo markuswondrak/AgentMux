@@ -8,17 +8,23 @@ defaults:
 
 roles:
   architect:
+    provider: opencode
     profile: max
   product-manager:
+    provider: opencode
     profile: max
   reviewer:
+    provider: opencode
     profile: standard
   coder:
     provider: opencode
     profile: standard
   designer:
+    provider: opencode
     profile: standard
   code-researcher:
+    provider: opencode
     profile: low
   web-researcher:
+    provider: opencode
     profile: low
