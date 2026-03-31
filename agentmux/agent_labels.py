@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from .sessions.state_store import feature_slug_from_dir
-from .shared.models import SESSION_DIR_NAMES
+from .shared.models import BATCH_AGENT_ROLES, SESSION_DIR_NAMES
 from .workflow.execution_plan import load_execution_plan
 
 _PLAN_ID_RE = re.compile(r"^plan_(\d+)(?:\.md)?$")
@@ -116,7 +116,7 @@ def role_display_label(
         return format_agent_label(role, _coder_detail(feature_dir, current_state, task_id))
     if role == "reviewer":
         return format_agent_label(role, f"iteration {_review_iteration(current_state) + 1}")
-    if role in {"code-researcher", "web-researcher"} and task_id is not None:
+    if role in BATCH_AGENT_ROLES and task_id is not None:
         return format_agent_label(role, str(task_id))
     if task_id is not None:
         return format_agent_label(role, str(task_id))

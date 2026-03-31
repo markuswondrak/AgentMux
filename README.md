@@ -56,7 +56,7 @@ agentmux --issue 42
 agentmux --issue https://github.com/owner/repo/issues/42
 
 # Resume an interrupted run
-agentmux --resume
+agentmux resume
 
 ```
 

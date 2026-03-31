@@ -404,7 +404,7 @@ class InterruptionReportStateTests(unittest.TestCase):
                 "last_event": "run_failed",
                 "interruption_category": "failed",
                 "interruption_cause": "Failure summary",
-                "interruption_resume_command": f"agentmux --resume {feature_dir}",
+                "interruption_resume_command": f"agentmux resume {feature_dir}",
                 "interruption_log_path": None,
             }
 
@@ -424,7 +424,7 @@ class InterruptionReportStateTests(unittest.TestCase):
                 "last_event": "run_failed",
                 "interruption_category": "failed",
                 "interruption_cause": "Failure summary",
-                "interruption_resume_command": f"agentmux --resume {feature_dir}",
+                "interruption_resume_command": f"agentmux resume {feature_dir}",
             }
 
             report = service.report_from_state(state, feature_dir)
@@ -517,7 +517,7 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertEqual("run_canceled", state["last_event"])
             self.assertEqual("canceled", state["interruption_category"])
             self.assertEqual(
-                f"agentmux --resume {feature_dir.name}",
+                f"agentmux resume {feature_dir.name}",
                 state["interruption_resume_command"],
             )
             self.assertEqual(
@@ -594,7 +594,7 @@ class ExitMessagingTests(unittest.TestCase):
             self.assertEqual("run_failed", state["last_event"])
             self.assertEqual("failed", state["interruption_category"])
             self.assertEqual(
-                f"agentmux --resume {feature_dir.name}",
+                f"agentmux resume {feature_dir.name}",
                 state["interruption_resume_command"],
             )
             self.assertIn("exit code 1", state["interruption_cause"])
@@ -629,7 +629,7 @@ class ExitMessagingTests(unittest.TestCase):
                         "last_event": "run_failed",
                         "interruption_category": "failed",
                         "interruption_cause": "Background orchestrator exited unexpectedly.",
-                        "interruption_resume_command": f"agentmux --resume {feature_dir}",
+                        "interruption_resume_command": f"agentmux resume {feature_dir}",
                         "interruption_log_path": str(log_path),
                     }
                 )

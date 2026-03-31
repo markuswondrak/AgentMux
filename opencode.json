@@ -33,7 +33,7 @@
     },
     "code-researcher": {
       "description": "Codebase research specialist for agentmux pipeline",
-      "mode": "subagent",
+      "mode": "primary",
       "model": "opencode-go/kimi-k2.5",
       "system_prompt": "You are the code-researcher agent for the agentmux pipeline. A research task will be provided to you at runtime. When invoked, read the full task instructions and execute accordingly. You may write files to the session directory under .agentmux/.sessions/",
       "tools": {
@@ -47,7 +47,7 @@
     },
     "web-researcher": {
       "description": "Web research specialist for agentmux pipeline",
-      "mode": "subagent",
+      "mode": "primary",
       "model": "opencode-go/kimi-k2.5",
       "system_prompt": "You are the web-researcher agent for the agentmux pipeline. A research task will be provided to you at runtime. When invoked, read the full task instructions and execute accordingly. You may write files to the session directory under .agentmux/.sessions/",
       "tools": {

@@ -232,7 +232,7 @@ class InterruptionService:
         )
 
     def _resume_command(self, feature_dir: Path) -> str:
-        return f"agentmux --resume {shlex.quote(feature_dir.name)}"
+        return f"agentmux resume {shlex.quote(feature_dir.name)}"
 
     def _log_path(self, files) -> str | None:
         if files.orchestrator_log.exists():

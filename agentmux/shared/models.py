@@ -25,6 +25,8 @@ PROMPT_AGENT_ROLES: tuple[str, ...] = (
     "web-researcher",
 )
 
+BATCH_AGENT_ROLES: frozenset[str] = frozenset({"code-researcher", "web-researcher"})
+
 PREFERENCE_PROPOSAL_SOURCES: tuple[str, ...] = (
     "product-manager",
     "architect",

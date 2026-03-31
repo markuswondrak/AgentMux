@@ -100,14 +100,14 @@ class ScreenRenderingTests(unittest.TestCase):
         goodbye_canceled(
             feature_name="add-welcome-and-goodbye-screen",
             session_id="20260328-082756-add-welcome-and-goodbye-screen",
-            resume_command="agentmux --resume 20260328-082756-add-welcome-and-goodbye-screen",
+            resume_command="agentmux resume 20260328-082756-add-welcome-and-goodbye-screen",
             console=console,
         )
 
         rendered = console.rendered_text()
         self.assertIn("Pipeline cancelled.", rendered)
         self.assertIn(
-            "agentmux --resume 20260328-082756-add-welcome-and-goodbye-screen", rendered
+            "agentmux resume 20260328-082756-add-welcome-and-goodbye-screen", rendered
         )
         self.assertIn("Session:", rendered)
         self.assertIn("20260328-082756-add-welcome-and-goodbye-screen", rendered)
@@ -137,7 +137,7 @@ class ScreenRenderingTests(unittest.TestCase):
         ):
             welcome_screen("Ship welcome screen.", "agentmux-demo")
             goodbye_success("demo", "abc123", None, "feature/demo", 3)
-            goodbye_canceled("demo", "/tmp/feature", "agentmux --resume demo")
+            goodbye_canceled("demo", "/tmp/feature", "agentmux resume demo")
             goodbye_error("demo", "/tmp/feature", "boom")
 
         rendered = output.getvalue()
@@ -285,7 +285,7 @@ class ApplicationScreenWiringTests(unittest.TestCase):
             self.assertEqual(130, result)
             self.assertEqual("demo-feature", goodbye_mock.call_args.args[0])
             self.assertEqual(prepared.feature_dir.name, goodbye_mock.call_args.args[1])
-            self.assertIn("agentmux --resume", goodbye_mock.call_args.args[2])
+            self.assertIn("agentmux resume", goodbye_mock.call_args.args[2])
 
     def test_launch_attached_session_renders_error_screen_on_subprocess_failure(
         self,

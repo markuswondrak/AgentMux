@@ -684,22 +684,22 @@ def create_batch_agent_pane(
     session_name: str,
     agent_name: str,
     agents: dict[str, AgentConfig],
-    prompt_content: str,
+    prompt_file: str,
     *,
     display_label: str | None = None,
 ) -> tuple[str, int]:
-    """Create a batch-mode agent pane with prompt as direct argument.
+    """Create a batch-mode agent pane with prompt file reference.
 
-    For batch mode (e.g., researcher agents), the prompt content is passed
-    directly as a command argument rather than injected via send_keys.
-    This prevents the agent from waiting for interactive input.
+    For batch mode (e.g., researcher agents), the prompt file path is passed
+    as a command argument. The agent reads the file to get its instructions.
+    This prevents shell argument length issues and is more robust.
 
     Returns:
         Tuple of (pane_id, process_pid)
     """
     agent = agents[agent_name]
 
-    # Build command with prompt content as final argument
+    # Build command with prompt file path as final argument
     env_prefix = ""
     if agent.env:
         env_items = [
@@ -713,7 +713,7 @@ def create_batch_agent_pane(
         env_prefix
         + f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}"
         + (f" {extra_args}" if extra_args else "")
-        + f" {shlex.quote(prompt_content)}"
+        + f" {shlex.quote(prompt_file)}"
     )
 
     split_target = _find_any_hidden_pane(session_name)

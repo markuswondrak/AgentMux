@@ -11,7 +11,7 @@ import time
 from typing import Iterable, Literal, Protocol
 
 from ..agent_labels import role_display_label
-from ..shared.models import AgentConfig
+from ..shared.models import AgentConfig, BATCH_AGENT_ROLES
 from .tmux_control import (
     ContentZone,
     _find_pane_by_title,
@@ -495,13 +495,14 @@ class TmuxAgentRuntime:
             return
 
         # Use batch mode for researcher agents to prevent interactive input waiting
-        if role in ("code-researcher", "web-researcher"):
-            prompt_content = prompt_file.read_text(encoding="utf-8")
+        if role in BATCH_AGENT_ROLES:
+            # Pass the prompt file path instead of the full content
+            # The agent CLI should read the file and follow instructions
             pane_id, pid = create_batch_agent_pane(
                 self.session_name,
                 role,
                 self.agents,
-                prompt_content,
+                str(prompt_file),
                 display_label=self._display_label_for_task(role, task_id),
             )
         else:

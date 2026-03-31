@@ -198,7 +198,7 @@ class GoodbyeScreenTests(unittest.TestCase):
             goodbye_canceled(
                 feature_name="demo",
                 session_id="20260101-120000-demo",
-                resume_command="agentmux --resume 20260101-120000-demo",
+                resume_command="agentmux resume 20260101-120000-demo",
                 console=Mock(print=output_lines.append),
             )
 
@@ -215,7 +215,7 @@ class GoodbyeScreenTests(unittest.TestCase):
                 feature_name="demo",
                 session_id="20260101-120000-demo",
                 error_reason="test error",
-                resume_command="agentmux --resume 20260101-120000-demo",
+                resume_command="agentmux resume 20260101-120000-demo",
                 console=Mock(print=output_lines.append),
             )
 

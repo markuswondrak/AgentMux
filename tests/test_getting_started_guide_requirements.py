@@ -4,7 +4,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -26,9 +25,17 @@ class GettingStartedGuideRequirementsTests(unittest.TestCase):
         self.assertIn("authenticated", text.lower())
 
         self.assertIn("## Installation", text)
-        self.assertIn("python3 -m pip install git+https://github.com/markuswondrak/AgentMux.git", text)
-        self.assertIn("pipx install git+https://github.com/markuswondrak/AgentMux.git", text)
-        self.assertIn("pipx install --force git+https://github.com/markuswondrak/AgentMux.git", text)
+        self.assertIn(
+            "python3 -m pip install git+https://github.com/markuswondrak/AgentMux.git",
+            text,
+        )
+        self.assertIn(
+            "pipx install git+https://github.com/markuswondrak/AgentMux.git", text
+        )
+        self.assertIn(
+            "pipx install --force git+https://github.com/markuswondrak/AgentMux.git",
+            text,
+        )
         self.assertIn("python3 -m pip install -e .", text)
         self.assertIn("agentmux --help", text)
 
@@ -77,7 +84,7 @@ class GettingStartedGuideRequirementsTests(unittest.TestCase):
     def test_readme_has_quickstart_cross_link_and_docs_entry(self) -> None:
         readme = self._read("README.md")
         quickstart_block = """# Resume an interrupted run
-agentmux --resume
+agentmux resume
 
 ```"""
         guide_line = "For a detailed walkthrough, see the [Getting Started guide](docs/getting-started.md)."
@@ -89,7 +96,9 @@ agentmux --resume
         self.assertLess(readme.index(quickstart_block), readme.index(guide_line))
         self.assertLess(readme.index(guide_line), readme.index(gh_line))
 
-        docs_section_match = re.search(r"## Documentation\n\n(?P<section>(?:- .+\n)+)", readme)
+        docs_section_match = re.search(
+            r"## Documentation\n\n(?P<section>(?:- .+\n)+)", readme
+        )
         self.assertIsNotNone(docs_section_match)
         docs_section = docs_section_match.group("section")
         first_entry = docs_section.splitlines()[0]
@@ -101,14 +110,18 @@ agentmux --resume
     def test_relative_links_resolve_in_getting_started_guide(self) -> None:
         text = self._read("docs/getting-started.md")
         links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", text)
-        relative_links = [link for link in links if not link.startswith(("http://", "https://", "#"))]
+        relative_links = [
+            link for link in links if not link.startswith(("http://", "https://", "#"))
+        ]
 
         self.assertGreater(len(relative_links), 0)
         docs_dir = REPO_ROOT / "docs"
         for link in relative_links:
             with self.subTest(link=link):
                 target = (docs_dir / link).resolve()
-                self.assertTrue(target.exists(), f"Missing relative link target: {link}")
+                self.assertTrue(
+                    target.exists(), f"Missing relative link target: {link}"
+                )
 
 
 if __name__ == "__main__":
