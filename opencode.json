@@ -1,69 +1,10 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "agent": {
-    "product-manager": {
-      "description": "Product management agent for agentmux pipeline",
-      "mode": "primary",
-      "model": "opencode-go/glm-5",
-      "system_prompt": "You are the product-manager agent for the agentmux pipeline. Analyze requirements and create detailed product specifications. You may write files to the session directory under .agentmux/.sessions/"
-    },
-    "architect": {
-      "description": "Architecture planning agent for agentmux pipeline",
-      "mode": "primary",
-      "model": "opencode-go/glm-5",
-      "system_prompt": "You are the architect agent for the agentmux pipeline. Create technical plans and designs. You may write files to the session directory under .agentmux/.sessions/"
-    },
-    "reviewer": {
-      "description": "Code review agent for agentmux pipeline",
-      "mode": "subagent",
-      "model": "opencode-go/kimi-k2.5",
-      "system_prompt": "You are the reviewer agent for the agentmux pipeline. Review code for quality and correctness. You may write files to the session directory under .agentmux/.sessions/"
-    },
-    "coder": {
-      "description": "Code implementation agent for agentmux pipeline",
-      "mode": "primary",
-      "model": "opencode-go/kimi-k2.5",
-      "system_prompt": "You are the coder agent for the agentmux pipeline. Implement features and fix bugs. You may write files to the session directory under .agentmux/.sessions/"
-    },
-    "designer": {
-      "description": "UI/UX design agent for agentmux pipeline",
-      "mode": "primary",
-      "model": "opencode-go/kimi-k2.5",
-      "system_prompt": "You are the designer agent for the agentmux pipeline. Create UI/UX designs and specifications. You may write files to the session directory under .agentmux/.sessions/"
-    },
-    "code-researcher": {
-      "description": "Codebase research specialist for agentmux pipeline",
-      "mode": "primary",
-      "model": "opencode-go/kimi-k2.5",
-      "system_prompt": "You are the code-researcher agent for the agentmux pipeline. A research task will be provided to you at runtime. When invoked, read the full task instructions and execute accordingly. You may write files to the session directory under .agentmux/.sessions/",
-      "tools": {
-        "read": true,
-        "grep": true,
-        "glob": true,
-        "bash": true,
-        "write": true,
-        "edit": true
-      }
-    },
-    "web-researcher": {
-      "description": "Web research specialist for agentmux pipeline",
-      "mode": "primary",
-      "model": "opencode-go/kimi-k2.5",
-      "system_prompt": "You are the web-researcher agent for the agentmux pipeline. A research task will be provided to you at runtime. When invoked, read the full task instructions and execute accordingly. You may write files to the session directory under .agentmux/.sessions/",
-      "tools": {
-        "read": true,
-        "webfetch": true,
-        "websearch": true,
-        "write": true,
-        "edit": true
-      }
-    }
-  },
   "mcp": {
     "agentmux-research": {
       "type": "local",
       "command": [
-        "/home/markus/.venvs/doc-pipeline/bin/python3",
+        "/home/markus/.local/share/pipx/venvs/agentmux/bin/python",
         "-m",
         "agentmux.integrations.mcp_research_server"
       ],

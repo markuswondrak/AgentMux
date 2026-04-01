@@ -84,13 +84,13 @@ launchers:
     model_flag: --model
     trust_snippet:
     role_args:
-      architect: [--agent, architect]
-      product-manager: [--agent, product-manager]
-      reviewer: [--agent, reviewer]
-      coder: [--agent, coder]
-      designer: [--agent, designer]
-      code-researcher: [--agent, code-researcher, run]
-      web-researcher: [--agent, web-researcher, run]
+      architect: [--agent, agentmux-architect]
+      product-manager: [--agent, agentmux-product-manager]
+      reviewer: [--agent, agentmux-reviewer]
+      coder: [--agent, agentmux-coder]
+      designer: [--agent, agentmux-designer]
+      code-researcher: [--agent, agentmux-code-researcher, run]
+      web-researcher: [--agent, agentmux-web-researcher, run]
 
 profiles:
   claude:
