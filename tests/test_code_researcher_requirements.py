@@ -255,11 +255,17 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             self.assertNotIn("db-schema", snapshot["parallel"]["code-researcher"])
 
     def test_planning_detects_task_requested_and_completed(self) -> None:
+        """Test that research events are detected correctly.
+
+        New pending requests are detected before completed tasks.
+        This ensures batch research tasks are properly dispatched.
+        """
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
             ctx, state_path = self._make_ctx(feature_dir)
 
+            # Setup: auth-module is dispatched and done, db-schema is new request
             state = load_state(state_path)
             state["phase"] = "planning"
             state["research_tasks"] = {"auth-module": "dispatched"}
@@ -277,14 +283,46 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             (feature_dir / RESEARCH_DIR / "code-auth-module" / "done").touch()
 
             phase = PlanningPhase()
+
+            # First: new pending request is detected (new behavior - priority to new tasks)
+            event = phase.detect_event(load_state(state_path), ctx)
+            self.assertEqual("code_batch_requested", event)
+
+            # After marking db-schema as dispatched, the completed task is detected
+            state = load_state(state_path)
+            state["research_tasks"] = {
+                "auth-module": "dispatched",
+                "db-schema": "dispatched",
+            }
+            write_state(state_path, state)
             event = phase.detect_event(load_state(state_path), ctx)
             self.assertEqual("task_completed:auth-module", event)
 
+    def test_planning_detects_new_requests_while_tasks_dispatched(self) -> None:
+        """Test the batching bug fix: new requests are detected even with dispatched tasks."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            ctx, state_path = self._make_ctx(feature_dir)
+
+            # Setup: one task already dispatched
             state = load_state(state_path)
-            state["research_tasks"] = {}
+            state["phase"] = "planning"
+            state["research_tasks"] = {"existing-task": "dispatched"}
             write_state(state_path, state)
-            (feature_dir / RESEARCH_DIR / "code-auth-module" / "done").unlink()
+
+            # Create a new request while existing task is still dispatched
+            (feature_dir / RESEARCH_DIR / "code-new-task").mkdir(
+                parents=True, exist_ok=True
+            )
+            (feature_dir / RESEARCH_DIR / "code-new-task" / "request.md").write_text(
+                "new task request", encoding="utf-8"
+            )
+
+            phase = PlanningPhase()
             event = phase.detect_event(load_state(state_path), ctx)
+
+            # Bug fix: new request should be detected even though tasks are already dispatched
             self.assertEqual("code_batch_requested", event)
 
     def test_planning_snapshot_inputs_include_research_request_and_done_markers(

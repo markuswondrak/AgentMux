@@ -3,17 +3,25 @@ from __future__ import annotations
 import unittest
 
 from agentmux.runtime.event_bus import EventBus
-from agentmux.runtime.interruption_sources import INTERRUPTION_EVENT_PANE_EXITED, InterruptionEventSource
+from agentmux.runtime.interruption_sources import (
+    INTERRUPTION_EVENT_PANE_EXITED,
+    InterruptionEventSource,
+)
 from agentmux.runtime import RegisteredPaneRef
 
 
 class _FakeRuntime:
-    def __init__(self, missing: list[RegisteredPaneRef], *, expected: set[str] | None = None) -> None:
+    def __init__(
+        self, missing: list[RegisteredPaneRef], *, expected: set[str] | None = None
+    ) -> None:
         self._missing = list(missing)
         self._expected = set(expected or set())
 
     def unexpected_missing_registered_panes(self) -> list[RegisteredPaneRef]:
         return [pane for pane in self._missing if pane.pane_id not in self._expected]
+
+    def is_expected_missing_pane(self, pane_id: str | None) -> bool:
+        return pane_id in self._expected
 
 
 class InterruptionEventSourceTests(unittest.TestCase):
@@ -110,7 +118,10 @@ class InterruptionEventSourceTests(unittest.TestCase):
         source.poll_once(bus)
 
         self.assertEqual("[coder] API wiring", seen[0].payload["label"])
-        self.assertIn("Agent pane [coder] API wiring was closed or exited", seen[0].payload["message"])
+        self.assertIn(
+            "Agent pane [coder] API wiring was closed or exited",
+            seen[0].payload["message"],
+        )
 
 
 if __name__ == "__main__":

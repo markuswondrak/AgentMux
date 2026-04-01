@@ -494,18 +494,30 @@ class TmuxAgentRuntime:
         if role not in self.agents:
             return
 
+        print(
+            f"[ORCH] spawn_task: role={role}, task_id={task_id}, prompt={prompt_file}"
+        )
+
         # Use batch mode for researcher agents to prevent interactive input waiting
         if role in BATCH_AGENT_ROLES:
-            # Pass the prompt file path instead of the full content
-            # The agent CLI should read the file and follow instructions
+            # Compute error log path for capturing stderr
+            error_log_path = (
+                self.feature_dir
+                / "03_research"
+                / f"{role.replace('_', '-')}-{task_id}"
+                / "error.log"
+            )
+            print(f"[ORCH] spawn_task: batch mode with error_log={error_log_path}")
             pane_id, pid = create_batch_agent_pane(
                 self.session_name,
                 role,
                 self.agents,
                 str(prompt_file),
                 display_label=self._display_label_for_task(role, task_id),
+                error_log_path=error_log_path,
             )
         else:
+            print(f"[ORCH] spawn_task: normal mode")
             pane_id, pid = create_agent_pane(
                 self.session_name,
                 role,
@@ -515,6 +527,7 @@ class TmuxAgentRuntime:
             )
             send_prompt(pane_id, prompt_file)
 
+        print(f"[ORCH] spawn_task: created pane_id={pane_id}, pid={pid}")
         self.parallel_panes.setdefault(role, {})[task_id] = pane_id
         self._track_process_pid(pane_id, pid)
         self._persist_snapshot()

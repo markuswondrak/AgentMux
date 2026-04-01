@@ -31,9 +31,19 @@ from .prompts import (
     build_web_researcher_prompt,
     write_prompt_file,
 )
-from .transitions import EXIT_FAILURE, EXIT_SUCCESS, PipelineContext, file_signature, phase_input_changed
+from .transitions import (
+    EXIT_FAILURE,
+    EXIT_SUCCESS,
+    PipelineContext,
+    file_signature,
+    phase_input_changed,
+)
 
 COMPLETION_SERVICE = CompletionService()
+
+
+def _orch_log(msg: str) -> None:
+    print(f"[ORCH] {msg}")
 
 
 def _git_status_porcelain(project_dir: Path) -> str:
@@ -107,7 +117,9 @@ def _set_implementation_progress(
 
     state["implementation_group_index"] = active_group_index + 1
     state["implementation_group_mode"] = str(schedule[active_group_index]["mode"])
-    state["implementation_active_plan_ids"] = list(schedule[active_group_index]["plan_ids"])
+    state["implementation_active_plan_ids"] = list(
+        schedule[active_group_index]["plan_ids"]
+    )
     state["implementation_completed_group_ids"] = [
         str(schedule[index]["group_id"]) for index in range(active_group_index)
     ]
@@ -144,13 +156,18 @@ def _build_implementation_schedule(
                 "mode": group.mode,
                 "plan_paths": plan_paths,
                 "plan_ids": [Path(plan.file).stem for plan in group.plans],
-                "plan_names": [plan.name or coder_label_for_subplan(planning_dir, index) for plan, index in zip(group.plans, group_indexes)],
+                "plan_names": [
+                    plan.name or coder_label_for_subplan(planning_dir, index)
+                    for plan, index in zip(group.plans, group_indexes)
+                ],
                 "marker_indexes": group_indexes,
             }
         )
 
     if len(all_indexes) != len(set(all_indexes)):
-        raise RuntimeError("execution_plan.json must not reuse plan files across groups.")
+        raise RuntimeError(
+            "execution_plan.json must not reuse plan files across groups."
+        )
     if all_indexes:
         max_index = max(all_indexes)
         missing_indexes = sorted(set(range(1, max_index + 1)) - set(all_indexes))
@@ -191,20 +208,20 @@ class Phase(ABC):
     name: str
 
     @abstractmethod
-    def on_enter(self, state: dict, ctx: PipelineContext) -> None:
-        ...
+    def on_enter(self, state: dict, ctx: PipelineContext) -> None: ...
 
     @abstractmethod
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
-        ...
+    def snapshot_inputs(
+        self, state: dict, ctx: PipelineContext
+    ) -> dict[str, str | None]: ...
 
     @abstractmethod
-    def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
-        ...
+    def detect_event(self, state: dict, ctx: PipelineContext) -> str | None: ...
 
     @abstractmethod
-    def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
-        ...
+    def handle_event(
+        self, state: dict, event: str, ctx: PipelineContext
+    ) -> str | None: ...
 
 
 class _ResearchDispatchMixin:
@@ -213,17 +230,21 @@ class _ResearchDispatchMixin:
         prefix = f"{expected}:"
         if not event.startswith(prefix):
             return None
-        topic = event[len(prefix):].strip()
+        topic = event[len(prefix) :].strip()
         return topic or None
 
     def _research_snapshot(self, ctx: PipelineContext) -> dict[str, str | None]:
         snapshot: dict[str, str | None] = {}
         for request_path in sorted(ctx.files.research_dir.glob("code-*/request.md")):
-            snapshot[f"{request_path.parent.name}/request.md"] = file_signature(request_path)
+            snapshot[f"{request_path.parent.name}/request.md"] = file_signature(
+                request_path
+            )
         for done_path in sorted(ctx.files.research_dir.glob("code-*/done")):
             snapshot[f"{done_path.parent.name}/done"] = file_signature(done_path)
         for request_path in sorted(ctx.files.research_dir.glob("web-*/request.md")):
-            snapshot[f"{request_path.parent.name}/request.md"] = file_signature(request_path)
+            snapshot[f"{request_path.parent.name}/request.md"] = file_signature(
+                request_path
+            )
         for done_path in sorted(ctx.files.research_dir.glob("web-*/done")):
             snapshot[f"{done_path.parent.name}/done"] = file_signature(done_path)
         return snapshot
@@ -233,12 +254,16 @@ class _ResearchDispatchMixin:
             str(topic): str(status)
             for topic, status in dict(state.get("research_tasks", {})).items()
         }
-        any_code_dispatched = any(v == "dispatched" for v in tracked_tasks.values())
-        if not any_code_dispatched:
-            for request_path in sorted(ctx.files.research_dir.glob("code-*/request.md")):
-                topic = request_path.parent.name.removeprefix("code-")
-                if topic and topic not in tracked_tasks:
-                    return "code_batch_requested"
+        _orch_log(f"Research detection: tracked={list(tracked_tasks.keys())}")
+        pending_code = [
+            request_path.parent.name.removeprefix("code-")
+            for request_path in sorted(ctx.files.research_dir.glob("code-*/request.md"))
+            if (topic := request_path.parent.name.removeprefix("code-"))
+            and topic not in tracked_tasks
+        ]
+        _orch_log(f"Research detection: pending_code={pending_code}")
+        if pending_code:
+            return "code_batch_requested"
 
         for done_path in sorted(ctx.files.research_dir.glob("code-*/done")):
             topic = done_path.parent.name.removeprefix("code-")
@@ -249,12 +274,16 @@ class _ResearchDispatchMixin:
             str(topic): str(status)
             for topic, status in dict(state.get("web_research_tasks", {})).items()
         }
-        any_web_dispatched = any(v == "dispatched" for v in tracked_web_tasks.values())
-        if not any_web_dispatched:
-            for request_path in sorted(ctx.files.research_dir.glob("web-*/request.md")):
-                topic = request_path.parent.name.removeprefix("web-")
-                if topic and topic not in tracked_web_tasks:
-                    return "web_batch_requested"
+        _orch_log(f"Research detection: tracked_web={list(tracked_web_tasks.keys())}")
+        pending_web = [
+            request_path.parent.name.removeprefix("web-")
+            for request_path in sorted(ctx.files.research_dir.glob("web-*/request.md"))
+            if (topic := request_path.parent.name.removeprefix("web-"))
+            and topic not in tracked_web_tasks
+        ]
+        _orch_log(f"Research detection: pending_web={pending_web}")
+        if pending_web:
+            return "web_batch_requested"
 
         for done_path in sorted(ctx.files.research_dir.glob("web-*/done")):
             topic = done_path.parent.name.removeprefix("web-")
@@ -276,18 +305,26 @@ class _ResearchDispatchMixin:
             }
             pending = [
                 request_path.parent.name.removeprefix("code-")
-                for request_path in sorted(ctx.files.research_dir.glob("code-*/request.md"))
+                for request_path in sorted(
+                    ctx.files.research_dir.glob("code-*/request.md")
+                )
                 if (topic := request_path.parent.name.removeprefix("code-"))
                 and topic not in research_tasks
             ]
+            _orch_log(f"Dispatching code research tasks: {pending}")
             for t in pending:
                 done_marker = ctx.files.research_dir / f"code-{t}" / "done"
                 if done_marker.exists():
                     done_marker.unlink()
                 prompt_file = write_prompt_file(
                     ctx.files.feature_dir,
-                    ctx.files.relative_path(ctx.files.research_dir / f"code-{t}" / "prompt.md"),
+                    ctx.files.relative_path(
+                        ctx.files.research_dir / f"code-{t}" / "prompt.md"
+                    ),
                     build_code_researcher_prompt(t, ctx.files),
+                )
+                _orch_log(
+                    f"Spawning code-researcher task '{t}' with prompt {prompt_file}"
                 )
                 ctx.runtime.spawn_task("code-researcher", t, prompt_file)
                 research_tasks[t] = "dispatched"
@@ -325,18 +362,26 @@ class _ResearchDispatchMixin:
             }
             pending = [
                 request_path.parent.name.removeprefix("web-")
-                for request_path in sorted(ctx.files.research_dir.glob("web-*/request.md"))
+                for request_path in sorted(
+                    ctx.files.research_dir.glob("web-*/request.md")
+                )
                 if (topic := request_path.parent.name.removeprefix("web-"))
                 and topic not in web_research_tasks
             ]
+            _orch_log(f"Dispatching web research tasks: {pending}")
             for t in pending:
                 done_marker = ctx.files.research_dir / f"web-{t}" / "done"
                 if done_marker.exists():
                     done_marker.unlink()
                 prompt_file = write_prompt_file(
                     ctx.files.feature_dir,
-                    ctx.files.relative_path(ctx.files.research_dir / f"web-{t}" / "prompt.md"),
+                    ctx.files.relative_path(
+                        ctx.files.research_dir / f"web-{t}" / "prompt.md"
+                    ),
                     build_web_researcher_prompt(t, ctx.files),
+                )
+                _orch_log(
+                    f"Spawning web-researcher task '{t}' with prompt {prompt_file}"
                 )
                 ctx.runtime.spawn_task("web-researcher", t, prompt_file)
                 web_research_tasks[t] = "dispatched"
@@ -376,12 +421,16 @@ class ProductManagementPhase(_ResearchDispatchMixin, Phase):
         _ = state
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
-            ctx.files.relative_path(ctx.files.product_management_dir / "product_manager_prompt.md"),
+            ctx.files.relative_path(
+                ctx.files.product_management_dir / "product_manager_prompt.md"
+            ),
             build_product_manager_prompt(ctx.files),
         )
         send_to_role(ctx, "product-manager", prompt_file)
 
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+    def snapshot_inputs(
+        self, state: dict, ctx: PipelineContext
+    ) -> dict[str, str | None]:
         _ = state
         snapshot = {
             "pm_done": file_signature(ctx.files.product_management_dir / "done"),
@@ -400,6 +449,9 @@ class ProductManagementPhase(_ResearchDispatchMixin, Phase):
 
     def handle_event(self, state: dict, event: str, ctx: PipelineContext) -> str | None:
         if event == "pm_completed":
+            _orch_log(
+                f"Phase transition: product_management -> planning (event: {event})"
+            )
             _apply_approved_preferences(ctx, "product-manager")
             ctx.runtime.kill_primary("product-manager")
             write_phase(ctx, state, "planning", "pm_completed")
@@ -412,17 +464,25 @@ class PlanningPhase(_ResearchDispatchMixin, Phase):
     name = "planning"
 
     def on_enter(self, state: dict, ctx: PipelineContext) -> None:
-        is_replan = state.get("last_event") == "changes_requested" and ctx.files.changes.exists()
+        is_replan = (
+            state.get("last_event") == "changes_requested"
+            and ctx.files.changes.exists()
+        )
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
             ctx.files.relative_path(
-                ctx.files.planning_dir / ("changes_prompt.txt" if is_replan else "architect_prompt.md")
+                ctx.files.planning_dir
+                / ("changes_prompt.txt" if is_replan else "architect_prompt.md")
             ),
-            build_change_prompt(ctx.files) if is_replan else build_architect_prompt(ctx.files),
+            build_change_prompt(ctx.files)
+            if is_replan
+            else build_architect_prompt(ctx.files),
         )
         send_to_role(ctx, "architect", prompt_file)
 
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+    def snapshot_inputs(
+        self, state: dict, ctx: PipelineContext
+    ) -> dict[str, str | None]:
         _ = state
         snapshot: dict[str, str | None] = {
             "plan": file_signature(ctx.files.plan),
@@ -457,10 +517,12 @@ class PlanningPhase(_ResearchDispatchMixin, Phase):
                 ctx.files.changes.unlink()
             ctx.runtime.deactivate("architect")
             ctx.runtime.kill_primary("architect")
+            next_phase = "designing" if needs_design else "implementing"
+            _orch_log(f"Phase transition: planning -> {next_phase} (event: {event})")
             write_phase(
                 ctx,
                 state,
-                "designing" if needs_design else "implementing",
+                next_phase,
                 "plan_written",
             )
             return None
@@ -481,10 +543,14 @@ class DesigningPhase(Phase):
             ctx,
             "designer",
             prompt_file,
-            display_label=role_display_label(ctx.files.feature_dir, "designer", state=state),
+            display_label=role_display_label(
+                ctx.files.feature_dir, "designer", state=state
+            ),
         )
 
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+    def snapshot_inputs(
+        self, state: dict, ctx: PipelineContext
+    ) -> dict[str, str | None]:
         _ = state
         return {"design": file_signature(ctx.files.design)}
 
@@ -537,7 +603,10 @@ class ImplementingPhase(Phase):
         group = schedule[active_group_index]
         marker_indexes = [int(index) for index in list(group["marker_indexes"])]
         plan_paths = [Path(path) for path in list(group["plan_paths"])]
-        plan_names = [None if name is None else str(name) for name in list(group.get("plan_names", []))]
+        plan_names = [
+            None if name is None else str(name)
+            for name in list(group.get("plan_names", []))
+        ]
         pending: list[tuple[int, Path, str | None]] = [
             (index, path, plan_name)
             for index, path, plan_name in zip(marker_indexes, plan_paths, plan_names)
@@ -554,7 +623,8 @@ class ImplementingPhase(Phase):
                     prompt_file=write_prompt_file(
                         ctx.files.feature_dir,
                         ctx.files.relative_path(
-                            ctx.files.implementation_dir / f"coder_prompt_{marker_index}.txt"
+                            ctx.files.implementation_dir
+                            / f"coder_prompt_{marker_index}.txt"
                         ),
                         build_coder_subplan_prompt(
                             ctx.files,
@@ -564,7 +634,10 @@ class ImplementingPhase(Phase):
                     ),
                     display_label=format_agent_label(
                         "coder",
-                        plan_name or coder_label_for_subplan(ctx.files.planning_dir, marker_index),
+                        plan_name
+                        or coder_label_for_subplan(
+                            ctx.files.planning_dir, marker_index
+                        ),
                     ),
                 )
             )
@@ -580,14 +653,20 @@ class ImplementingPhase(Phase):
         )
 
     def on_enter(self, state: dict, ctx: PipelineContext) -> None:
-        if state.get("last_event") in {"plan_written", "design_written", "changes_requested"}:
+        if state.get("last_event") in {
+            "plan_written",
+            "design_written",
+            "changes_requested",
+        }:
             reset_markers(ctx.files.implementation_dir, "done_*")
         ctx.runtime.kill_primary("coder")
 
         schedule = self._schedule(ctx)
         state["subplan_count"] = self._total_marker_count(schedule)
         state["completed_subplans"] = []
-        active_group_index = _first_incomplete_group_index(ctx.files.implementation_dir, schedule)
+        active_group_index = _first_incomplete_group_index(
+            ctx.files.implementation_dir, schedule
+        )
         _set_implementation_progress(state, schedule, active_group_index)
         state["updated_at"] = now_iso()
         state["updated_by"] = "pipeline"
@@ -597,7 +676,9 @@ class ImplementingPhase(Phase):
             return
         self._dispatch_active_group(ctx, schedule, active_group_index)
 
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+    def snapshot_inputs(
+        self, state: dict, ctx: PipelineContext
+    ) -> dict[str, str | None]:
         schedule = self._schedule(ctx)
         if not schedule:
             return {}
@@ -611,7 +692,9 @@ class ImplementingPhase(Phase):
             active_group = schedule[group_index - 1]
         marker_indexes = [int(index) for index in list(active_group["marker_indexes"])]
         return {
-            f"done_{index}": file_signature(ctx.files.implementation_dir / f"done_{index}")
+            f"done_{index}": file_signature(
+                ctx.files.implementation_dir / f"done_{index}"
+            )
             for index in marker_indexes
         }
 
@@ -620,13 +703,17 @@ class ImplementingPhase(Phase):
         if not schedule:
             return "implementation_completed"
         group_index = int(state.get("implementation_group_index", 0))
-        if group_index >= len(schedule) and not state.get("implementation_active_plan_ids"):
+        if group_index >= len(schedule) and not state.get(
+            "implementation_active_plan_ids"
+        ):
             return "implementation_completed"
         if group_index <= 0:
             return None
         active_group = schedule[group_index - 1]
         changed_done: list[int] = []
-        for marker_index in [int(index) for index in list(active_group["marker_indexes"])]:
+        for marker_index in [
+            int(index) for index in list(active_group["marker_indexes"])
+        ]:
             if phase_input_changed(
                 ctx,
                 f"done_{marker_index}",
@@ -660,7 +747,9 @@ class ImplementingPhase(Phase):
         if event not in {"implementation_group_completed", "implementation_completed"}:
             return None
         schedule = self._schedule(ctx)
-        next_group_index = _first_incomplete_group_index(ctx.files.implementation_dir, schedule)
+        next_group_index = _first_incomplete_group_index(
+            ctx.files.implementation_dir, schedule
+        )
         ctx.runtime.finish_many("coder")
 
         if next_group_index is None:
@@ -673,7 +762,9 @@ class ImplementingPhase(Phase):
             write_phase(ctx, state, "reviewing", "implementation_completed")
             return None
 
-        _set_implementation_progress(state, schedule, active_group_index=next_group_index)
+        _set_implementation_progress(
+            state, schedule, active_group_index=next_group_index
+        )
         state["completed_subplans"] = []
         state["updated_at"] = now_iso()
         state["updated_by"] = "pipeline"
@@ -681,6 +772,7 @@ class ImplementingPhase(Phase):
         self._dispatch_active_group(ctx, schedule, next_group_index)
         ctx.phase_baseline = self.snapshot_inputs(state, ctx)
         return None
+
 
 class ReviewingPhase(Phase):
     name = "reviewing"
@@ -697,10 +789,14 @@ class ReviewingPhase(Phase):
             ctx,
             "reviewer",
             prompt_file,
-            display_label=role_display_label(ctx.files.feature_dir, "reviewer", state=state),
+            display_label=role_display_label(
+                ctx.files.feature_dir, "reviewer", state=state
+            ),
         )
 
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+    def snapshot_inputs(
+        self, state: dict, ctx: PipelineContext
+    ) -> dict[str, str | None]:
         _ = state
         return {"review": file_signature(ctx.files.review)}
 
@@ -709,7 +805,11 @@ class ReviewingPhase(Phase):
         if not phase_input_changed(ctx, "review", file_signature(ctx.files.review)):
             return None
         review_text = ctx.files.review.read_text(encoding="utf-8")
-        first_line = review_text.splitlines()[0].strip().lower() if review_text.splitlines() else ""
+        first_line = (
+            review_text.splitlines()[0].strip().lower()
+            if review_text.splitlines()
+            else ""
+        )
         if first_line == "verdict: pass":
             return "review_passed"
         if first_line == "verdict: fail":
@@ -758,10 +858,14 @@ class FixingPhase(Phase):
             ctx,
             "coder",
             prompt_file,
-            display_label=role_display_label(ctx.files.feature_dir, "coder", state=state),
+            display_label=role_display_label(
+                ctx.files.feature_dir, "coder", state=state
+            ),
         )
 
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+    def snapshot_inputs(
+        self, state: dict, ctx: PipelineContext
+    ) -> dict[str, str | None]:
         _ = state
         return {
             "done_1": file_signature(ctx.files.implementation_dir / "done_1"),
@@ -799,17 +903,23 @@ class CompletingPhase(Phase):
             return
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
-            ctx.files.relative_path(ctx.files.completion_dir / "confirmation_prompt.md"),
+            ctx.files.relative_path(
+                ctx.files.completion_dir / "confirmation_prompt.md"
+            ),
             build_confirmation_prompt(ctx.files),
         )
         send_to_role(
             ctx,
             "reviewer",
             prompt_file,
-            display_label=role_display_label(ctx.files.feature_dir, "reviewer", state=state),
+            display_label=role_display_label(
+                ctx.files.feature_dir, "reviewer", state=state
+            ),
         )
 
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+    def snapshot_inputs(
+        self, state: dict, ctx: PipelineContext
+    ) -> dict[str, str | None]:
         _ = state
         return {
             "approval": file_signature(ctx.files.completion_dir / "approval.json"),
@@ -819,7 +929,10 @@ class CompletingPhase(Phase):
     def detect_event(self, state: dict, ctx: PipelineContext) -> str | None:
         _ = state
         approval_path = ctx.files.completion_dir / "approval.json"
-        if ctx.workflow_settings.completion.skip_final_approval and approval_path.exists():
+        if (
+            ctx.workflow_settings.completion.skip_final_approval
+            and approval_path.exists()
+        ):
             raw = approval_path.read_text(encoding="utf-8").strip()
             if raw:
                 payload = json.loads(raw)
@@ -841,13 +954,19 @@ class CompletingPhase(Phase):
             approval_path = ctx.files.completion_dir / "approval.json"
             payload = json.loads(approval_path.read_text(encoding="utf-8"))
             _apply_approved_preferences(ctx, "reviewer")
-            changed_paths = _parse_changed_paths(_git_status_porcelain(ctx.files.project_dir))
+            changed_paths = _parse_changed_paths(
+                _git_status_porcelain(ctx.files.project_dir)
+            )
             exclude_files = {
                 str(path).strip()
                 for path in payload.get("exclude_files", [])
                 if str(path).strip()
             }
-            issue_number = str(state.get("issue_number")) if state.get("issue_number") is not None else None
+            issue_number = (
+                str(state.get("issue_number"))
+                if state.get("issue_number") is not None
+                else None
+            )
             commit_message = COMPLETION_SERVICE.resolve_commit_message(
                 payload_commit_message=payload.get("commit_message"),
                 files=ctx.files,
@@ -859,12 +978,16 @@ class CompletingPhase(Phase):
                 gh_available=bool(state.get("gh_available")),
                 issue_number=issue_number,
                 commit_message=commit_message,
-                changed_paths=[path for path in changed_paths if path not in exclude_files],
+                changed_paths=[
+                    path for path in changed_paths if path not in exclude_files
+                ],
             )
             feature_name = feature_slug_from_dir(ctx.files.feature_dir)
             branch_name = f"{ctx.github_config.branch_prefix}{feature_name}"
             if result.commit_hash is not None:
-                summary_path = ctx.files.project_dir / ".agentmux" / ".last_completion.json"
+                summary_path = (
+                    ctx.files.project_dir / ".agentmux" / ".last_completion.json"
+                )
                 summary_path.parent.mkdir(parents=True, exist_ok=True)
                 summary_path.write_text(
                     json.dumps(
@@ -888,7 +1011,9 @@ class CompletingPhase(Phase):
                     else:
                         print("PR creation failed (commit preserved).")
             else:
-                print("Completion approved, but commit step failed or was skipped. Feature directory retained.")
+                print(
+                    "Completion approved, but commit step failed or was skipped. Feature directory retained."
+                )
             return EXIT_SUCCESS
 
         if event != "changes_requested":
@@ -908,7 +1033,9 @@ class FailedPhase(Phase):
     def on_enter(self, state: dict, ctx: PipelineContext) -> None:
         _ = state, ctx
 
-    def snapshot_inputs(self, state: dict, ctx: PipelineContext) -> dict[str, str | None]:
+    def snapshot_inputs(
+        self, state: dict, ctx: PipelineContext
+    ) -> dict[str, str | None]:
         _ = state, ctx
         return {}
 

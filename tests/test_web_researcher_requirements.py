@@ -9,7 +9,10 @@ from unittest.mock import patch
 from agentmux.configuration import load_explicit_config
 from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
 from agentmux.workflow.phases import PlanningPhase
-from agentmux.workflow.prompts import build_architect_prompt, build_web_researcher_prompt
+from agentmux.workflow.prompts import (
+    build_architect_prompt,
+    build_web_researcher_prompt,
+)
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.workflow.transitions import PipelineContext
 
@@ -22,11 +25,22 @@ class FakeRuntime:
         self.calls: list[tuple[str, object]] = []
         self.primary_panes = {"architect": "%1"}
 
-    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
+    def send(
+        self, role: str, prompt_file: Path, display_label: str | None = None
+    ) -> None:
         self.calls.append(("send", role, prompt_file.name))
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
-        self.calls.append(("send_many", role, [Path(getattr(item, "prompt_file", item)).name for item in prompt_specs]))
+        self.calls.append(
+            (
+                "send_many",
+                role,
+                [
+                    Path(getattr(item, "prompt_file", item)).name
+                    for item in prompt_specs
+                ],
+            )
+        )
 
     def spawn_task(self, role: str, task_id: str, prompt_file: Path) -> None:
         self.calls.append(("spawn_task", role, task_id, prompt_file.name))
@@ -59,7 +73,9 @@ class WebResearcherRequirementsTests(unittest.TestCase):
     def _make_ctx(self, feature_dir: Path) -> tuple[PipelineContext, Path]:
         project_dir = feature_dir.parent / "project"
         project_dir.mkdir(parents=True, exist_ok=True)
-        files = create_feature_files(project_dir, feature_dir, "add web researcher", "session-x")
+        files = create_feature_files(
+            project_dir, feature_dir, "add web researcher", "session-x"
+        )
 
         prompts = {"architect": feature_dir / PLANNING_DIR / "architect_prompt.md"}
         for prompt in prompts.values():
@@ -67,9 +83,15 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             prompt.write_text(prompt.name, encoding="utf-8")
 
         agents = {
-            "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
-            "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[]),
-            "web-researcher": AgentConfig(role="web-researcher", cli="claude", model="sonnet", args=[]),
+            "architect": AgentConfig(
+                role="architect", cli="claude", model="opus", args=[]
+            ),
+            "coder": AgentConfig(
+                role="coder", cli="codex", model="gpt-5.3-codex", args=[]
+            ),
+            "web-researcher": AgentConfig(
+                role="web-researcher", cli="claude", model="sonnet", args=[]
+            ),
         }
 
         ctx = PipelineContext(
@@ -104,13 +126,17 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             self.assertEqual("claude", agents["web-researcher"].cli)
             self.assertEqual("sonnet", agents["web-researcher"].model)
 
-    def test_build_web_researcher_prompt_renders_topic_and_paths_and_constraints(self) -> None:
+    def test_build_web_researcher_prompt_renders_topic_and_paths_and_constraints(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
-            files = create_feature_files(project_dir, feature_dir, "research", "session-x")
+            files = create_feature_files(
+                project_dir, feature_dir, "research", "session-x"
+            )
             self._write_web_request(feature_dir, "openai-models")
 
             prompt = build_web_researcher_prompt("openai-models", files)
@@ -131,7 +157,9 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             project_dir = tmp_path / "project"
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
-            files = create_feature_files(project_dir, feature_dir, "research", "session-x")
+            files = create_feature_files(
+                project_dir, feature_dir, "research", "session-x"
+            )
 
             prompt = build_architect_prompt(files)
 
@@ -140,41 +168,64 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             self.assertIn("agentmux_research_dispatch_web", prompt)
 
     def test_planning_detects_web_task_requested_and_completed(self) -> None:
+        """Test that web research events are detected correctly.
+
+        New pending requests are detected before completed tasks.
+        This ensures batch web research tasks are properly dispatched.
+        """
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
             ctx, state_path = self._make_ctx(feature_dir)
 
+            # Setup: openai-models is dispatched and done, react-19 is new request
             state = load_state(state_path)
             state["phase"] = "planning"
             state["web_research_tasks"] = {"openai-models": "dispatched"}
             write_state(state_path, state)
 
-            (feature_dir / RESEARCH_DIR / "web-react-19").mkdir(parents=True, exist_ok=True)
-            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(parents=True, exist_ok=True)
-            (feature_dir / RESEARCH_DIR / "web-react-19" / "request.md").write_text("look at react", encoding="utf-8")
+            (feature_dir / RESEARCH_DIR / "web-react-19").mkdir(
+                parents=True, exist_ok=True
+            )
+            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(
+                parents=True, exist_ok=True
+            )
+            (feature_dir / RESEARCH_DIR / "web-react-19" / "request.md").write_text(
+                "look at react", encoding="utf-8"
+            )
             (feature_dir / RESEARCH_DIR / "web-openai-models" / "done").touch()
 
             phase = PlanningPhase()
-            event = phase.detect_event(load_state(state_path), ctx)
-            self.assertEqual("web_task_completed:openai-models", event)
 
-            state = load_state(state_path)
-            state["web_research_tasks"] = {}
-            write_state(state_path, state)
-            (feature_dir / RESEARCH_DIR / "web-openai-models" / "done").unlink()
+            # First: new pending request is detected (priority to new tasks)
             event = phase.detect_event(load_state(state_path), ctx)
             self.assertEqual("web_batch_requested", event)
 
-    def test_planning_snapshot_inputs_include_web_research_request_and_done_markers(self) -> None:
+            # After marking react-19 as dispatched, the completed task is detected
+            state = load_state(state_path)
+            state["web_research_tasks"] = {
+                "openai-models": "dispatched",
+                "react-19": "dispatched",
+            }
+            write_state(state_path, state)
+            event = phase.detect_event(load_state(state_path), ctx)
+            self.assertEqual("web_task_completed:openai-models", event)
+
+    def test_planning_snapshot_inputs_include_web_research_request_and_done_markers(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
             ctx, state_path = self._make_ctx(feature_dir)
             _ = state_path
 
-            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(parents=True, exist_ok=True)
-            (feature_dir / RESEARCH_DIR / "web-openai-models" / "request.md").write_text(
+            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(
+                parents=True, exist_ok=True
+            )
+            (
+                feature_dir / RESEARCH_DIR / "web-openai-models" / "request.md"
+            ).write_text(
                 "look at models",
                 encoding="utf-8",
             )
@@ -185,7 +236,9 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             self.assertIn("web-openai-models/request.md", snapshot)
             self.assertIn("web-openai-models/done", snapshot)
 
-    def test_planning_handle_web_task_requested_spawns_researcher_and_updates_state(self) -> None:
+    def test_planning_handle_web_task_requested_spawns_researcher_and_updates_state(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -194,8 +247,12 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             state["phase"] = "planning"
             write_state(state_path, state)
 
-            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(parents=True, exist_ok=True)
-            (feature_dir / RESEARCH_DIR / "web-openai-models" / "request.md").write_text(
+            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(
+                parents=True, exist_ok=True
+            )
+            (
+                feature_dir / RESEARCH_DIR / "web-openai-models" / "request.md"
+            ).write_text(
                 "investigate models",
                 encoding="utf-8",
             )
@@ -203,7 +260,9 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             stale_done.touch()
 
             phase = PlanningPhase()
-            result = phase.handle_event(load_state(state_path), "web_batch_requested", ctx)
+            result = phase.handle_event(
+                load_state(state_path), "web_batch_requested", ctx
+            )
 
             self.assertIsNone(result)
             self.assertFalse(stale_done.exists())
@@ -211,11 +270,19 @@ class WebResearcherRequirementsTests(unittest.TestCase):
                 ("spawn_task", "web-researcher", "openai-models", "prompt.md"),
                 ctx.runtime.calls[-1],
             )
-            self.assertTrue((feature_dir / RESEARCH_DIR / "web-openai-models" / "prompt.md").exists())
+            self.assertTrue(
+                (
+                    feature_dir / RESEARCH_DIR / "web-openai-models" / "prompt.md"
+                ).exists()
+            )
             updated = load_state(state_path)
-            self.assertEqual("dispatched", updated["web_research_tasks"]["openai-models"])
+            self.assertEqual(
+                "dispatched", updated["web_research_tasks"]["openai-models"]
+            )
 
-    def test_planning_handle_web_task_completed_finishes_researcher_and_notifies_architect(self) -> None:
+    def test_planning_handle_web_task_completed_finishes_researcher_and_notifies_architect(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -224,16 +291,25 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             state["phase"] = "planning"
             state["web_research_tasks"] = {"openai-models": "dispatched"}
             write_state(state_path, state)
-            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(parents=True, exist_ok=True)
+            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(
+                parents=True, exist_ok=True
+            )
             (feature_dir / RESEARCH_DIR / "web-openai-models" / "done").touch()
 
             phase = PlanningPhase()
-            result = phase.handle_event(load_state(state_path), "web_task_completed:openai-models", ctx)
+            result = phase.handle_event(
+                load_state(state_path), "web_task_completed:openai-models", ctx
+            )
 
             self.assertIsNone(result)
-            self.assertEqual(("notify", "architect",
-                "Web research on 'openai-models' is complete. Read 03_research/web-openai-models/summary.md and continue from there.",
-            ), ctx.runtime.calls[-1])
+            self.assertEqual(
+                (
+                    "notify",
+                    "architect",
+                    "Web research on 'openai-models' is complete. Read 03_research/web-openai-models/summary.md and continue from there.",
+                ),
+                ctx.runtime.calls[-1],
+            )
             updated = load_state(state_path)
             self.assertEqual("done", updated["web_research_tasks"]["openai-models"])
 

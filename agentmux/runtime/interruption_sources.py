@@ -13,8 +13,14 @@ INTERRUPTION_SOURCE_NAME = "interruption"
 INTERRUPTION_EVENT_PANE_EXITED = "interruption.pane_exited"
 
 
+def _log(msg: str) -> None:
+    print(f"[ORCH] {msg}")
+
+
 class InterruptionEventSource:
-    def __init__(self, runtime: "TmuxAgentRuntime", *, poll_interval: float = 0.25) -> None:
+    def __init__(
+        self, runtime: "TmuxAgentRuntime", *, poll_interval: float = 0.25
+    ) -> None:
         self._runtime = runtime
         self._poll_interval = poll_interval
         self._stop_event = threading.Event()
@@ -40,11 +46,19 @@ class InterruptionEventSource:
             self._thread = None
 
     def poll_once(self, bus: EventBus) -> None:
-        for pane in self._runtime.unexpected_missing_registered_panes():
+        missing_panes = self._runtime.unexpected_missing_registered_panes()
+        if missing_panes:
+            _log(f"Interruption detection: found {len(missing_panes)} missing pane(s)")
+        for pane in missing_panes:
             event_key = self._event_key(pane)
             if event_key in self._reported:
                 continue
             self._reported.add(event_key)
+            is_expected = self._runtime.is_expected_missing_pane(pane.pane_id)
+            _log(
+                f"Interruption: pane_exited role={pane.role} scope={pane.scope} "
+                f"task_id={pane.task_id} pane_id={pane.pane_id} expected={is_expected}"
+            )
             bus.publish(
                 SessionEvent(
                     kind=INTERRUPTION_EVENT_PANE_EXITED,

@@ -687,12 +687,16 @@ def create_batch_agent_pane(
     prompt_file: str,
     *,
     display_label: str | None = None,
+    error_log_path: Path | None = None,
 ) -> tuple[str, int]:
     """Create a batch-mode agent pane with prompt file reference.
 
     For batch mode (e.g., researcher agents), the prompt file path is passed
     as a command argument. The agent reads the file to get its instructions.
     This prevents shell argument length issues and is more robust.
+
+    Args:
+        error_log_path: Optional path to capture stderr output
 
     Returns:
         Tuple of (pane_id, process_pid)
@@ -715,6 +719,12 @@ def create_batch_agent_pane(
         + (f" {extra_args}" if extra_args else "")
         + f" {shlex.quote(prompt_file)}"
     )
+
+    # Redirect stderr to error log if provided
+    if error_log_path:
+        error_log_path.parent.mkdir(parents=True, exist_ok=True)
+        agent_cmd += f" 2>{shlex.quote(str(error_log_path))}"
+        _log(f"create_batch_agent_pane: stderr will be captured to {error_log_path}")
 
     split_target = _find_any_hidden_pane(session_name)
     if not split_target:
