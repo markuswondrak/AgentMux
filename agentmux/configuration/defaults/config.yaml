@@ -92,8 +92,3 @@ providers:
       designer: [--agent, agentmux-designer]
       code-researcher: [--agent, agentmux-code-researcher]
       web-researcher: [--agent, agentmux-web-researcher]
-
-roles:
-  coder:
-    provider: codex
-    model: gpt-5.3-codex
