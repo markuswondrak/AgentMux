@@ -724,24 +724,22 @@ def create_batch_agent_pane(
         env_prefix = f"env {' '.join(env_items)} "
 
     extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
-    if agent.batch_subcommand:
-        # e.g. opencode: `opencode run --model x --agent y prompt.md`
-        # The pane CWD is already set to project_dir via tmux -c.
-        agent_cmd = (
-            env_prefix
-            + f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)}"
-            + f" {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}"
-            + (f" {extra_args}" if extra_args else "")
-            + f" {shlex.quote(prompt_file)}"
-        )
-    else:
-        # Default: prompt file as final positional arg (claude, codex, gemini)
-        agent_cmd = (
-            env_prefix
-            + f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}"
-            + (f" {extra_args}" if extra_args else "")
-            + f" {shlex.quote(prompt_file)}"
-        )
+
+    # Build CLI segment: include batch_subcommand if present (e.g., opencode: `opencode run`)
+    # The pane CWD is already set to project_dir via tmux -c.
+    cli_segment = (
+        f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)}"
+        if agent.batch_subcommand
+        else f"{shlex.quote(agent.cli)}"
+    )
+
+    agent_cmd = (
+        env_prefix
+        + cli_segment
+        + f" {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}"
+        + (f" {extra_args}" if extra_args else "")
+        + f" {shlex.quote(prompt_file)}"
+    )
 
     # Redirect stderr to output log if provided (captures all agent output)
     if output_log_path:

@@ -2,29 +2,17 @@ version: 2
 
 defaults:
   session_name: multi-agent-mvp
-  provider: claude
-  model: sonnet
+  provider: opencode
+  model: fireworks-ai/accounts/fireworks/routers/kimi-k2p5-turbo
   max_review_iterations: 3
 
 roles:
   architect:
     provider: opencode
-    model: kimi-k2.5
+    model: fireworks-ai/accounts/fireworks/models/glm-5
   product-manager:
     provider: opencode
-    model: kimi-k2.5
-  reviewer:
-    provider: opencode
-    model: kimi-k2.5
+    model: fireworks-ai/accounts/fireworks/models/glm-5
   coder:
     provider: opencode
     model: gpt-5.1-codex-mini
-  designer:
-    provider: opencode
-    model: kimi-k2.5
-  code-researcher:
-    provider: opencode
-    model: kimi-k2.5
-  web-researcher:
-    provider: opencode
-    model: kimi-k2.5
