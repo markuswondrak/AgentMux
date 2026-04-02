@@ -263,7 +263,7 @@ class TestWorkflowEventRouter:
         router = WorkflowEventRouter(phases)
 
         state = {"phase": "failed"}
-        event = WorkflowEvent(kind="file.created", path="error.log")
+        event = WorkflowEvent(kind="file.created", path="output.log")
 
         with patch("agentmux.sessions.state_store.write_state"):
             updates, exit_code = router.handle(event, state, mock_context)

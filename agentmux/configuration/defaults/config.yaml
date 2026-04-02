@@ -84,7 +84,6 @@ launchers:
     model_flag: --model
     trust_snippet:
     batch_subcommand: run
-    batch_prompt_flag: "-f"
     role_args:
       architect: [--agent, agentmux-architect]
       product-manager: [--agent, agentmux-product-manager]

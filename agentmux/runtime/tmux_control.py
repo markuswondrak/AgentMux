@@ -696,7 +696,7 @@ def create_batch_agent_pane(
     project_dir: Path,
     *,
     display_label: str | None = None,
-    error_log_path: Path | None = None,
+    output_log_path: Path | None = None,
 ) -> tuple[str, int]:
     """Create a batch-mode agent pane with prompt file reference.
 
@@ -705,7 +705,7 @@ def create_batch_agent_pane(
     This prevents shell argument length issues and is more robust.
 
     Args:
-        error_log_path: Optional path to capture stderr output
+        output_log_path: Optional path to capture stderr output (contains both normal output and errors)
         project_dir: The project directory to use as working directory
 
     Returns:
@@ -725,15 +725,14 @@ def create_batch_agent_pane(
 
     extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
     if agent.batch_subcommand:
-        # e.g. opencode: `opencode run --model x --agent y -f prompt.md`
+        # e.g. opencode: `opencode run --model x --agent y prompt.md`
         # The pane CWD is already set to project_dir via tmux -c.
-        prompt_flag = agent.batch_prompt_flag or "-f"
         agent_cmd = (
             env_prefix
             + f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)}"
             + f" {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}"
             + (f" {extra_args}" if extra_args else "")
-            + f" {shlex.quote(prompt_flag)} {shlex.quote(prompt_file)}"
+            + f" {shlex.quote(prompt_file)}"
         )
     else:
         # Default: prompt file as final positional arg (claude, codex, gemini)
@@ -744,11 +743,13 @@ def create_batch_agent_pane(
             + f" {shlex.quote(prompt_file)}"
         )
 
-    # Redirect stderr to error log if provided
-    if error_log_path:
-        error_log_path.parent.mkdir(parents=True, exist_ok=True)
-        agent_cmd += f" 2>{shlex.quote(str(error_log_path))}"
-        _log(f"create_batch_agent_pane: stderr will be captured to {error_log_path}")
+    # Redirect stderr to output log if provided (captures all agent output)
+    if output_log_path:
+        output_log_path.parent.mkdir(parents=True, exist_ok=True)
+        agent_cmd += f" 2>{shlex.quote(str(output_log_path))}"
+        _log(f"create_batch_agent_pane: stderr will be captured to {output_log_path}")
+
+    _log(f"create_batch_agent_pane: command = {agent_cmd}")
 
     split_target = _find_any_hidden_pane(session_name)
     if not split_target:

@@ -7,7 +7,12 @@ from typing import Any
 
 import yaml
 
-from ..shared.models import AgentConfig, CompletionSettings, GitHubConfig, WorkflowSettings
+from ..shared.models import (
+    AgentConfig,
+    CompletionSettings,
+    GitHubConfig,
+    WorkflowSettings,
+)
 
 ROLES = (
     "architect",
@@ -86,7 +91,10 @@ def load_layered_config(
 
 
 def infer_project_dir(feature_dir: Path) -> Path:
-    if feature_dir.parent.name == ".sessions" and feature_dir.parent.parent.name == ".agentmux":
+    if (
+        feature_dir.parent.name == ".sessions"
+        and feature_dir.parent.parent.name == ".agentmux"
+    ):
         return feature_dir.parent.parent.parent
     return feature_dir.parent
 
@@ -110,7 +118,9 @@ def _load_structured_file(path: Path) -> dict[str, Any]:
     elif suffix in {".yaml", ".yml"}:
         data = yaml.safe_load(text)
     else:
-        raise ValueError(f"Unsupported config format for {path}. Expected .json, .yaml, or .yml")
+        raise ValueError(
+            f"Unsupported config format for {path}. Expected .json, .yaml, or .yml"
+        )
 
     if data is None:
         return {}
@@ -146,19 +156,25 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "roles": {},
     }
 
-    launchers = dict(raw.get("launchers", {})) if isinstance(raw.get("launchers"), dict) else {}
+    launchers = (
+        dict(raw.get("launchers", {})) if isinstance(raw.get("launchers"), dict) else {}
+    )
     normalized["launchers"] = {
         str(name): _normalize_launcher(str(name), launcher_raw)
         for name, launcher_raw in launchers.items()
     }
 
-    profiles = dict(raw.get("profiles", {})) if isinstance(raw.get("profiles"), dict) else {}
+    profiles = (
+        dict(raw.get("profiles", {})) if isinstance(raw.get("profiles"), dict) else {}
+    )
     normalized["profiles"] = {
         str(provider): _normalize_profile_map(str(provider), profile_map)
         for provider, profile_map in profiles.items()
     }
 
-    nested_roles = dict(raw.get("roles", {})) if isinstance(raw.get("roles"), dict) else {}
+    nested_roles = (
+        dict(raw.get("roles", {})) if isinstance(raw.get("roles"), dict) else {}
+    )
     normalized["roles"] = {
         str(role): _normalize_role_config(str(role), role_raw)
         for role, role_raw in nested_roles.items()
@@ -169,7 +185,11 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
 def _normalize_defaults(raw: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError("defaults must be a mapping.")
-    unsupported_keys = [key for key in ("skip_final_approval", "require_final_approval", "tier") if key in raw]
+    unsupported_keys = [
+        key
+        for key in ("skip_final_approval", "require_final_approval", "tier")
+        if key in raw
+    ]
     if unsupported_keys:
         keys_csv = ", ".join(sorted(unsupported_keys))
         raise ValueError(
@@ -186,11 +206,15 @@ def _normalize_defaults(raw: dict[str, Any]) -> dict[str, Any]:
         defaults["profile"] = str(profile)
     if "max_review_iterations" in raw:
         defaults["max_review_iterations"] = int(raw["max_review_iterations"])
-    completion = _normalize_completion_defaults(raw.get("completion"), "defaults.completion")
+    completion = _normalize_completion_defaults(
+        raw.get("completion"), "defaults.completion"
+    )
     if completion:
         defaults["completion"] = completion
     if "compression" in raw:
-        compression = _normalize_compression_defaults(raw["compression"], "defaults.compression")
+        compression = _normalize_compression_defaults(
+            raw["compression"], "defaults.compression"
+        )
         if compression:
             defaults["compression"] = compression
     return defaults
@@ -231,17 +255,24 @@ def _normalize_launcher(name: str, raw: Any) -> dict[str, Any]:
         role_args = {}
     if not isinstance(role_args, dict):
         raise ValueError(f"Launcher '{name}'.role_args must be a mapping.")
-    return {
+
+    # Start with required fields
+    result: dict[str, Any] = {
         "command": str(raw.get("command", name)),
         "model_flag": str(raw.get("model_flag", "--model")),
-        "trust_snippet": None if raw.get("trust_snippet") is None else str(raw["trust_snippet"]),
-        "batch_subcommand": None if raw.get("batch_subcommand") is None else str(raw["batch_subcommand"]),
-        "batch_prompt_flag": None if raw.get("batch_prompt_flag") is None else str(raw["batch_prompt_flag"]),
         "role_args": {
             str(role): _normalize_args(f"launchers.{name}.role_args.{role}", args)
             for role, args in role_args.items()
         },
     }
+
+    # Only add optional fields if they have values (preserves builtin values during merge)
+    if raw.get("trust_snippet") is not None:
+        result["trust_snippet"] = str(raw["trust_snippet"])
+    if raw.get("batch_subcommand") is not None:
+        result["batch_subcommand"] = str(raw["batch_subcommand"])
+
+    return result
 
 
 def _normalize_profile_map(provider: str, raw: Any) -> dict[str, Any]:
@@ -260,7 +291,9 @@ def _normalize_profile(provider: str, profile: str, raw: Any) -> dict[str, Any]:
         raise ValueError(f"Profile '{provider}.{profile}' must define 'model'.")
     data = {"model": str(raw["model"])}
     if "args" in raw:
-        data["args"] = _normalize_args(f"profiles.{provider}.{profile}.args", raw["args"])
+        data["args"] = _normalize_args(
+            f"profiles.{provider}.{profile}.args", raw["args"]
+        )
     return data
 
 
@@ -268,7 +301,9 @@ def _normalize_role_config(role: str, raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError(f"Role '{role}' must be a mapping.")
     if "tier" in raw:
-        raise ValueError(f"roles.{role}.tier is no longer supported. Use roles.{role}.profile.")
+        raise ValueError(
+            f"roles.{role}.tier is no longer supported. Use roles.{role}.profile."
+        )
     data: dict[str, Any] = {}
     if "provider" in raw:
         data["provider"] = str(raw["provider"])
@@ -339,7 +374,9 @@ def _validate_project_config(raw: dict[str, Any], path: Path) -> None:
         )
 
 
-def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> LoadedConfig:
+def _resolve_loaded_config(
+    raw: dict[str, Any], sources: tuple[Path, ...]
+) -> LoadedConfig:
     defaults = raw.get("defaults", {})
     github_raw = raw.get("github", {})
     launchers = raw.get("launchers", {})
@@ -355,13 +392,17 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
         draft=_coerce_bool(github_raw.get("draft", True), "github.draft"),
         branch_prefix=str(github_raw.get("branch_prefix", "feature/")),
     )
-    completion_defaults = _normalize_completion_defaults(defaults.get("completion"), "defaults.completion")
+    completion_defaults = _normalize_completion_defaults(
+        defaults.get("completion"), "defaults.completion"
+    )
     workflow_settings = WorkflowSettings(
         completion=CompletionSettings(
             skip_final_approval=completion_defaults.get("skip_final_approval", False),
         ),
     )
-    compression_defaults = _normalize_compression_defaults(defaults.get("compression"), "defaults.compression")
+    compression_defaults = _normalize_compression_defaults(
+        defaults.get("compression"), "defaults.compression"
+    )
     compression_enabled = bool(compression_defaults.get("enabled", False))
 
     agents: dict[str, AgentConfig] = {}
@@ -382,7 +423,9 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
         try:
             provider_profiles = profiles[provider_name]
         except KeyError as exc:
-            raise ValueError(f"No profiles configured for provider '{provider_name}'.") from exc
+            raise ValueError(
+                f"No profiles configured for provider '{provider_name}'."
+            ) from exc
 
         profile_name = str(role_config.get("profile", default_profile))
         try:
@@ -408,7 +451,6 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
             trust_snippet=launcher.get("trust_snippet"),
             provider=provider_name,
             batch_subcommand=launcher.get("batch_subcommand"),
-            batch_prompt_flag=launcher.get("batch_prompt_flag"),
         )
 
     return LoadedConfig(

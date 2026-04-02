@@ -503,7 +503,7 @@ class TmuxAgentRuntime:
         """Spawn a batch research task in the given research directory.
 
         The research_dir is the single source of truth. All files (prompt.md,
-        error.log, summary.md, detail.md, done) are created within this directory.
+        output.log, summary.md, detail.md, done) are created within this directory.
         """
         if role not in self.agents:
             return
@@ -516,9 +516,9 @@ class TmuxAgentRuntime:
 
         # Use batch mode for researcher agents to prevent interactive input waiting
         if role in BATCH_AGENT_ROLES:
-            # Error log is always in the same research directory (single source of truth)
-            error_log_path = research_dir / "error.log"
-            print(f"[ORCH] spawn_task: batch mode with error_log={error_log_path}")
+            # Output log is always in the same research directory (single source of truth)
+            output_log_path = research_dir / "output.log"
+            print(f"[ORCH] spawn_task: batch mode with output_log={output_log_path}")
             pane_id, pid = create_batch_agent_pane(
                 self.session_name,
                 role,
@@ -526,7 +526,7 @@ class TmuxAgentRuntime:
                 str(prompt_file),
                 self.project_dir,
                 display_label=self._display_label_for_task(role, task_id),
-                error_log_path=error_log_path,
+                output_log_path=output_log_path,
             )
         else:
             print(f"[ORCH] spawn_task: normal mode")
