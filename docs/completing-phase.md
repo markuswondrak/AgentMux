@@ -3,7 +3,7 @@
 > Related source files: `agentmux/workflow/phases.py`, `agentmux/integrations/completion.py`, `agentmux/workflow/prompts.py`, `agentmux/sessions/state_store.py`
 
 When the review passes, the workflow terminates all `coder` panes (primary and parallel workers) and transitions directly into `completing`.
-Documentation updates are expected to be delivered during implementation and verified in review through the planned task scope (`02_planning/tasks.md`), not via a separate runtime phase.
+Documentation updates are expected to be delivered during implementation and verified in review through the planned task scope (`02_planning/tasks_<N>.md`), not via a separate runtime phase.
 
 ## Flow
 

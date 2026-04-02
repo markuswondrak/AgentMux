@@ -120,13 +120,20 @@ def _write_execution_plan(ctx: PipelineContext, groups: list[dict]) -> None:
     (planning_dir / "execution_plan.json").write_text(
         json.dumps(payload, indent=2) + "\n", encoding="utf-8"
     )
-    (planning_dir / "tasks.md").write_text(
-        "# Tasks\n\n- [ ] execute\n", encoding="utf-8"
-    )
     for group in groups:
         for plan_file in group["plans"]:
             plan_ref = plan_file["file"] if isinstance(plan_file, dict) else plan_file
             (planning_dir / plan_ref).write_text(f"# {plan_ref}\n", encoding="utf-8")
+            # Create per-plan tasks file
+            import re
+
+            match = re.search(r"plan_(\d+)\.md", plan_ref)
+            if match:
+                plan_index = int(match.group(1))
+                (planning_dir / f"tasks_{plan_index}.md").write_text(
+                    f"# Tasks for plan {plan_index}\n\n- [ ] execute sub-plan {plan_index}\n",
+                    encoding="utf-8",
+                )
 
 
 class StagedExecutionSchedulerTests(unittest.TestCase):

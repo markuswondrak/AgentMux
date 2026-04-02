@@ -109,6 +109,9 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
         (planning_dir / "plan_1.md").write_text(
             "## Sub-plan 1: implementation\n", encoding="utf-8"
         )
+        (planning_dir / "tasks_1.md").write_text(
+            "# Tasks for plan 1\n\n- [ ] task\n", encoding="utf-8"
+        )
         (planning_dir / "execution_plan.json").write_text(
             json.dumps(
                 {

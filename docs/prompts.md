@@ -110,7 +110,7 @@ The coder prompt contract now requires:
 
 - TDD protocol: write tests first, run them, verify they fail (Red), then implement until tests pass (Green).
 - Strict phase order discipline: follow the active plan/sub-plan phase order and do not move to later-phase logic early.
-- Atomic execution from tasks: complete one task from `02_planning/tasks.md` at a time, validate it, and check it off before starting the next task.
+- Atomic execution from tasks: complete one task from your assigned `02_planning/tasks_<N>.md` at a time, validate it, and check it off before starting the next task.
 - Completion marker flow remains unchanged: finish all required validation first, then create the phase completion marker as the final action.
 
 ## Staged planning contract
@@ -120,9 +120,10 @@ Planning and replanning prompts share one contract for implementation scheduling
 - `02_planning/plan.md` is the human-readable overview
 - `02_planning/plan_<N>.md` files are executable implementation units
 - `02_planning/execution_plan.json` is the scheduling source of truth (ordered execution groups, each marked as `serial` or `parallel`, with explicit named plan references)
-- `02_planning/tasks.md` remains the implementation checklist mapped to the same work
+- `02_planning/tasks_<N>.md` are per-plan implementation checklists mapped to the same work; each coder receives only their assigned plan's tasks
+- `02_planning/tasks.md` is an optional human-readable overview summarizing all tasks (not used by scheduler)
 - `02_planning/plan_meta.json` remains workflow intent metadata (`needs_design`, `needs_docs`, `doc_files`)
-- Documentation updates must be represented in planning artifacts (`plan.md`, `plan_<N>.md`, and `tasks.md`) rather than a dedicated post-review docs phase.
+- Documentation updates must be represented in planning artifacts (`plan.md`, `plan_<N>.md`, and corresponding `tasks_<N>.md`) rather than a dedicated post-review docs phase.
 
 Architect output requirements for parallel work include:
 

@@ -31,12 +31,13 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
   - Canonical plan-entry shape is `{ "file": "plan_<N>.md", "name": "Human title" }`
   - Plan references must be unique across groups
   - Group ordering defines implementation wave order
-- `tasks.md` — architect implementation checklist derived from the same staged plan
+- `tasks_<N>.md` — per-plan implementation checklists; each coder receives only their assigned plan's tasks
+- `tasks.md` — optional human-readable overview summarizing all tasks (not used by scheduler)
 - `plan_meta.json` — architect workflow-intent metadata:
   - `needs_design` (`true`/`false`) — whether to run a dedicated design handoff
   - `needs_docs` (`true`/`false`) — informational signal that documentation updates are in scope
   - `doc_files` (`string[]`) — planned documentation targets when docs work is in scope
-  - Documentation updates must be captured explicitly in `plan.md`, each `plan_<N>.md`, and `tasks.md`; this metadata does not create a separate runtime phase
+  - Documentation updates must be captured explicitly in `plan.md`, each `plan_<N>.md`, and corresponding `tasks_<N>.md`; this metadata does not create a separate runtime phase
 
 Execution scheduling is strict:
 

@@ -109,9 +109,10 @@ def _write_execution_plan(
         (planning_dir / f"plan_{index}.md").write_text(
             f"## Sub-plan {index}: {name}\n", encoding="utf-8"
         )
-    (planning_dir / "tasks.md").write_text(
-        "# Tasks\n\n- [ ] execute sub-plan\n", encoding="utf-8"
-    )
+        # Create per-plan tasks file for each plan
+        (planning_dir / f"tasks_{index}.md").write_text(
+            f"# Tasks for plan {index}\n\n- [ ] execute sub-plan {index}\n", encoding="utf-8"
+        )
     (planning_dir / "execution_plan.json").write_text(
         json.dumps(
             {

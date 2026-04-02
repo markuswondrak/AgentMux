@@ -108,6 +108,9 @@ def _write_execution_plan(feature_dir: Path, *, name: str = "implementation") ->
     (planning_dir / "plan_1.md").write_text(
         f"## Sub-plan 1: {name}\n", encoding="utf-8"
     )
+    (planning_dir / "tasks_1.md").write_text(
+        "# Tasks for plan 1\n\n- [ ] task\n", encoding="utf-8"
+    )
     (planning_dir / "execution_plan.json").write_text(
         json.dumps(
             {
@@ -132,8 +135,8 @@ class DesignerRequirementsTests(unittest.TestCase):
         (planning_dir / "plan_1.md").write_text(
             "## Sub-plan 1: implementation\n", encoding="utf-8"
         )
-        (planning_dir / "tasks.md").write_text(
-            "# Tasks\n\n- [ ] implement\n", encoding="utf-8"
+        (planning_dir / "tasks_1.md").write_text(
+            "# Tasks for plan 1\n\n- [ ] one task\n", encoding="utf-8"
         )
 
     def test_load_config_parses_optional_designer(self) -> None:

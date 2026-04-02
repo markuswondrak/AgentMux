@@ -101,6 +101,23 @@ class RuntimeFiles:
         return path.relative_to(self.feature_dir).as_posix()
 
 
+def tasks_file_for_plan(planning_dir: Path, plan_index: int) -> Path:
+    """Return the path to the per-plan tasks file for a given plan index.
+
+    The naming convention is `tasks_<N>.md` aligned with `plan_<N>.md`.
+    This allows each sub-plan to have its own implementation checklist,
+    while the global tasks.md remains available as an optional overview.
+
+    Args:
+        planning_dir: The 02_planning directory path.
+        plan_index: The sub-plan index (1-based for first sub-plan).
+
+    Returns:
+        The path to the per-plan tasks file (e.g., tasks_1.md).
+    """
+    return planning_dir / f"tasks_{plan_index}.md"
+
+
 def _require_string(payload: dict[str, Any], key: str) -> str:
     value = payload.get(key)
     if not isinstance(value, str):

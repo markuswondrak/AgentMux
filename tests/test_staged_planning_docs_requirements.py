@@ -25,7 +25,10 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         self.assertIn("exclusive ownership", text.lower())
         self.assertIn("enabling refactor", text.lower())
         self.assertIn("technical debt", text.lower())
-        self.assertNotIn("empty file-set intersection should be treated as parallelizable", text.lower())
+        self.assertNotIn(
+            "empty file-set intersection should be treated as parallelizable",
+            text.lower(),
+        )
 
     def test_prompts_doc_covers_three_stage_template_rendering(self) -> None:
         text = self._read_doc("docs/prompts.md")
@@ -43,7 +46,9 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         self.assertIn("Red", text)
         self.assertIn("Green", text)
         self.assertIn("phase order", text.lower())
-        self.assertIn("one task from `02_planning/tasks.md` at a time", text)
+        self.assertIn(
+            "one task from your assigned `02_planning/tasks_<N>.md` at a time", text
+        )
 
     def test_prompts_doc_describes_strict_placeholder_rendering(self) -> None:
         text = self._read_doc("docs/prompts.md")
@@ -51,7 +56,9 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         self.assertIn("Curly braces in project content stay literal", text)
         self.assertNotIn("{project_instructions}", text)
 
-    def test_file_protocol_doc_covers_execution_groups_and_strict_scheduling(self) -> None:
+    def test_file_protocol_doc_covers_execution_groups_and_strict_scheduling(
+        self,
+    ) -> None:
         text = self._read_doc("docs/file-protocol.md")
         self.assertIn("execution_plan.json", text)
         self.assertIn("execution groups", text.lower())
@@ -71,7 +78,9 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         text = self._read_doc("docs/prompts.md")
         self.assertNotIn("build_docs_prompt()", text)
         self.assertNotIn("commands/docs.md", text)
-        self.assertIn("Documentation updates must be represented in planning artifacts", text)
+        self.assertIn(
+            "Documentation updates must be represented in planning artifacts", text
+        )
 
     def test_workflow_docs_no_longer_reference_removed_docs_phase_markers(self) -> None:
         for relative_path in [

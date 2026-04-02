@@ -4,7 +4,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from ..shared.models import ProjectPaths, RuntimeFiles
+from ..shared.models import ProjectPaths, RuntimeFiles, tasks_file_for_plan
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _SHARED_FRAGMENT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
@@ -254,6 +254,16 @@ def build_coder_subplan_prompt(
             "- Do not write anything to the marker file; create it as an empty file.",
         ]
     )
+
+    # Compute per-plan tasks file path and validate it exists
+    tasks_path = tasks_file_for_plan(files.planning_dir, subplan_index)
+    if not tasks_path.is_file():
+        raise FileNotFoundError(
+            f"Per-plan tasks file not found: {tasks_path}. "
+            f"The architect must create tasks_{subplan_index}.md alongside plan_{subplan_index}.md."
+        )
+    tasks_file_relative = files.relative_path(tasks_path)
+
     rendered = _render_template(
         _load_template(
             "agents",
@@ -264,6 +274,7 @@ def build_coder_subplan_prompt(
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
             "plan_file": files.relative_path(subplan_path),
+            "tasks_file": tasks_file_relative,
             "research_handoff": _build_coder_research_handoff(files),
             "completion_instruction": completion_instruction,
             "completion_constraints": completion_constraints,

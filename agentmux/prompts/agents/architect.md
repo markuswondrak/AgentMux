@@ -57,8 +57,8 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
    - Owned files/modules: the explicit files/modules that sub-plan is allowed to mutate. Be concrete; avoid broad catch-all ownership when possible.
    - Dependencies: which Phase 1 contracts/interfaces this sub-plan depends on.
    - Isolation: why the sub-plan can proceed without coordinating with sibling Phase 2 sub-plans, specifically in terms of exclusive ownership.
-9. Treat shared mutable artifacts conservatively. Files such as `02_planning/tasks.md`, prompt templates, monitor/state metadata files, and cross-cutting tests/docs should have a single owner in Phase 2 unless they are intentionally deferred to a serial integration sub-plan.
-10. For parallel work, keep task ownership unambiguous. Tasks grouped under one `## Sub-plan <N>` in `02_planning/tasks.md` must belong only to that sub-plan's owned files/modules. If a task would reasonably belong to multiple lanes, it does not belong in parallel Phase 2 as written.
+9. Treat shared mutable artifacts conservatively. Per-plan task files (`02_planning/tasks_<N>.md`) enforce task ownership by file structure—each tasks file is scoped to its corresponding sub-plan. Files such as prompt templates, monitor/state metadata files, and cross-cutting tests/docs should have a single owner in Phase 2 unless they are intentionally deferred to a serial integration sub-plan.
+10. For parallel work, keep task ownership unambiguous. Each per-plan tasks file (`02_planning/tasks_<N>.md`) contains only tasks relevant to that specific sub-plan. Tasks in a given tasks file must belong only to that sub-plan's owned files/modules. If a task would reasonably belong to multiple lanes, it does not belong in parallel Phase 2 as written.
 11. Assess whether a small enabling refactor is needed to preserve clean boundaries. If you defer a refactor or accept technical debt, explicitly state the technical debt and rationale.
 12. Do not implement code, run implementation validation, or produce UI design artifacts.
 13. Wait for the user to review. Incorporate any feedback and revise the draft as needed. Repeat until the user explicitly approves.
@@ -68,16 +68,17 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
 `{{ "version": 1, "groups": [{{ "group_id": "string", "mode": "serial|parallel", "plans": [{{ "file": "plan_1.md", "name": "Foundation contracts" }}, {{ "file": "plan_2.md", "name": "API wiring" }}] }}] }}`
 Every `plans[]` entry must include an explicit `name` for that work unit. Use the same work-unit title you want displayed in coder pane titles and monitor labels.
 17. `02_planning/execution_plan.json` is required. Always write it alongside the numbered `plan_<N>.md` files.
-18. After writing `02_planning/plan.md`, plan files, and `02_planning/execution_plan.json`, also write `02_planning/tasks.md` as a numbered checklist derived from the plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z"). If you created sub-plans, group tasks under the corresponding `## Sub-plan <N>: <title>` header.
+18. After writing `02_planning/plan.md`, plan files, and `02_planning/execution_plan.json`, also write per-plan task files `02_planning/tasks_<N>.md` for each numbered plan. Each tasks file must contain only tasks relevant to that specific sub-plan. Each task must be a concrete, testable unit of work (for example: "Create function X in file Y", "Add test for Z").
 For Phase 2 parallel sub-plans, ensure each task list stays within that sub-plan's owned files/modules. Cross-cutting validation or cleanup that depends on sibling-lane edits belongs in a serial integration sub-plan, not in a parallel lane.
-19. Documentation updates must be captured as explicit plan and task items in `02_planning/plan.md`, every `02_planning/plan_<N>.md`, and `02_planning/tasks.md`.
+19. You may optionally write `02_planning/tasks.md` as a human-readable overview summarizing all tasks across plans, but this is not required for execution—the scheduler uses only the per-plan task files.
+20. Documentation updates must be captured as explicit plan and task items in `02_planning/plan.md`, every `02_planning/plan_<N>.md`, and every `02_planning/tasks_<N>.md`.
 Do not defer documentation to a separate post-review handoff; keep documentation work in the same implementation scope as code changes.
-20. After writing planning/task/execution artifacts, write `02_planning/plan_meta.json` with this exact shape: `{{ "needs_design": true|false, "needs_docs": true|false, "doc_files": ["path/to/doc.md", ...] }}`.
+21. After writing planning/task/execution artifacts, write `02_planning/plan_meta.json` with this exact shape: `{{ "needs_design": true|false, "needs_docs": true|false, "doc_files": ["path/to/doc.md", ...] }}`.
 Set `needs_design` to `true` only when the plan requires a dedicated design handoff before coding.
 Set `needs_docs` to `true` only when documentation updates are required for this feature scope.
 `doc_files` must list the documentation files expected to change when `needs_docs` is `true`, and must be an empty list when `needs_docs` is `false`.
 Do not treat `needs_docs` as a workflow switch; it is planning metadata only and must not imply a dedicated agent or phase.
-21. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
+22. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
 
 ## Preference memory at phase-end approval
 
