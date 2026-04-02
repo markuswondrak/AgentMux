@@ -94,18 +94,6 @@ providers:
       web-researcher: [--agent, agentmux-web-researcher]
 
 roles:
-  architect:
-    model: opus
-  product-manager:
-    model: opus
-  reviewer:
-    model: sonnet
   coder:
     provider: codex
     model: gpt-5.3-codex
-  designer:
-    model: sonnet
-  code-researcher:
-    model: haiku
-  web-researcher:
-    model: sonnet

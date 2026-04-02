@@ -124,9 +124,9 @@ class InitRequirementsTests(unittest.TestCase):
                 "claude",
                 "Customize roles",
                 "default",
-                "opus",  # architect model
+                "sonnet",  # architect model (matches default baseline)
                 "default",
-                "opus",  # product-manager model
+                "sonnet",  # product-manager model (matches default baseline)
                 "default",
                 "sonnet",  # reviewer model
                 "default",

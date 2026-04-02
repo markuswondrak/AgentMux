@@ -8,11 +8,10 @@ defaults:
 
 roles:
   architect:
-    provider: opencode
     model: fireworks-ai/accounts/fireworks/models/glm-5
   product-manager:
-    provider: opencode
     model: fireworks-ai/accounts/fireworks/models/glm-5
-  coder:
-    provider: opencode
-    model: gpt-5.1-codex-mini
+  reviewer:
+    model: fireworks-ai/accounts/fireworks/models/glm-5
+  designer:
+    model: fireworks-ai/accounts/fireworks/models/glm-5

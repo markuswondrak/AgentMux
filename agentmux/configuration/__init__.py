@@ -409,9 +409,7 @@ def _resolve_loaded_config(
 
     agents: dict[str, AgentConfig] = {}
     for role in ROLES:
-        role_config = roles.get(role)
-        if not role_config:
-            continue
+        role_config = roles.get(role) or {}
 
         provider_name = str(role_config.get("provider", default_provider))
         try:
