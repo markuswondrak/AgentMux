@@ -77,6 +77,7 @@ class TmuxAgentRuntime:
         self,
         *,
         feature_dir: Path,
+        project_dir: Path,
         session_name: str,
         agents: dict[str, AgentConfig],
         primary_panes: dict[str, str | None],
@@ -84,6 +85,7 @@ class TmuxAgentRuntime:
         parallel_panes: dict[str, dict[int | str, str]] | None = None,
     ) -> None:
         self.feature_dir = feature_dir
+        self.project_dir = project_dir
         self.session_name = session_name
         self.agents = agents
         self.primary_panes = primary_panes
@@ -99,6 +101,7 @@ class TmuxAgentRuntime:
         cls,
         *,
         feature_dir: Path,
+        project_dir: Path,
         session_name: str,
         agents: dict[str, AgentConfig],
         config_path: Path | None,
@@ -110,12 +113,14 @@ class TmuxAgentRuntime:
             session_name,
             agents,
             feature_dir,
+            project_dir,
             config_path,
             agents[initial_role].trust_snippet,
             initial_role,
         )
         runtime = cls(
             feature_dir=feature_dir,
+            project_dir=project_dir,
             session_name=session_name,
             agents=agents,
             primary_panes=panes,
@@ -129,6 +134,7 @@ class TmuxAgentRuntime:
         cls,
         *,
         feature_dir: Path,
+        project_dir: Path,
         session_name: str,
         agents: dict[str, AgentConfig],
     ) -> "TmuxAgentRuntime":
@@ -144,6 +150,7 @@ class TmuxAgentRuntime:
         }
         runtime = cls(
             feature_dir=feature_dir,
+            project_dir=project_dir,
             session_name=session_name,
             agents=agents,
             primary_panes=primary_panes,
@@ -366,6 +373,7 @@ class TmuxAgentRuntime:
             self.session_name,
             role,
             self.agents,
+            self.project_dir,
             self.agents[role].trust_snippet,
         )
         self.primary_panes[role] = pane_id
@@ -422,6 +430,7 @@ class TmuxAgentRuntime:
                     self.session_name,
                     role,
                     self.agents,
+                    self.project_dir,
                     self.agents[role].trust_snippet,
                     display_label=display_label,
                 )
@@ -490,29 +499,32 @@ class TmuxAgentRuntime:
         send_text(pane_id, text)
         self._persist_snapshot()
 
-    def spawn_task(self, role: str, task_id: str, prompt_file: Path) -> None:
+    def spawn_task(self, role: str, task_id: str, research_dir: Path) -> None:
+        """Spawn a batch research task in the given research directory.
+
+        The research_dir is the single source of truth. All files (prompt.md,
+        error.log, summary.md, detail.md, done) are created within this directory.
+        """
         if role not in self.agents:
             return
 
+        prompt_file = research_dir / "prompt.md"
+
         print(
-            f"[ORCH] spawn_task: role={role}, task_id={task_id}, prompt={prompt_file}"
+            f"[ORCH] spawn_task: role={role}, task_id={task_id}, research_dir={research_dir}"
         )
 
         # Use batch mode for researcher agents to prevent interactive input waiting
         if role in BATCH_AGENT_ROLES:
-            # Compute error log path for capturing stderr
-            error_log_path = (
-                self.feature_dir
-                / "03_research"
-                / f"{role.replace('_', '-')}-{task_id}"
-                / "error.log"
-            )
+            # Error log is always in the same research directory (single source of truth)
+            error_log_path = research_dir / "error.log"
             print(f"[ORCH] spawn_task: batch mode with error_log={error_log_path}")
             pane_id, pid = create_batch_agent_pane(
                 self.session_name,
                 role,
                 self.agents,
                 str(prompt_file),
+                self.project_dir,
                 display_label=self._display_label_for_task(role, task_id),
                 error_log_path=error_log_path,
             )
@@ -522,6 +534,7 @@ class TmuxAgentRuntime:
                 self.session_name,
                 role,
                 self.agents,
+                self.project_dir,
                 self.agents[role].trust_snippet,
                 display_label=self._display_label_for_task(role, task_id),
             )
@@ -634,6 +647,7 @@ class TmuxRuntimeFactory:
         self,
         *,
         feature_dir: Path,
+        project_dir: Path,
         session_name: str,
         agents: dict[str, AgentConfig],
         config_path: Path | None,
@@ -641,6 +655,7 @@ class TmuxRuntimeFactory:
     ) -> TmuxAgentRuntime:
         return TmuxAgentRuntime.create(
             feature_dir=feature_dir,
+            project_dir=project_dir,
             session_name=session_name,
             agents=agents,
             config_path=config_path,
@@ -651,11 +666,13 @@ class TmuxRuntimeFactory:
         self,
         *,
         feature_dir: Path,
+        project_dir: Path,
         session_name: str,
         agents: dict[str, AgentConfig],
     ) -> TmuxAgentRuntime:
         return TmuxAgentRuntime.attach(
             feature_dir=feature_dir,
+            project_dir=project_dir,
             session_name=session_name,
             agents=agents,
         )

@@ -235,6 +235,8 @@ def _normalize_launcher(name: str, raw: Any) -> dict[str, Any]:
         "command": str(raw.get("command", name)),
         "model_flag": str(raw.get("model_flag", "--model")),
         "trust_snippet": None if raw.get("trust_snippet") is None else str(raw["trust_snippet"]),
+        "batch_subcommand": None if raw.get("batch_subcommand") is None else str(raw["batch_subcommand"]),
+        "batch_prompt_flag": None if raw.get("batch_prompt_flag") is None else str(raw["batch_prompt_flag"]),
         "role_args": {
             str(role): _normalize_args(f"launchers.{name}.role_args.{role}", args)
             for role, args in role_args.items()
@@ -405,6 +407,8 @@ def _resolve_loaded_config(raw: dict[str, Any], sources: tuple[Path, ...]) -> Lo
             args=list(args),
             trust_snippet=launcher.get("trust_snippet"),
             provider=provider_name,
+            batch_subcommand=launcher.get("batch_subcommand"),
+            batch_prompt_flag=launcher.get("batch_prompt_flag"),
         )
 
     return LoadedConfig(

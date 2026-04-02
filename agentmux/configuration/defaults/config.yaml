@@ -83,14 +83,16 @@ launchers:
     command: opencode
     model_flag: --model
     trust_snippet:
+    batch_subcommand: run
+    batch_prompt_flag: "-f"
     role_args:
       architect: [--agent, agentmux-architect]
       product-manager: [--agent, agentmux-product-manager]
       reviewer: [--agent, agentmux-reviewer]
       coder: [--agent, agentmux-coder]
       designer: [--agent, agentmux-designer]
-      code-researcher: [--agent, agentmux-code-researcher, run]
-      web-researcher: [--agent, agentmux-web-researcher, run]
+      code-researcher: [--agent, agentmux-code-researcher]
+      web-researcher: [--agent, agentmux-web-researcher]
 
 profiles:
   claude:

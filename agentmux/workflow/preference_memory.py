@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 
-from ..shared.models import PreferenceProposal, RuntimeFiles
+from ..shared.models import PreferenceProposal, ProjectPaths, RuntimeFiles
 
 _BULLET_PREFIX = re.compile(r"^[-*+]\s*")
 _BULLET_LINE = re.compile(r"^\s*[-*+]\s+(.+?)\s*$")
@@ -34,7 +34,9 @@ def proposal_artifact_for_source(files: RuntimeFiles, source_role: str) -> Path:
         return files.architect_preference_proposal
     if source_role == "reviewer":
         return files.reviewer_preference_proposal
-    raise ValueError("source_role must be one of: product-manager, architect, reviewer.")
+    raise ValueError(
+        "source_role must be one of: product-manager, architect, reviewer."
+    )
 
 
 def load_preference_proposal(path: Path) -> PreferenceProposal | None:
@@ -76,8 +78,11 @@ def _append_markdown_bullets(path: Path, bullets: list[str]) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def apply_preference_proposal(project_dir: Path, proposal: PreferenceProposal) -> dict[str, list[str]]:
-    prompts_root = project_dir / ".agentmux" / "prompts" / "agents"
+def apply_preference_proposal(
+    project_dir: Path, proposal: PreferenceProposal
+) -> dict[str, list[str]]:
+    paths = ProjectPaths.from_project(project_dir)
+    prompts_root = paths.agent_prompts_dir
 
     deduped_by_role: dict[str, list[str]] = {}
     seen_in_batch: dict[str, set[str]] = {}

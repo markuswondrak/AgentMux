@@ -95,6 +95,7 @@ class TmuxPromptReferencesTests(unittest.TestCase):
                     "session-x",
                     agents,
                     feature_dir,
+                    Path("/project"),
                     config_path,
                     trust_snippet=None,
                 )
@@ -356,6 +357,7 @@ class TmuxPromptReferencesTests(unittest.TestCase):
                 "session-x",
                 "coder",
                 agents,
+                Path("/project"),
                 trust_snippet=None,
                 display_label="API wiring",
             )

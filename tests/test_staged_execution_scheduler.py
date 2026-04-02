@@ -5,10 +5,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agentmux.sessions.state_store import create_feature_files, infer_resume_phase, load_state, write_state
+from agentmux.sessions.state_store import (
+    create_feature_files,
+    infer_resume_phase,
+    load_state,
+    write_state,
+)
 from agentmux.shared.models import AgentConfig
-from agentmux.workflow.phases import run_phase_cycle
+from agentmux.workflow.handlers import ImplementingHandler, FixingHandler
 from agentmux.workflow.transitions import PipelineContext
+from agentmux.workflow.event_router import WorkflowEvent
 
 
 def _prompt_names(prompt_specs: list[object]) -> list[str]:
@@ -24,7 +30,9 @@ class _FakeRuntime:
         self.calls: list[tuple[str, object]] = []
         self.parallel_specs: list[list[tuple[int | str, str, str | None]]] = []
 
-    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
+    def send(
+        self, role: str, prompt_file: Path, display_label: str | None = None
+    ) -> None:
         self.calls.append(("send", role, prompt_file.name, display_label))
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
@@ -62,7 +70,9 @@ class _FakeRuntime:
 def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
     project_dir = feature_dir.parent / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
-    files = create_feature_files(project_dir, feature_dir, "staged execution", "session-x")
+    files = create_feature_files(
+        project_dir, feature_dir, "staged execution", "session-x"
+    )
     files.plan.parent.mkdir(parents=True, exist_ok=True)
     files.plan.write_text("# Plan\n", encoding="utf-8")
     files.tasks.parent.mkdir(parents=True, exist_ok=True)
@@ -75,9 +85,15 @@ def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
         files=files,
         runtime=_FakeRuntime(),
         agents={
-            "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
-            "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[]),
-            "reviewer": AgentConfig(role="reviewer", cli="claude", model="sonnet", args=[]),
+            "architect": AgentConfig(
+                role="architect", cli="claude", model="opus", args=[]
+            ),
+            "coder": AgentConfig(
+                role="coder", cli="codex", model="gpt-5.3-codex", args=[]
+            ),
+            "reviewer": AgentConfig(
+                role="reviewer", cli="claude", model="sonnet", args=[]
+            ),
         },
         max_review_iterations=3,
         prompts={},
@@ -91,12 +107,6 @@ def _set_phase(state_path: Path, phase: str) -> None:
     write_state(state_path, state)
 
 
-def _cycle(ctx: PipelineContext, state_path: Path) -> dict:
-    state = load_state(state_path)
-    run_phase_cycle(state, ctx)
-    return load_state(state_path)
-
-
 def _touch(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("", encoding="utf-8")
@@ -107,8 +117,12 @@ def _write_execution_plan(ctx: PipelineContext, groups: list[dict]) -> None:
     planning_dir.mkdir(parents=True, exist_ok=True)
     (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
     payload = {"version": 1, "groups": groups}
-    (planning_dir / "execution_plan.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    (planning_dir / "tasks.md").write_text("# Tasks\n\n- [ ] execute\n", encoding="utf-8")
+    (planning_dir / "execution_plan.json").write_text(
+        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+    )
+    (planning_dir / "tasks.md").write_text(
+        "# Tasks\n\n- [ ] execute\n", encoding="utf-8"
+    )
     for group in groups:
         for plan_file in group["plans"]:
             plan_ref = plan_file["file"] if isinstance(plan_file, dict) else plan_file
@@ -122,15 +136,38 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             _set_phase(state_path, "implementing")
             _write_execution_plan(
                 ctx,
-                [{"group_id": "g1", "mode": "serial", "plans": [{"file": "plan_1.md", "name": "Foundation"}]}],
+                [
+                    {
+                        "group_id": "g1",
+                        "mode": "serial",
+                        "plans": [{"file": "plan_1.md", "name": "Foundation"}],
+                    }
+                ],
             )
 
-            _cycle(ctx, state_path)
-            self.assertIn(("send", "coder", "coder_prompt_1.txt", "[coder] Foundation"), ctx.runtime.calls)
+            handler = ImplementingHandler()
+            state = load_state(state_path)
+            updates = handler.enter(state, ctx)
+            # Merge updates into state
+            state.update(updates)
+            write_state(state_path, state)
+
+            self.assertIn(
+                ("send", "coder", "coder_prompt_1.txt", "[coder] Foundation"),
+                ctx.runtime.calls,
+            )
 
             _touch(ctx.files.implementation_dir / "done_1")
-            state = _cycle(ctx, state_path)
-            self.assertEqual("reviewing", state["phase"])
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_1",
+                payload={},
+            )
+            state = load_state(state_path)
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertEqual("reviewing", next_phase)
 
     def test_parallel_schedule_waits_for_all_markers(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -150,25 +187,54 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
                 ],
             )
 
-            _cycle(ctx, state_path)
-            self.assertIn(("send_many", "coder", ["coder_prompt_1.txt", "coder_prompt_2.txt"]), ctx.runtime.calls)
+            handler = ImplementingHandler()
+            state = load_state(state_path)
+            updates = handler.enter(state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+
+            self.assertIn(
+                ("send_many", "coder", ["coder_prompt_1.txt", "coder_prompt_2.txt"]),
+                ctx.runtime.calls,
+            )
 
             _touch(ctx.files.implementation_dir / "done_1")
-            state = _cycle(ctx, state_path)
-            self.assertEqual("implementing", state["phase"])
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_1",
+                payload={},
+            )
+            state = load_state(state_path)
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertIsNone(next_phase)  # Still in implementing phase
 
             _touch(ctx.files.implementation_dir / "done_2")
-            state = _cycle(ctx, state_path)
-            self.assertEqual("reviewing", state["phase"])
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_2",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertEqual("reviewing", next_phase)
 
-    def test_mixed_schedule_dispatches_waves_and_only_finishes_after_last_group(self) -> None:
+    def test_mixed_schedule_dispatches_waves_and_only_finishes_after_last_group(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(Path(td) / "feature")
             _set_phase(state_path, "implementing")
             _write_execution_plan(
                 ctx,
                 [
-                    {"group_id": "g1", "mode": "serial", "plans": [{"file": "plan_1.md", "name": "Foundation"}]},
+                    {
+                        "group_id": "g1",
+                        "mode": "serial",
+                        "plans": [{"file": "plan_1.md", "name": "Foundation"}],
+                    },
                     {
                         "group_id": "g2",
                         "mode": "parallel",
@@ -177,34 +243,86 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
                             {"file": "plan_3.md", "name": "UI polish"},
                         ],
                     },
-                    {"group_id": "g3", "mode": "serial", "plans": [{"file": "plan_4.md", "name": "Integration"}]},
+                    {
+                        "group_id": "g3",
+                        "mode": "serial",
+                        "plans": [{"file": "plan_4.md", "name": "Integration"}],
+                    },
                 ],
             )
 
-            _cycle(ctx, state_path)
-            self.assertIn(("send", "coder", "coder_prompt_1.txt", "[coder] Foundation"), ctx.runtime.calls)
+            handler = ImplementingHandler()
+            state = load_state(state_path)
+            updates = handler.enter(state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+
+            self.assertIn(
+                ("send", "coder", "coder_prompt_1.txt", "[coder] Foundation"),
+                ctx.runtime.calls,
+            )
 
             _touch(ctx.files.implementation_dir / "done_1")
-            state = _cycle(ctx, state_path)
-            self.assertEqual("implementing", state["phase"])
-            self.assertIn(("send_many", "coder", ["coder_prompt_2.txt", "coder_prompt_3.txt"]), ctx.runtime.calls)
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_1",
+                payload={},
+            )
+            state = load_state(state_path)
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertIsNone(next_phase)
             self.assertIn(
-                [(2, "coder_prompt_2.txt", "[coder] API wiring"), (3, "coder_prompt_3.txt", "[coder] UI polish")],
+                ("send_many", "coder", ["coder_prompt_2.txt", "coder_prompt_3.txt"]),
+                ctx.runtime.calls,
+            )
+            self.assertIn(
+                [
+                    (2, "coder_prompt_2.txt", "[coder] API wiring"),
+                    (3, "coder_prompt_3.txt", "[coder] UI polish"),
+                ],
                 ctx.runtime.parallel_specs,
             )
 
             _touch(ctx.files.implementation_dir / "done_2")
-            state = _cycle(ctx, state_path)
-            self.assertEqual("implementing", state["phase"])
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_2",
+                payload={},
+            )
+            state = load_state(state_path)
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertIsNone(next_phase)
 
             _touch(ctx.files.implementation_dir / "done_3")
-            state = _cycle(ctx, state_path)
-            self.assertEqual("implementing", state["phase"])
-            self.assertIn(("send", "coder", "coder_prompt_4.txt", "[coder] Integration"), ctx.runtime.calls)
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_3",
+                payload={},
+            )
+            state = load_state(state_path)
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertIsNone(next_phase)
+            self.assertIn(
+                ("send", "coder", "coder_prompt_4.txt", "[coder] Integration"),
+                ctx.runtime.calls,
+            )
 
             _touch(ctx.files.implementation_dir / "done_4")
-            state = _cycle(ctx, state_path)
-            self.assertEqual("reviewing", state["phase"])
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_4",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertEqual("reviewing", next_phase)
 
     def test_resume_during_parallel_group_only_redispatches_pending_work(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -214,7 +332,11 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             _write_execution_plan(
                 ctx,
                 [
-                    {"group_id": "g1", "mode": "serial", "plans": [{"file": "plan_1.md", "name": "Foundation"}]},
+                    {
+                        "group_id": "g1",
+                        "mode": "serial",
+                        "plans": [{"file": "plan_1.md", "name": "Foundation"}],
+                    },
                     {
                         "group_id": "g2",
                         "mode": "parallel",
@@ -223,14 +345,41 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
                             {"file": "plan_3.md", "name": "UI polish"},
                         ],
                     },
-                    {"group_id": "g3", "mode": "serial", "plans": [{"file": "plan_4.md", "name": "Integration"}]},
+                    {
+                        "group_id": "g3",
+                        "mode": "serial",
+                        "plans": [{"file": "plan_4.md", "name": "Integration"}],
+                    },
                 ],
             )
 
-            _cycle(ctx, state_path)
+            handler = ImplementingHandler()
+            state = load_state(state_path)
+            updates = handler.enter(state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+
             _touch(ctx.files.implementation_dir / "done_1")
-            _cycle(ctx, state_path)
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_1",
+                payload={},
+            )
+            state = load_state(state_path)
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+
             _touch(ctx.files.implementation_dir / "done_2")
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_2",
+                payload={},
+            )
+            state = load_state(state_path)
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
 
             state = load_state(state_path)
             state["phase"] = "failed"
@@ -251,18 +400,51 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
                 max_review_iterations=ctx.max_review_iterations,
                 prompts=ctx.prompts,
             )
-            _cycle(resumed_ctx, state_path)
-            self.assertIn(("send", "coder", "coder_prompt_3.txt", "[coder] UI polish"), resumed_ctx.runtime.calls)
-            self.assertNotIn(("send", "coder", "coder_prompt_2.txt", "[coder] API wiring"), resumed_ctx.runtime.calls)
+            resumed_handler = ImplementingHandler()
+            resumed_state = load_state(state_path)
+            updates = resumed_handler.enter(resumed_state, resumed_ctx)
+            resumed_state.update(updates)
+            write_state(state_path, resumed_state)
+
+            self.assertIn(
+                ("send", "coder", "coder_prompt_3.txt", "[coder] UI polish"),
+                resumed_ctx.runtime.calls,
+            )
+            self.assertNotIn(
+                ("send", "coder", "coder_prompt_2.txt", "[coder] API wiring"),
+                resumed_ctx.runtime.calls,
+            )
 
             _touch(ctx.files.implementation_dir / "done_3")
-            state = _cycle(resumed_ctx, state_path)
-            self.assertEqual("implementing", state["phase"])
-            self.assertIn(("send", "coder", "coder_prompt_4.txt", "[coder] Integration"), resumed_ctx.runtime.calls)
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_3",
+                payload={},
+            )
+            state = load_state(state_path)
+            updates, next_phase = resumed_handler.handle_event(
+                event, state, resumed_ctx
+            )
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertIsNone(next_phase)
+            self.assertIn(
+                ("send", "coder", "coder_prompt_4.txt", "[coder] Integration"),
+                resumed_ctx.runtime.calls,
+            )
 
             _touch(ctx.files.implementation_dir / "done_4")
-            state = _cycle(resumed_ctx, state_path)
-            self.assertEqual("reviewing", state["phase"])
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_4",
+                payload={},
+            )
+            updates, next_phase = resumed_handler.handle_event(
+                event, state, resumed_ctx
+            )
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertEqual("reviewing", next_phase)
 
     def test_fixing_phase_completes_on_done_1_even_with_multiple_subplans(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -272,12 +454,23 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             state["subplan_count"] = 4
             write_state(state_path, state)
 
-            _cycle(ctx, state_path)
-            self.assertIn(("send", "coder", "fix_prompt.txt", "[coder] fix 1"), ctx.runtime.calls)
+            handler = FixingHandler()
+            handler.enter(state, ctx)
+            self.assertIn(
+                ("send", "coder", "fix_prompt.txt", "[coder] fix 1"), ctx.runtime.calls
+            )
 
             _touch(ctx.files.implementation_dir / "done_1")
-            state = _cycle(ctx, state_path)
-            self.assertEqual("reviewing", state["phase"])
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_1",
+                payload={},
+            )
+            state = load_state(state_path)
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+            self.assertEqual("reviewing", next_phase)
 
 
 if __name__ == "__main__":

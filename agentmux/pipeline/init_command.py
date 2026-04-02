@@ -293,7 +293,10 @@ def _claude_md_content(project_dir: Path) -> str:
 
 
 def _stub_path(project_dir: Path, role: str) -> Path:
-    return project_dir / ".agentmux" / "prompts" / "agents" / f"{role}.md"
+    from ..shared.models import ProjectPaths
+
+    paths = ProjectPaths.from_project(project_dir)
+    return paths.agent_prompts_dir / f"{role}.md"
 
 
 def detect_clis() -> dict[str, bool]:
@@ -540,8 +543,11 @@ def generate_config(
     console: Any | None = None,
     defaults_mode: bool = False,
 ) -> Path:
+    from ..shared.models import ProjectPaths
+
     _ = _console(console)
-    config_path = project_dir / ".agentmux" / "config.yaml"
+    paths = ProjectPaths.from_project(project_dir)
+    config_path = paths.config
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     if config_path.exists() and not defaults_mode:

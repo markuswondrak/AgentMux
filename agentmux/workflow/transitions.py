@@ -20,16 +20,4 @@ class PipelineContext:
     prompts: dict[str, Path]
     github_config: GitHubConfig = field(default_factory=GitHubConfig)
     workflow_settings: WorkflowSettings = field(default_factory=WorkflowSettings)
-    entered_phase: str | None = None
-    phase_baseline: dict[str, str | None] = field(default_factory=dict)
-
-
-def file_signature(path: Path) -> str | None:
-    if not path.exists() or not path.is_file():
-        return None
-    stat = path.stat()
-    return f"{stat.st_mtime_ns}:{stat.st_size}"
-
-
-def phase_input_changed(ctx: PipelineContext, key: str, current: str | None) -> bool:
-    return current is not None and current != ctx.phase_baseline.get(key)
+    entered_phase: str | None = None  # Keep for tracking, but not used for baseline

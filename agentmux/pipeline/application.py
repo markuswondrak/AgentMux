@@ -66,7 +66,10 @@ def _read_initial_request_line(requirements_path: Path) -> str:
 
 
 def _read_last_completion(project_dir: Path) -> dict[str, str | None]:
-    summary_path = project_dir / ".agentmux" / ".last_completion.json"
+    from ..shared.models import ProjectPaths
+
+    paths = ProjectPaths.from_project(project_dir)
+    summary_path = paths.last_completion
     if not summary_path.exists():
         return {}
     try:
@@ -129,6 +132,7 @@ class PipelineApplication:
         session_name = str(state.get("session_name") or loaded.session_name)
         runtime = self.runtime_factory.attach(
             feature_dir=feature_dir,
+            project_dir=self.project_dir,
             session_name=session_name,
             agents=agents,
         )
@@ -316,6 +320,7 @@ class PipelineApplication:
         try:
             runtime = self.runtime_factory.attach(
                 feature_dir=feature_dir,
+                project_dir=self.project_dir,
                 session_name=session_name,
                 agents=agents,
             )
@@ -340,6 +345,7 @@ class PipelineApplication:
                 with contextlib.redirect_stdout(_setup_log):
                     self.runtime_factory.create(
                         feature_dir=feature_dir,
+                        project_dir=self.project_dir,
                         session_name=session_name,
                         agents=agents,
                         config_path=self.config_path,

@@ -133,9 +133,11 @@ def _create_runtime_mcp_config(servers: list[McpServerSpec], project_dir: Path) 
     Returns:
         Absolute path to the generated config file
     """
-    agentmux_dir = project_dir / ".agentmux"
-    agentmux_dir.mkdir(parents=True, exist_ok=True)
-    config_path = agentmux_dir / "mcp_servers.json"
+    from ..shared.models import ProjectPaths
+
+    paths = ProjectPaths.from_project(project_dir)
+    paths.root.mkdir(parents=True, exist_ok=True)
+    config_path = paths.mcp_servers
 
     # Build the config structure with env.PYTHONPATH
     mcp_servers: dict[str, object] = {}

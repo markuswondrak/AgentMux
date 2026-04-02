@@ -40,10 +40,12 @@ class AgentConfig:
     cli: str
     model: str
     model_flag: str = "--model"
-    args: list[str] = None
+    args: list[str] | None = None
     env: dict[str, str] | None = None
     trust_snippet: str | None = None
     provider: str | None = None
+    batch_subcommand: str | None = None
+    batch_prompt_flag: str | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +96,7 @@ class RuntimeFiles:
     runtime_state: Path
     orchestrator_log: Path
     created_files_log: Path
+    status_log: Path
 
     def relative_path(self, path: Path) -> str:
         return path.relative_to(self.feature_dir).as_posix()
@@ -152,7 +155,9 @@ class PreferenceProposal:
         approved_raw = payload.get("approved")
         if not isinstance(approved_raw, list):
             raise ValueError("Preference proposal `approved` must be a list.")
-        approved = tuple(PreferenceProposalEntry.from_dict(item) for item in approved_raw)
+        approved = tuple(
+            PreferenceProposalEntry.from_dict(item) for item in approved_raw
+        )
         return cls(
             source_role=source_role,
             approved=approved,
@@ -163,7 +168,9 @@ class PreferenceProposal:
         try:
             payload = json.loads(raw_json)
         except json.JSONDecodeError as exc:
-            raise ValueError("Preference proposal file must contain valid JSON.") from exc
+            raise ValueError(
+                "Preference proposal file must contain valid JSON."
+            ) from exc
         return cls.from_dict(payload)
 
     def to_dict(self) -> dict[str, Any]:
@@ -171,3 +178,51 @@ class PreferenceProposal:
             "source_role": self.source_role,
             "approved": [entry.to_dict() for entry in self.approved],
         }
+
+
+@dataclass(frozen=True)
+class ProjectPaths:
+    """Canonical container for project-level file paths.
+
+    Binds the project root once and provides derived path attributes,
+    eliminating scattered inline path construction.
+    """
+
+    project_dir: Path
+
+    @property
+    def root(self) -> Path:
+        return self.project_dir / ".agentmux"
+
+    @property
+    def config(self) -> Path:
+        return self.root / "config.yaml"
+
+    @property
+    def mcp_servers(self) -> Path:
+        return self.root / "mcp_servers.json"
+
+    @property
+    def sessions_root(self) -> Path:
+        return self.root / ".sessions"
+
+    @property
+    def last_completion(self) -> Path:
+        return self.root / ".last_completion.json"
+
+    @property
+    def prompts_dir(self) -> Path:
+        return self.root / "prompts"
+
+    @property
+    def agent_prompts_dir(self) -> Path:
+        return self.prompts_dir / "agents"
+
+    @property
+    def command_prompts_dir(self) -> Path:
+        return self.prompts_dir / "commands"
+
+    @staticmethod
+    def from_project(project_dir: Path) -> "ProjectPaths":
+        """Create a ProjectPaths instance from a project directory."""
+        return ProjectPaths(project_dir=project_dir)

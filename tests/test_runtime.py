@@ -134,6 +134,7 @@ class RuntimeTests(unittest.TestCase):
                 session_name: str,
                 role: str,
                 agents,
+                project_dir,
                 trust_snippet: str | None,
                 *,
                 display_label: str | None = None,
@@ -159,6 +160,7 @@ class RuntimeTests(unittest.TestCase):
             ):
                 runtime = TmuxAgentRuntime(
                     feature_dir=feature_dir,
+                    project_dir=Path("/project"),
                     session_name="session-x",
                     agents=_agents(),
                     primary_panes={"architect": "%1"},
@@ -213,6 +215,7 @@ class RuntimeTests(unittest.TestCase):
             ):
                 runtime = TmuxAgentRuntime(
                     feature_dir=feature_dir,
+                    project_dir=Path("/project"),
                     session_name="session-x",
                     agents=_agents(),
                     primary_panes={"architect": "%1", "coder": "%2"},
@@ -249,6 +252,7 @@ class RuntimeTests(unittest.TestCase):
             zone = FakeZone("session-x", visible=["%2", "%99"])
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
+                project_dir=Path("/project"),
                 session_name="session-x",
                 agents=_agents(),
                 primary_panes={"architect": "%1", "coder": "%2"},
@@ -285,6 +289,7 @@ class RuntimeTests(unittest.TestCase):
             ):
                 runtime = TmuxAgentRuntime.attach(
                     feature_dir=feature_dir,
+                    project_dir=Path("/project"),
                     session_name="session-x",
                     agents=_agents(),
                 )
@@ -307,11 +312,19 @@ class RuntimeTests(unittest.TestCase):
                 session_name: str,
                 agents: dict[str, AgentConfig],
                 feature_dir_arg: Path,
+                project_dir_arg: Path,
                 config_path: Path,
                 trust_snippet: str | None,
                 primary_role: str,
             ) -> tuple[dict[str, str | None], FakeZone]:
-                _ = (session_name, agents, feature_dir_arg, config_path, primary_role)
+                _ = (
+                    session_name,
+                    agents,
+                    feature_dir_arg,
+                    project_dir_arg,
+                    config_path,
+                    primary_role,
+                )
                 args_seen.append(trust_snippet)
                 return (
                     {"_control": "%0", "architect": "%1", "coder": None},
@@ -323,6 +336,7 @@ class RuntimeTests(unittest.TestCase):
             ):
                 TmuxAgentRuntime.create(
                     feature_dir=feature_dir,
+                    project_dir=Path("/project"),
                     session_name="session-x",
                     agents=_agents(),
                     config_path=feature_dir / "config.json",
@@ -338,6 +352,7 @@ class RuntimeTests(unittest.TestCase):
             zone = FakeZone("session-x", visible=["%1"])
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
+                project_dir=Path("/project"),
                 session_name="session-x",
                 agents=_agents(),
                 primary_panes={"architect": "%1", "coder": "%2"},
@@ -362,6 +377,7 @@ class RuntimeTests(unittest.TestCase):
             zone = ObservedRemoveZone("session-x", visible=["%1"])
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
+                project_dir=Path("/project"),
                 session_name="session-x",
                 agents=_agents(),
                 primary_panes={"architect": "%1", "coder": "%2"},
@@ -404,6 +420,7 @@ class RuntimeTests(unittest.TestCase):
             zone = ObservedRemoveZone("session-x", visible=["%1"])
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
+                project_dir=Path("/project"),
                 session_name="session-x",
                 agents=_agents(),
                 primary_panes={"architect": "%1", "coder": "%2"},
@@ -431,6 +448,7 @@ class RuntimeTests(unittest.TestCase):
             zone = ObservedRemoveZone("session-x", visible=["%2", "%9"])
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
+                project_dir=Path("/project"),
                 session_name="session-x",
                 agents=_agents(),
                 primary_panes={"architect": "%1", "coder": "%2"},
@@ -479,6 +497,7 @@ class RuntimeTests(unittest.TestCase):
             zone = ObservedRemoveZone("session-x", visible=["%2", "%9"])
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
+                project_dir=Path("/project"),
                 session_name="session-x",
                 agents=_agents(),
                 primary_panes={"architect": "%1", "coder": "%2"},
@@ -507,6 +526,7 @@ class RuntimeTests(unittest.TestCase):
             zone = ObservedRemoveZone("session-x", visible=["%2", "%9"])
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
+                project_dir=Path("/project"),
                 session_name="session-x",
                 agents=_agents(),
                 primary_panes={"architect": "%1", "coder": "%2"},
@@ -555,6 +575,7 @@ class RuntimeTests(unittest.TestCase):
             zone = ObservedRemoveZone("session-x", visible=["%2", "%9"])
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
+                project_dir=Path("/project"),
                 session_name="session-x",
                 agents=_agents(),
                 primary_panes={"architect": "%1", "coder": "%2"},
@@ -585,6 +606,7 @@ class RuntimeTests(unittest.TestCase):
             )
             runtime = TmuxAgentRuntime(
                 feature_dir=feature_dir,
+                project_dir=Path("/project"),
                 session_name="session-x",
                 agents=_agents(),
                 primary_panes={"architect": "%1", "coder": "%2"},
@@ -626,6 +648,7 @@ class RuntimeTests(unittest.TestCase):
             ):
                 runtime = TmuxAgentRuntime(
                     feature_dir=feature_dir,
+                    project_dir=Path("/project"),
                     session_name="session-x",
                     agents=_agents(),
                     primary_panes={"architect": "%1", "coder": "%2"},

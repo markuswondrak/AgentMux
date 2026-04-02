@@ -8,13 +8,14 @@ from unittest.mock import patch
 
 from agentmux.configuration import load_explicit_config
 from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
-from agentmux.workflow.phases import PlanningPhase
+from agentmux.workflow.handlers import PlanningHandler
 from agentmux.workflow.prompts import (
     build_architect_prompt,
     build_web_researcher_prompt,
 )
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.workflow.transitions import PipelineContext
+from agentmux.workflow.event_router import WorkflowEvent
 
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 RESEARCH_DIR = SESSION_DIR_NAMES["research"]
@@ -42,8 +43,8 @@ class FakeRuntime:
             )
         )
 
-    def spawn_task(self, role: str, task_id: str, prompt_file: Path) -> None:
-        self.calls.append(("spawn_task", role, task_id, prompt_file.name))
+    def spawn_task(self, role: str, task_id: str, research_dir: Path) -> None:
+        self.calls.append(("spawn_task", role, task_id, research_dir.name))
 
     def finish_task(self, role: str, task_id: str) -> None:
         self.calls.append(("finish_task", role, task_id))
@@ -167,75 +168,6 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             self.assertIn("03_research/web-<topic>/detail.md", prompt)
             self.assertIn("agentmux_research_dispatch_web", prompt)
 
-    def test_planning_detects_web_task_requested_and_completed(self) -> None:
-        """Test that web research events are detected correctly.
-
-        New pending requests are detected before completed tasks.
-        This ensures batch web research tasks are properly dispatched.
-        """
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            feature_dir = tmp_path / "feature"
-            ctx, state_path = self._make_ctx(feature_dir)
-
-            # Setup: openai-models is dispatched and done, react-19 is new request
-            state = load_state(state_path)
-            state["phase"] = "planning"
-            state["web_research_tasks"] = {"openai-models": "dispatched"}
-            write_state(state_path, state)
-
-            (feature_dir / RESEARCH_DIR / "web-react-19").mkdir(
-                parents=True, exist_ok=True
-            )
-            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(
-                parents=True, exist_ok=True
-            )
-            (feature_dir / RESEARCH_DIR / "web-react-19" / "request.md").write_text(
-                "look at react", encoding="utf-8"
-            )
-            (feature_dir / RESEARCH_DIR / "web-openai-models" / "done").touch()
-
-            phase = PlanningPhase()
-
-            # First: new pending request is detected (priority to new tasks)
-            event = phase.detect_event(load_state(state_path), ctx)
-            self.assertEqual("web_batch_requested", event)
-
-            # After marking react-19 as dispatched, the completed task is detected
-            state = load_state(state_path)
-            state["web_research_tasks"] = {
-                "openai-models": "dispatched",
-                "react-19": "dispatched",
-            }
-            write_state(state_path, state)
-            event = phase.detect_event(load_state(state_path), ctx)
-            self.assertEqual("web_task_completed:openai-models", event)
-
-    def test_planning_snapshot_inputs_include_web_research_request_and_done_markers(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            feature_dir = tmp_path / "feature"
-            ctx, state_path = self._make_ctx(feature_dir)
-            _ = state_path
-
-            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(
-                parents=True, exist_ok=True
-            )
-            (
-                feature_dir / RESEARCH_DIR / "web-openai-models" / "request.md"
-            ).write_text(
-                "look at models",
-                encoding="utf-8",
-            )
-            (feature_dir / RESEARCH_DIR / "web-openai-models" / "done").touch()
-
-            snapshot = PlanningPhase().snapshot_inputs({}, ctx)
-
-            self.assertIn("web-openai-models/request.md", snapshot)
-            self.assertIn("web-openai-models/done", snapshot)
-
     def test_planning_handle_web_task_requested_spawns_researcher_and_updates_state(
         self,
     ) -> None:
@@ -259,15 +191,21 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             stale_done = feature_dir / RESEARCH_DIR / "web-openai-models" / "done"
             stale_done.touch()
 
-            phase = PlanningPhase()
-            result = phase.handle_event(
-                load_state(state_path), "web_batch_requested", ctx
+            handler = PlanningHandler()
+            event = WorkflowEvent(
+                kind="file.created",
+                path="03_research/web-openai-models/request.md",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
             )
 
-            self.assertIsNone(result)
+            self.assertIsNone(next_phase)
             self.assertFalse(stale_done.exists())
+            # spawn_task now receives the research directory
             self.assertEqual(
-                ("spawn_task", "web-researcher", "openai-models", "prompt.md"),
+                ("spawn_task", "web-researcher", "openai-models", "web-openai-models"),
                 ctx.runtime.calls[-1],
             )
             self.assertTrue(
@@ -275,9 +213,8 @@ class WebResearcherRequirementsTests(unittest.TestCase):
                     feature_dir / RESEARCH_DIR / "web-openai-models" / "prompt.md"
                 ).exists()
             )
-            updated = load_state(state_path)
             self.assertEqual(
-                "dispatched", updated["web_research_tasks"]["openai-models"]
+                "dispatched", updates.get("web_research_tasks", {}).get("openai-models")
             )
 
     def test_planning_handle_web_task_completed_finishes_researcher_and_notifies_architect(
@@ -296,12 +233,17 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             )
             (feature_dir / RESEARCH_DIR / "web-openai-models" / "done").touch()
 
-            phase = PlanningPhase()
-            result = phase.handle_event(
-                load_state(state_path), "web_task_completed:openai-models", ctx
+            handler = PlanningHandler()
+            event = WorkflowEvent(
+                kind="file.created",
+                path="03_research/web-openai-models/done",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
             )
 
-            self.assertIsNone(result)
+            self.assertIsNone(next_phase)
             self.assertEqual(
                 (
                     "notify",
@@ -310,8 +252,9 @@ class WebResearcherRequirementsTests(unittest.TestCase):
                 ),
                 ctx.runtime.calls[-1],
             )
-            updated = load_state(state_path)
-            self.assertEqual("done", updated["web_research_tasks"]["openai-models"])
+            self.assertEqual(
+                "done", updates.get("web_research_tasks", {}).get("openai-models")
+            )
 
 
 if __name__ == "__main__":

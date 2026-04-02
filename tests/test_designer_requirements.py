@@ -7,10 +7,20 @@ from pathlib import Path
 
 from agentmux.configuration import load_explicit_config
 from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
-from agentmux.workflow.phases import PHASES, get_phase, run_phase_cycle
-from agentmux.workflow.prompts import build_coder_subplan_prompt, build_designer_prompt, build_initial_prompts
-from agentmux.sessions.state_store import create_feature_files, load_runtime_files, load_state, write_state
+from agentmux.workflow.handlers import PHASE_HANDLERS, DesigningHandler, PlanningHandler
+from agentmux.workflow.prompts import (
+    build_coder_subplan_prompt,
+    build_designer_prompt,
+    build_initial_prompts,
+)
+from agentmux.sessions.state_store import (
+    create_feature_files,
+    load_runtime_files,
+    load_state,
+    write_state,
+)
 from agentmux.workflow.transitions import PipelineContext
+from agentmux.workflow.event_router import WorkflowEvent
 
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 DESIGN_DIR = SESSION_DIR_NAMES["design"]
@@ -23,11 +33,22 @@ class FakeRuntime:
     def __init__(self) -> None:
         self.calls: list[tuple[str, object]] = []
 
-    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
+    def send(
+        self, role: str, prompt_file: Path, display_label: str | None = None
+    ) -> None:
         self.calls.append(("send", role, prompt_file.name, display_label))
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
-        self.calls.append(("send_many", role, [Path(getattr(item, "prompt_file", item)).name for item in prompt_specs]))
+        self.calls.append(
+            (
+                "send_many",
+                role,
+                [
+                    Path(getattr(item, "prompt_file", item)).name
+                    for item in prompt_specs
+                ],
+            )
+        )
 
     def deactivate(self, role: str) -> None:
         self.calls.append(("deactivate", role))
@@ -51,11 +72,15 @@ def _base_agents(with_designer: bool = True) -> dict[str, AgentConfig]:
         "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[]),
     }
     if with_designer:
-        agents["designer"] = AgentConfig(role="designer", cli="claude", model="sonnet", args=[])
+        agents["designer"] = AgentConfig(
+            role="designer", cli="claude", model="sonnet", args=[]
+        )
     return agents
 
 
-def _make_ctx(feature_dir: Path, with_designer: bool = True) -> tuple[PipelineContext, Path]:
+def _make_ctx(
+    feature_dir: Path, with_designer: bool = True
+) -> tuple[PipelineContext, Path]:
     project_dir = feature_dir.parent / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
     files = create_feature_files(project_dir, feature_dir, "add designer", "session-x")
@@ -80,7 +105,9 @@ def _make_ctx(feature_dir: Path, with_designer: bool = True) -> tuple[PipelineCo
 def _write_execution_plan(feature_dir: Path, *, name: str = "implementation") -> None:
     planning_dir = feature_dir / PLANNING_DIR
     planning_dir.mkdir(parents=True, exist_ok=True)
-    (planning_dir / "plan_1.md").write_text(f"## Sub-plan 1: {name}\n", encoding="utf-8")
+    (planning_dir / "plan_1.md").write_text(
+        f"## Sub-plan 1: {name}\n", encoding="utf-8"
+    )
     (planning_dir / "execution_plan.json").write_text(
         json.dumps(
             {
@@ -102,8 +129,12 @@ class DesignerRequirementsTests(unittest.TestCase):
     def _write_coder_inputs(self, feature_dir: Path) -> None:
         planning_dir = feature_dir / PLANNING_DIR
         planning_dir.mkdir(parents=True, exist_ok=True)
-        (planning_dir / "plan_1.md").write_text("## Sub-plan 1: implementation\n", encoding="utf-8")
-        (planning_dir / "tasks.md").write_text("# Tasks\n\n- [ ] implement\n", encoding="utf-8")
+        (planning_dir / "plan_1.md").write_text(
+            "## Sub-plan 1: implementation\n", encoding="utf-8"
+        )
+        (planning_dir / "tasks.md").write_text(
+            "# Tasks\n\n- [ ] implement\n", encoding="utf-8"
+        )
 
     def test_load_config_parses_optional_designer(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -154,7 +185,9 @@ class DesignerRequirementsTests(unittest.TestCase):
             files.plan.write_text("# Plan\n", encoding="utf-8")
             self._write_coder_inputs(feature_dir)
 
-            coder_prompt = build_coder_subplan_prompt(files, feature_dir / PLANNING_DIR / "plan_1.md", 1)
+            coder_prompt = build_coder_subplan_prompt(
+                files, feature_dir / PLANNING_DIR / "plan_1.md", 1
+            )
             designer_prompt = build_designer_prompt(files)
             initial_prompts = build_initial_prompts(files)
 
@@ -165,10 +198,14 @@ class DesignerRequirementsTests(unittest.TestCase):
             self.assertNotIn("[[placeholder:", designer_prompt)
             self.assertEqual(["architect"], list(initial_prompts.keys()))
             self.assertEqual("architect_prompt.md", initial_prompts["architect"].name)
-            self.assertFalse((feature_dir / IMPLEMENTATION_DIR / "coder_prompt.md").exists())
+            self.assertFalse(
+                (feature_dir / IMPLEMENTATION_DIR / "coder_prompt.md").exists()
+            )
             self.assertFalse((feature_dir / REVIEW_DIR / "review_prompt.md").exists())
             self.assertFalse((feature_dir / DESIGN_DIR / "designer_prompt.md").exists())
-            self.assertFalse((feature_dir / COMPLETION_DIR / "confirmation_prompt.md").exists())
+            self.assertFalse(
+                (feature_dir / COMPLETION_DIR / "confirmation_prompt.md").exists()
+            )
 
     def test_build_designer_prompt_includes_design_contract_additions(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -191,7 +228,9 @@ class DesignerRequirementsTests(unittest.TestCase):
             self.assertIn("Loading-State", designer_prompt)
             self.assertIn("Error-State", designer_prompt)
 
-    def test_plan_written_moves_to_designing_when_plan_meta_requests_design(self) -> None:
+    def test_plan_written_moves_to_designing_when_plan_meta_requests_design(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -202,15 +241,31 @@ class DesignerRequirementsTests(unittest.TestCase):
             write_state(state_path, state)
             _write_execution_plan(feature_dir, name="implementation")
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "plan_meta.json").write_text('{"needs_design": true}\n', encoding="utf-8")
+            # Write all three required files for plan completion
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan\n", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "tasks.md").write_text(
+                "# Tasks\n\n- [ ] task\n", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "plan_meta.json").write_text(
+                '{"needs_design": true}\n', encoding="utf-8"
+            )
 
-            phase = get_phase(load_state(state_path))
-            phase.handle_event(load_state(state_path), "plan_written", ctx)
+            handler = PlanningHandler()
+            event = WorkflowEvent(
+                kind="file.created",
+                path="02_planning/plan_meta.json",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
+            )
 
-            updated = load_state(state_path)
-            self.assertEqual("designing", updated["phase"])
-            self.assertEqual("plan_written", updated["last_event"])
-            self.assertEqual([("deactivate", "architect"), ("kill_primary", "architect")], ctx.runtime.calls)
+            self.assertEqual("designing", next_phase)
+            self.assertEqual("plan_written", updates.get("last_event"))
+            self.assertIn(("deactivate", "architect"), ctx.runtime.calls)
+            self.assertIn(("kill_primary", "architect"), ctx.runtime.calls)
 
     def test_enter_designing_builds_designer_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -222,9 +277,13 @@ class DesignerRequirementsTests(unittest.TestCase):
             state["phase"] = "designing"
             write_state(state_path, state)
 
-            run_phase_cycle(load_state(state_path), ctx)
+            handler = DesigningHandler()
+            handler.enter(load_state(state_path), ctx)
 
-            self.assertEqual([("send", "designer", "designer_prompt.md", "[designer] feature")], ctx.runtime.calls)
+            self.assertEqual(
+                [("send", "designer", "designer_prompt.md", "[designer] feature")],
+                ctx.runtime.calls,
+            )
             self.assertTrue((feature_dir / DESIGN_DIR / "designer_prompt.md").exists())
 
     def test_design_written_hands_off_to_implementing(self) -> None:
@@ -237,13 +296,19 @@ class DesignerRequirementsTests(unittest.TestCase):
             state["phase"] = "designing"
             write_state(state_path, state)
 
-            phase = get_phase(load_state(state_path))
-            phase.handle_event(load_state(state_path), "design_written", ctx)
+            handler = DesigningHandler()
+            event = WorkflowEvent(
+                kind="file.created",
+                path="04_design/design.md",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
+            )
 
-            updated = load_state(state_path)
-            self.assertEqual("implementing", updated["phase"])
-            self.assertEqual("design_written", updated["last_event"])
-            self.assertEqual([("deactivate", "designer")], ctx.runtime.calls)
+            self.assertEqual("implementing", next_phase)
+            self.assertEqual("design_written", updates.get("last_event"))
+            self.assertIn(("deactivate", "designer"), ctx.runtime.calls)
 
     def test_phase_registry_contains_expected_phases(self) -> None:
         self.assertEqual(
@@ -257,7 +322,7 @@ class DesignerRequirementsTests(unittest.TestCase):
                 "completing",
                 "failed",
             },
-            set(PHASES),
+            set(PHASE_HANDLERS),
         )
 
 

@@ -8,11 +8,12 @@ from unittest.mock import patch
 
 from agentmux.configuration import load_explicit_config
 from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
-from agentmux.workflow.phases import PlanningPhase
+from agentmux.workflow.handlers import PlanningHandler
 from agentmux.workflow.prompts import build_code_researcher_prompt
 from agentmux.runtime import TmuxAgentRuntime
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.workflow.transitions import PipelineContext
+from agentmux.workflow.event_router import WorkflowEvent
 
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 RESEARCH_DIR = SESSION_DIR_NAMES["research"]
@@ -40,8 +41,9 @@ class FakeRuntime:
             )
         )
 
-    def spawn_task(self, role: str, task_id: str, prompt_file: Path) -> None:
-        self.calls.append(("spawn_task", role, task_id, prompt_file.name))
+    def spawn_task(self, role: str, task_id: str, research_dir: Path) -> None:
+        # Store the directory name for verification
+        self.calls.append(("spawn_task", role, task_id, research_dir.name))
 
     def finish_task(self, role: str, task_id: str) -> None:
         self.calls.append(("finish_task", role, task_id))
@@ -233,6 +235,7 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             ):
                 runtime = TmuxAgentRuntime.attach(
                     feature_dir=feature_dir,
+                    project_dir=Path("/project"),
                     session_name="session-x",
                     agents=agents,
                 )
@@ -253,98 +256,6 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
                 {"auth-module": "%9"}, snapshot["parallel"]["code-researcher"]
             )
             self.assertNotIn("db-schema", snapshot["parallel"]["code-researcher"])
-
-    def test_planning_detects_task_requested_and_completed(self) -> None:
-        """Test that research events are detected correctly.
-
-        New pending requests are detected before completed tasks.
-        This ensures batch research tasks are properly dispatched.
-        """
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            feature_dir = tmp_path / "feature"
-            ctx, state_path = self._make_ctx(feature_dir)
-
-            # Setup: auth-module is dispatched and done, db-schema is new request
-            state = load_state(state_path)
-            state["phase"] = "planning"
-            state["research_tasks"] = {"auth-module": "dispatched"}
-            write_state(state_path, state)
-
-            (feature_dir / RESEARCH_DIR / "code-db-schema").mkdir(
-                parents=True, exist_ok=True
-            )
-            (feature_dir / RESEARCH_DIR / "code-auth-module").mkdir(
-                parents=True, exist_ok=True
-            )
-            (feature_dir / RESEARCH_DIR / "code-db-schema" / "request.md").write_text(
-                "look at db", encoding="utf-8"
-            )
-            (feature_dir / RESEARCH_DIR / "code-auth-module" / "done").touch()
-
-            phase = PlanningPhase()
-
-            # First: new pending request is detected (new behavior - priority to new tasks)
-            event = phase.detect_event(load_state(state_path), ctx)
-            self.assertEqual("code_batch_requested", event)
-
-            # After marking db-schema as dispatched, the completed task is detected
-            state = load_state(state_path)
-            state["research_tasks"] = {
-                "auth-module": "dispatched",
-                "db-schema": "dispatched",
-            }
-            write_state(state_path, state)
-            event = phase.detect_event(load_state(state_path), ctx)
-            self.assertEqual("task_completed:auth-module", event)
-
-    def test_planning_detects_new_requests_while_tasks_dispatched(self) -> None:
-        """Test the batching bug fix: new requests are detected even with dispatched tasks."""
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            feature_dir = tmp_path / "feature"
-            ctx, state_path = self._make_ctx(feature_dir)
-
-            # Setup: one task already dispatched
-            state = load_state(state_path)
-            state["phase"] = "planning"
-            state["research_tasks"] = {"existing-task": "dispatched"}
-            write_state(state_path, state)
-
-            # Create a new request while existing task is still dispatched
-            (feature_dir / RESEARCH_DIR / "code-new-task").mkdir(
-                parents=True, exist_ok=True
-            )
-            (feature_dir / RESEARCH_DIR / "code-new-task" / "request.md").write_text(
-                "new task request", encoding="utf-8"
-            )
-
-            phase = PlanningPhase()
-            event = phase.detect_event(load_state(state_path), ctx)
-
-            # Bug fix: new request should be detected even though tasks are already dispatched
-            self.assertEqual("code_batch_requested", event)
-
-    def test_planning_snapshot_inputs_include_research_request_and_done_markers(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            feature_dir = tmp_path / "feature"
-            ctx, state_path = self._make_ctx(feature_dir)
-            _ = state_path
-            (feature_dir / RESEARCH_DIR / "code-auth-module").mkdir(
-                parents=True, exist_ok=True
-            )
-            (feature_dir / RESEARCH_DIR / "code-auth-module" / "request.md").write_text(
-                "look at auth", encoding="utf-8"
-            )
-            (feature_dir / RESEARCH_DIR / "code-auth-module" / "done").touch()
-
-            snapshot = PlanningPhase().snapshot_inputs({}, ctx)
-
-            self.assertIn("code-auth-module/request.md", snapshot)
-            self.assertIn("code-auth-module/done", snapshot)
 
     def test_planning_handle_task_requested_spawns_researcher_and_updates_state(
         self,
@@ -367,22 +278,30 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             stale_done = feature_dir / RESEARCH_DIR / "code-auth-module" / "done"
             stale_done.touch()
 
-            phase = PlanningPhase()
-            result = phase.handle_event(
-                load_state(state_path), "code_batch_requested", ctx
+            handler = PlanningHandler()
+            event = WorkflowEvent(
+                kind="file.created",
+                path="03_research/code-auth-module/request.md",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
             )
 
-            self.assertIsNone(result)
+            self.assertIsNone(next_phase)
             self.assertFalse(stale_done.exists())
+            # spawn_task now receives the research directory, not the prompt file
+            # The call stores the directory name: "code-auth-module"
             self.assertEqual(
-                ("spawn_task", "code-researcher", "auth-module", "prompt.md"),
+                ("spawn_task", "code-researcher", "auth-module", "code-auth-module"),
                 ctx.runtime.calls[-1],
             )
             self.assertTrue(
                 (feature_dir / RESEARCH_DIR / "code-auth-module" / "prompt.md").exists()
             )
-            updated = load_state(state_path)
-            self.assertEqual("dispatched", updated["research_tasks"]["auth-module"])
+            self.assertEqual(
+                "dispatched", updates.get("research_tasks", {}).get("auth-module")
+            )
 
     def test_planning_handle_task_completed_finishes_researcher_and_notifies_architect(
         self,
@@ -400,12 +319,17 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
             )
             (feature_dir / RESEARCH_DIR / "code-auth-module" / "done").touch()
 
-            phase = PlanningPhase()
-            result = phase.handle_event(
-                load_state(state_path), "task_completed:auth-module", ctx
+            handler = PlanningHandler()
+            event = WorkflowEvent(
+                kind="file.created",
+                path="03_research/code-auth-module/done",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
             )
 
-            self.assertIsNone(result)
+            self.assertIsNone(next_phase)
             self.assertEqual(
                 (
                     "notify",
@@ -414,8 +338,9 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
                 ),
                 ctx.runtime.calls[-1],
             )
-            updated = load_state(state_path)
-            self.assertEqual("done", updated["research_tasks"]["auth-module"])
+            self.assertEqual(
+                "done", updates.get("research_tasks", {}).get("auth-module")
+            )
 
 
 if __name__ == "__main__":

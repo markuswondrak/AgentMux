@@ -14,6 +14,8 @@ class Provider:
     models: dict[str, str]
     trust_snippet: str | None
     default_args: dict[str, list[str]]
+    batch_subcommand: str | None = None
+    batch_prompt_flag: str | None = None
 
 
 def _build_builtin_providers() -> dict[str, Provider]:
@@ -78,4 +80,6 @@ def resolve_agent(
         model_flag=provider.model_flag,
         args=list(args),
         trust_snippet=provider.trust_snippet,
+        batch_subcommand=provider.batch_subcommand,
+        batch_prompt_flag=provider.batch_prompt_flag,
     )

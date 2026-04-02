@@ -5,10 +5,11 @@ import unittest
 from pathlib import Path
 
 from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
-from agentmux.workflow.phases import PHASES, get_phase
+from agentmux.workflow.handlers import PHASE_HANDLERS, ReviewingHandler
 from agentmux.workflow.prompts import build_reviewer_prompt
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.workflow.transitions import PipelineContext
+from agentmux.workflow.event_router import WorkflowEvent
 
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 
@@ -17,11 +18,22 @@ class FakeRuntime:
     def __init__(self) -> None:
         self.calls: list[tuple[str, object]] = []
 
-    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
+    def send(
+        self, role: str, prompt_file: Path, display_label: str | None = None
+    ) -> None:
         self.calls.append(("send", role, prompt_file.name, display_label))
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
-        self.calls.append(("send_many", role, [Path(getattr(item, "prompt_file", item)).name for item in prompt_specs]))
+        self.calls.append(
+            (
+                "send_many",
+                role,
+                [
+                    Path(getattr(item, "prompt_file", item)).name
+                    for item in prompt_specs
+                ],
+            )
+        )
 
     def deactivate(self, role: str) -> None:
         self.calls.append(("deactivate", role))
@@ -43,7 +55,9 @@ class ReviewPassRequirementsTests(unittest.TestCase):
     def _make_ctx(self, feature_dir: Path) -> tuple[PipelineContext, Path]:
         project_dir = feature_dir.parent / "project"
         project_dir.mkdir(parents=True, exist_ok=True)
-        files = create_feature_files(project_dir, feature_dir, "review handling", "session-x")
+        files = create_feature_files(
+            project_dir, feature_dir, "review handling", "session-x"
+        )
 
         prompts = {"architect": feature_dir / PLANNING_DIR / "architect_prompt.md"}
         for prompt in prompts.values():
@@ -51,9 +65,15 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             prompt.write_text(prompt.name, encoding="utf-8")
 
         agents = {
-            "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
-            "reviewer": AgentConfig(role="reviewer", cli="claude", model="sonnet", args=[]),
-            "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[]),
+            "architect": AgentConfig(
+                role="architect", cli="claude", model="opus", args=[]
+            ),
+            "reviewer": AgentConfig(
+                role="reviewer", cli="claude", model="sonnet", args=[]
+            ),
+            "coder": AgentConfig(
+                role="coder", cli="codex", model="gpt-5.3-codex", args=[]
+            ),
         }
 
         ctx = PipelineContext(
@@ -68,7 +88,9 @@ class ReviewPassRequirementsTests(unittest.TestCase):
     def test_reviewer_prompt_requires_review_md_for_pass_and_fail(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
-            files = create_feature_files(tmp_path / "project", tmp_path / "feature", "x", "session")
+            files = create_feature_files(
+                tmp_path / "project", tmp_path / "feature", "x", "session"
+            )
 
             prompt = build_reviewer_prompt(files, is_review=True)
 
@@ -88,30 +110,42 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             state["phase"] = "reviewing"
             write_state(state_path, state)
 
-            phase = get_phase(load_state(state_path))
-            phase.on_enter(load_state(state_path), ctx)
+            handler = ReviewingHandler()
+            handler.enter(load_state(state_path), ctx)
 
-            self.assertIn(("send", "reviewer", "review_prompt.md", "[reviewer] iteration 1"), ctx.runtime.calls)
+            self.assertIn(
+                ("send", "reviewer", "review_prompt.md", "[reviewer] iteration 1"),
+                ctx.runtime.calls,
+            )
             self.assertFalse(ctx.files.review.exists())
 
     def test_reviewing_phase_is_registered(self) -> None:
-        self.assertIn("reviewing", PHASES)
+        self.assertIn("reviewing", PHASE_HANDLERS)
 
     def test_handle_review_passed_moves_to_completing(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = self._make_ctx(tmp_path / "feature")
+            # Create the review.md file with verdict: pass
+            ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
+            ctx.files.review.write_text("verdict: pass\n", encoding="utf-8")
 
             state = load_state(state_path)
             state["phase"] = "reviewing"
             write_state(state_path, state)
 
-            phase = get_phase(load_state(state_path))
-            phase.handle_event(load_state(state_path), "review_passed", ctx)
+            handler = ReviewingHandler()
+            event = WorkflowEvent(
+                kind="file.created",
+                path="06_review/review.md",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
+            )
 
-            updated = load_state(state_path)
-            self.assertEqual("completing", updated["phase"])
-            self.assertEqual("review_passed", updated["last_event"])
+            self.assertEqual("completing", next_phase)
+            self.assertEqual("review_passed", updates.get("last_event"))
             self.assertIn(("finish_many", "coder"), ctx.runtime.calls)
             self.assertIn(("kill_primary", "coder"), ctx.runtime.calls)
 
@@ -124,17 +158,26 @@ class ReviewPassRequirementsTests(unittest.TestCase):
                 '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md"]}',
                 encoding="utf-8",
             )
+            # Create the review.md file with verdict: pass
+            ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
+            ctx.files.review.write_text("verdict: pass\n", encoding="utf-8")
 
             state = load_state(state_path)
             state["phase"] = "reviewing"
             write_state(state_path, state)
 
-            phase = get_phase(load_state(state_path))
-            phase.handle_event(load_state(state_path), "review_passed", ctx)
+            handler = ReviewingHandler()
+            event = WorkflowEvent(
+                kind="file.created",
+                path="06_review/review.md",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
+            )
 
-            updated = load_state(state_path)
-            self.assertEqual("completing", updated["phase"])
-            self.assertEqual("review_passed", updated["last_event"])
+            self.assertEqual("completing", next_phase)
+            self.assertEqual("review_passed", updates.get("last_event"))
 
     def test_handle_review_failed_moves_to_fixing_before_limit(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -148,12 +191,18 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             state["review_iteration"] = 1
             write_state(state_path, state)
 
-            phase = get_phase(load_state(state_path))
-            phase.handle_event(load_state(state_path), "review_failed", ctx)
+            handler = ReviewingHandler()
+            event = WorkflowEvent(
+                kind="file.created",
+                path="06_review/review.md",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
+            )
 
-            updated = load_state(state_path)
-            self.assertEqual("fixing", updated["phase"])
-            self.assertEqual(2, updated["review_iteration"])
+            self.assertEqual("fixing", next_phase)
+            self.assertEqual(2, updates.get("review_iteration"))
             self.assertTrue(ctx.files.fix_request.exists())
 
 
