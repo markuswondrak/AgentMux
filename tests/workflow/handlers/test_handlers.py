@@ -758,7 +758,7 @@ class TestCompletingHandler:
 
             updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
-            assert updates == {"__exit__": 0}
+            assert updates == {"__exit__": 0, "cleanup_feature_dir": False}
             assert next_phase is None
             mock_apply.assert_called_once_with(mock_ctx, "reviewer")
 

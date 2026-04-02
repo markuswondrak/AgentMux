@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..sessions.state_store import (
-    cleanup_feature_dir,
     feature_slug_from_dir,
 )
 from ..shared.models import GitHubConfig, RuntimeFiles
@@ -21,6 +20,7 @@ class CompletionResult:
     commit_hash: str | None
     pr_url: str | None
     cleaned_up: bool
+    should_cleanup: bool = False
 
 
 class CompletionService:
@@ -106,8 +106,12 @@ class CompletionService:
             if result:
                 pr_url = result["pr_url"]
 
-        cleanup_feature_dir(files.feature_dir)
-        return CompletionResult(commit_hash=commit_hash, pr_url=pr_url, cleaned_up=True)
+        return CompletionResult(
+            commit_hash=commit_hash,
+            pr_url=pr_url,
+            cleaned_up=False,
+            should_cleanup=True,
+        )
 
 
 def _read_text(path: Path) -> str:

@@ -198,6 +198,8 @@ class TmuxAgentRuntime:
 
     def _persist_snapshot(self) -> None:
         target = self.feature_dir / "runtime_state.json"
+        if not self.feature_dir.exists():
+            return  # Directory deleted, nothing to persist
         data = {
             "version": SNAPSHOT_VERSION,
             "primary": self.primary_panes,
@@ -637,9 +639,12 @@ class TmuxAgentRuntime:
 
     def shutdown(self, keep_session: bool) -> None:
         if not keep_session:
-            # Kill all tracked processes before killing session
-            self.kill_tracked_processes(timeout=5.0)
-            tmux_kill_session(self.session_name)
+            try:
+                self.kill_tracked_processes(timeout=5.0)
+            except Exception:
+                pass  # Best effort - don't prevent session kill
+            finally:
+                tmux_kill_session(self.session_name)
 
 
 class TmuxRuntimeFactory:

@@ -292,7 +292,10 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 patch(
                     "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.finalize_approval",
                     return_value=CompletionResult(
-                        commit_hash=None, pr_url=None, cleaned_up=False
+                        commit_hash=None,
+                        pr_url=None,
+                        cleaned_up=False,
+                        should_cleanup=False,
                     ),
                 ) as finalize_mock,
             ):
@@ -305,7 +308,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                     event, load_state(state_path), ctx
                 )
 
-            self.assertEqual({"__exit__": 0}, updates)
+            self.assertEqual({"__exit__": 0, "cleanup_feature_dir": False}, updates)
             self.assertIsNone(next_phase)
             self.assertEqual(
                 "complete", finalize_mock.call_args.kwargs["commit_message"]
@@ -342,7 +345,10 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 patch(
                     "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.finalize_approval",
                     return_value=CompletionResult(
-                        commit_hash=None, pr_url=None, cleaned_up=False
+                        commit_hash=None,
+                        pr_url=None,
+                        cleaned_up=False,
+                        should_cleanup=False,
                     ),
                 ) as finalize_mock,
             ):
@@ -355,7 +361,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                     event, load_state(state_path), ctx
                 )
 
-            self.assertEqual({"__exit__": 0}, updates)
+            self.assertEqual({"__exit__": 0, "cleanup_feature_dir": False}, updates)
             self.assertIsNone(next_phase)
             self.assertEqual(
                 "complete", finalize_mock.call_args.kwargs["commit_message"]
@@ -396,7 +402,10 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 patch(
                     "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.finalize_approval",
                     return_value=CompletionResult(
-                        commit_hash=None, pr_url=None, cleaned_up=False
+                        commit_hash=None,
+                        pr_url=None,
+                        cleaned_up=False,
+                        should_cleanup=False,
                     ),
                 ) as finalize_mock,
             ):
@@ -409,7 +418,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                     event, load_state(state_path), ctx
                 )
 
-            self.assertEqual({"__exit__": 0}, updates)
+            self.assertEqual({"__exit__": 0, "cleanup_feature_dir": False}, updates)
             self.assertIsNone(next_phase)
             draft_mock.assert_called_once_with(
                 files=ctx.files,
@@ -561,7 +570,10 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 patch(
                     "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.finalize_approval",
                     return_value=CompletionResult(
-                        commit_hash=None, pr_url=None, cleaned_up=False
+                        commit_hash=None,
+                        pr_url=None,
+                        cleaned_up=False,
+                        should_cleanup=False,
                     ),
                 ),
             ):
@@ -574,7 +586,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                     event, load_state(state_path), ctx
                 )
 
-            self.assertEqual({"__exit__": 0}, updates)
+            self.assertEqual({"__exit__": 0, "cleanup_feature_dir": False}, updates)
             self.assertIsNone(next_phase)
             target = (
                 ctx.files.project_dir / ".agentmux" / "prompts" / "agents" / "coder.md"

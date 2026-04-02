@@ -37,6 +37,9 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
   - `needs_design` (`true`/`false`) — whether to run a dedicated design handoff
   - `needs_docs` (`true`/`false`) — informational signal that documentation updates are in scope
   - `doc_files` (`string[]`) — planned documentation targets when docs work is in scope
+  - `review_strategy` (`object`) — risk assessment and review scope configuration:
+    - `severity` (`"low"`|`"medium"`|`"high"`) — implementation risk level: `low` for UI/CSS/text, `medium` for logic changes, `high` for security/DB/core changes
+    - `focus` (`string[]`) — specific review focus areas (e.g., `["security", "performance", "data-consistency"]`)
   - Documentation updates must be captured explicitly in `plan.md`, each `plan_<N>.md`, and corresponding `tasks_<N>.md`; this metadata does not create a separate runtime phase
 
 Execution scheduling is strict:
@@ -68,8 +71,17 @@ Execution scheduling is strict:
 
 ## Review (`06_review/`)
 
-- `review_prompt.md` / `review.md`
+- `review_prompt.md` / `review.md` — legacy review prompt (backward compatibility)
+- `review_logic_prompt.md` — Logic & Alignment reviewer prompt (functional correctness vs plan)
+- `review_quality_prompt.md` — Quality & Style reviewer prompt (clean code, naming, standards)
+- `review_expert_prompt.md` — Deep-Dive Expert reviewer prompt (security, performance, edge cases)
 - `fix_prompt.txt` / `fix_request.md`
+
+**Reviewer Selection:** Which prompt is used depends on `plan_meta.review_strategy`:
+- Missing `review_strategy` → uses `review_logic_prompt.md` (backward compatible default)
+- `severity: low` → uses `review_quality_prompt.md`
+- `severity: medium/high` without security/performance focus → uses `review_logic_prompt.md`
+- `severity: medium/high` with security or performance in focus → uses `review_expert_prompt.md`
 
 ## Completion (`08_completion/`)
 

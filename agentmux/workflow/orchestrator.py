@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 import threading
 
 from ..integrations.compression import cleanup_compression
@@ -10,7 +11,7 @@ from ..runtime.interruption_sources import (
     INTERRUPTION_EVENT_PANE_EXITED,
     InterruptionEventSource,
 )
-from ..sessions.state_store import load_state
+from ..sessions.state_store import cleanup_feature_dir, load_state
 from ..shared.models import BATCH_AGENT_ROLES, GitHubConfig, WorkflowSettings
 from .event_router import WorkflowEvent, WorkflowEventRouter
 from .handlers import PHASE_HANDLERS
@@ -165,8 +166,8 @@ class PipelineOrchestrator:
     def run(self, ctx: PipelineContext, keep_session: bool) -> int:
         """Run the pipeline - event-driven, no loop.
 
-        Registers the event callback with the event bus, starts the bus,
-        and blocks until an exit signal is received.
+        Uses ExitStack to ensure cleanup happens in correct LIFO order:
+        bus.stop → cleanup_mcp → cleanup_compression → shutdown → cleanup_feature_dir
         """
         self._ctx = ctx
         self._exit_code = None
@@ -178,18 +179,23 @@ class PipelineOrchestrator:
         bus.register(self._on_event)
         bus.start()
 
-        try:
+        def handle_feature_dir_cleanup():
+            """Clean up feature directory if flagged in state and not keeping session."""
+            if keep_session:
+                return  # Don't delete feature dir if keeping session
+            state = load_state(ctx.files.state)
+            if state.get("cleanup_feature_dir"):
+                cleanup_feature_dir(ctx.files.feature_dir)
+
+        with ExitStack() as stack:
+            # Register callbacks in REVERSE order of desired execution (LIFO)
+            # Execution order will be: bus.stop → cleanup_mcp → cleanup_compression → shutdown → cleanup_feature_dir
+            stack.callback(handle_feature_dir_cleanup)
+            stack.callback(ctx.runtime.shutdown, keep_session)
+            stack.callback(cleanup_compression, ctx.files.feature_dir)
+            stack.callback(cleanup_mcp, ctx.files.feature_dir, ctx.files.project_dir)
+            stack.callback(bus.stop)
+
             # Block until exit signal (no loop!)
             self._exit_event.wait()
             return self._exit_code or 0
-        finally:
-            try:
-                bus.stop()
-            finally:
-                try:
-                    cleanup_mcp(ctx.files.feature_dir, ctx.files.project_dir)
-                finally:
-                    try:
-                        cleanup_compression(ctx.files.feature_dir)
-                    finally:
-                        ctx.runtime.shutdown(keep_session)

@@ -200,7 +200,7 @@ class CompletingHandler:
                 "Completion approved, but commit step failed or was skipped. Feature directory retained."
             )
 
-        return {"__exit__": 0}, None
+        return {"__exit__": 0, "cleanup_feature_dir": result.should_cleanup}, None
 
     def _handle_changes_requested(
         self,

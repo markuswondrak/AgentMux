@@ -68,6 +68,7 @@ class CompletionDataPersistenceTests(unittest.TestCase):
                         commit_hash="abc1234",
                         pr_url="https://example.com/pr/123",
                         cleaned_up=True,
+                        should_cleanup=True,
                     ),
                 ),
             ):
@@ -78,7 +79,7 @@ class CompletionDataPersistenceTests(unittest.TestCase):
                 )
                 updates, next_phase = handler.handle_event(event, state, ctx)
 
-            self.assertEqual({"__exit__": 0}, updates)
+            self.assertEqual({"__exit__": 0, "cleanup_feature_dir": True}, updates)
             self.assertIsNone(next_phase)
             summary_path = ctx.files.project_dir / ".agentmux" / ".last_completion.json"
             self.assertTrue(summary_path.exists())
@@ -116,6 +117,7 @@ class CompletionDataPersistenceTests(unittest.TestCase):
                         commit_hash=None,
                         pr_url=None,
                         cleaned_up=False,
+                        should_cleanup=False,
                     ),
                 ),
             ):
@@ -126,7 +128,7 @@ class CompletionDataPersistenceTests(unittest.TestCase):
                 )
                 updates, next_phase = handler.handle_event(event, state, ctx)
 
-            self.assertEqual({"__exit__": 0}, updates)
+            self.assertEqual({"__exit__": 0, "cleanup_feature_dir": False}, updates)
             self.assertIsNone(next_phase)
             summary_path = ctx.files.project_dir / ".agentmux" / ".last_completion.json"
             self.assertFalse(summary_path.exists())
@@ -154,6 +156,7 @@ class CompletionDataPersistenceTests(unittest.TestCase):
                         commit_hash="deadbeef",
                         pr_url=None,
                         cleaned_up=True,
+                        should_cleanup=True,
                     ),
                 ),
             ):
@@ -164,7 +167,7 @@ class CompletionDataPersistenceTests(unittest.TestCase):
                 )
                 updates, next_phase = handler.handle_event(event, state, ctx)
 
-            self.assertEqual({"__exit__": 0}, updates)
+            self.assertEqual({"__exit__": 0, "cleanup_feature_dir": True}, updates)
             self.assertIsNone(next_phase)
             summary_path = ctx.files.project_dir / ".agentmux" / ".last_completion.json"
             payload = json.loads(summary_path.read_text(encoding="utf-8"))

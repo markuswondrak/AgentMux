@@ -73,12 +73,28 @@ For Phase 2 parallel sub-plans, ensure each task list stays within that sub-plan
 19. You may optionally write `02_planning/tasks.md` as a human-readable overview summarizing all tasks across plans, but this is not required for execution—the scheduler uses only the per-plan task files.
 20. Documentation updates must be captured as explicit plan and task items in `02_planning/plan.md`, every `02_planning/plan_<N>.md`, and every `02_planning/tasks_<N>.md`.
 Do not defer documentation to a separate post-review handoff; keep documentation work in the same implementation scope as code changes.
-21. After writing planning/task/execution artifacts, write `02_planning/plan_meta.json` with this exact shape: `{{ "needs_design": true|false, "needs_docs": true|false, "doc_files": ["path/to/doc.md", ...] }}`.
-Set `needs_design` to `true` only when the plan requires a dedicated design handoff before coding.
-Set `needs_docs` to `true` only when documentation updates are required for this feature scope.
-`doc_files` must list the documentation files expected to change when `needs_docs` is `true`, and must be an empty list when `needs_docs` is `false`.
-Do not treat `needs_docs` as a workflow switch; it is planning metadata only and must not imply a dedicated agent or phase.
-22. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
+21. **Review-Strategie festlegen:** Evaluiere das Risiko der Implementierung und bestimme den Review-Umfang. Schreibe dies in `02_planning/plan_meta.json` unter dem Schlüssel `review_strategy`.
+    - **Risk Levels:** `low` (UI/CSS, Texte), `medium` (Logik-Änderungen, neue Komponenten), `high` (Security, DB-Migrationen, Core-Refactoring).
+    - **Review Focus:** Liste spezifische Fokus-Punkte auf (z.B. `["performance", "security", "accessibility"]`).
+22. After writing planning/task/execution artifacts, write `02_planning/plan_meta.json` with this exact shape:
+    ```json
+    {
+      "needs_design": true|false,
+      "needs_docs": true|false,
+      "doc_files": ["path/to/doc.md", ...],
+      "review_strategy": {
+        "severity": "low"|"medium"|"high",
+        "focus": ["security", "performance", ...]
+      }
+    }
+    ```
+    Set `needs_design` to `true` only when the plan requires a dedicated design handoff before coding.
+    Set `needs_docs` to `true` only when documentation updates are required for this feature scope.
+    Set `review_strategy.severity` based on risk assessment: `low` for UI/CSS/text changes, `medium` for logic changes/new components, `high` for security/DB migrations/core refactoring.
+    Set `review_strategy.focus` to an array of specific focus areas relevant to this feature (e.g., `["security", "data-consistency"]`).
+    `doc_files` must list the documentation files expected to change when `needs_docs` is `true`, and must be an empty list when `needs_docs` is `false`.
+    Do not treat `needs_docs` as a workflow switch; it is planning metadata only and must not imply a dedicated agent or phase.
+23. FINAL STEP ONLY — after writing the planning artifacts, stop. Do not update `state.json` or any workflow status from this step.
 
 ## Preference memory at phase-end approval
 

@@ -100,6 +100,9 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         orchestrator_log=feature_dir / "orchestrator.log",
         created_files_log=feature_dir / "created_files.log",
         status_log=feature_dir / "status_log.txt",
+        review_logic_prompt=review_dir / "review_logic_prompt.md",
+        review_quality_prompt=review_dir / "review_quality_prompt.md",
+        review_expert_prompt=review_dir / "review_expert_prompt.md",
     )
 
 

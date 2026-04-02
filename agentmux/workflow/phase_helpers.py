@@ -202,3 +202,50 @@ def apply_role_preferences(ctx: "PipelineContext", role: str) -> None:
     proposal = load_preference_proposal(proposal_path)
     if proposal:
         apply_preference_proposal(ctx.files.project_dir, proposal)
+
+
+def select_reviewer_type(plan_meta: dict) -> str:
+    """Select the appropriate reviewer type based on plan_meta review_strategy.
+
+    Args:
+        plan_meta: The plan_meta dictionary from 02_planning/plan_meta.json
+
+    Returns:
+        One of "logic" | "quality" | "expert"
+
+    Rules:
+        - Missing review_strategy -> "logic" (backward compat default)
+        - low severity -> "quality"
+        - medium severity + no security/performance in focus -> "logic"
+        - medium severity + security OR performance in focus -> "expert"
+        - high severity + no security/performance in focus -> "logic"
+        - high severity + security OR performance in focus -> "expert"
+    """
+    review_strategy = plan_meta.get("review_strategy")
+    if not review_strategy:
+        return "logic"
+
+    severity = review_strategy.get("severity", "").lower()
+    focus = review_strategy.get("focus", [])
+
+    # Normalize focus to lowercase strings for comparison
+    focus_lower = set()
+    for item in focus:
+        if isinstance(item, str):
+            focus_lower.add(item.lower())
+
+    has_security_focus = "security" in focus_lower
+    has_performance_focus = "performance" in focus_lower
+    needs_expert = has_security_focus or has_performance_focus
+
+    if severity == "low":
+        return "quality"
+
+    if severity == "medium":
+        return "expert" if needs_expert else "logic"
+
+    if severity == "high":
+        return "expert" if needs_expert else "logic"
+
+    # Default fallback for unknown severity
+    return "logic"

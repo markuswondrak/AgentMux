@@ -209,6 +209,63 @@ def build_reviewer_prompt(files: RuntimeFiles, is_review: bool = False) -> str:
     return _expand_session_includes(rendered, files.feature_dir)
 
 
+def build_reviewer_logic_prompt(files: RuntimeFiles) -> str:
+    """Build prompt for Logic & Alignment reviewer."""
+    rendered = _render_template(
+        _load_template(
+            "agents",
+            "reviewer_logic",
+            project_dir=files.project_dir,
+        ),
+        {
+            "feature_dir": files.feature_dir,
+            "project_dir": files.project_dir,
+            "reviewer_preference_proposal_file": files.relative_path(
+                files.reviewer_preference_proposal
+            ),
+        },
+    )
+    return _expand_session_includes(rendered, files.feature_dir)
+
+
+def build_reviewer_quality_prompt(files: RuntimeFiles) -> str:
+    """Build prompt for Quality & Style reviewer."""
+    rendered = _render_template(
+        _load_template(
+            "agents",
+            "reviewer_quality",
+            project_dir=files.project_dir,
+        ),
+        {
+            "feature_dir": files.feature_dir,
+            "project_dir": files.project_dir,
+            "reviewer_preference_proposal_file": files.relative_path(
+                files.reviewer_preference_proposal
+            ),
+        },
+    )
+    return _expand_session_includes(rendered, files.feature_dir)
+
+
+def build_reviewer_expert_prompt(files: RuntimeFiles) -> str:
+    """Build prompt for Deep-Dive Expert reviewer."""
+    rendered = _render_template(
+        _load_template(
+            "agents",
+            "reviewer_expert",
+            project_dir=files.project_dir,
+        ),
+        {
+            "feature_dir": files.feature_dir,
+            "project_dir": files.project_dir,
+            "reviewer_preference_proposal_file": files.relative_path(
+                files.reviewer_preference_proposal
+            ),
+        },
+    )
+    return _expand_session_includes(rendered, files.feature_dir)
+
+
 def build_designer_prompt(files: RuntimeFiles) -> str:
     completion_instruction = (
         "FINAL STEP ONLY — after writing design.md and any optional design artifacts, "
