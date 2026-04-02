@@ -30,7 +30,10 @@ class GitHubConfigResolutionTests(unittest.TestCase):
             project_dir = Path(td) / "project"
             project_dir.mkdir()
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
                 loaded = load_layered_config(project_dir)
 
             self.assertEqual("main", loaded.github.base_branch)
@@ -54,7 +57,10 @@ github:
                 encoding="utf-8",
             )
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
                 loaded = load_layered_config(project_dir)
 
             self.assertEqual("develop", loaded.github.base_branch)
@@ -67,14 +73,20 @@ class GitHubHelpersTests(unittest.TestCase):
         self.assertEqual("42", extract_issue_number("42"))
 
     def test_extract_issue_number_accepts_github_issue_url(self) -> None:
-        self.assertEqual("314", extract_issue_number("https://github.com/acme/demo/issues/314"))
+        self.assertEqual(
+            "314", extract_issue_number("https://github.com/acme/demo/issues/314")
+        )
 
     def test_extract_issue_number_rejects_non_numeric(self) -> None:
         with self.assertRaises(ValueError):
             extract_issue_number("not-an-issue")
 
-    def test_check_gh_available_and_authenticated_return_false_when_binary_missing(self) -> None:
-        with patch("agentmux.integrations.github.subprocess.run", side_effect=FileNotFoundError):
+    def test_check_gh_available_and_authenticated_return_false_when_binary_missing(
+        self,
+    ) -> None:
+        with patch(
+            "agentmux.integrations.github.subprocess.run", side_effect=FileNotFoundError
+        ):
             self.assertFalse(check_gh_available())
             self.assertFalse(check_gh_authenticated())
 
@@ -194,17 +206,27 @@ Finalize directly from completing when skip mode is enabled.
             feature_dir = Path(td) / "feature"
             project_dir.mkdir()
             feature_dir.mkdir()
-            (feature_dir / "requirements.md").write_text("# Requirements\n", encoding="utf-8")
+            (feature_dir / "requirements.md").write_text(
+                "# Requirements\n", encoding="utf-8"
+            )
             (feature_dir / "02_planning").mkdir(parents=True)
-            (feature_dir / "02_planning" / "plan.md").write_text("# Plan\n", encoding="utf-8")
+            (feature_dir / "02_planning" / "plan.md").write_text(
+                "# Plan\n", encoding="utf-8"
+            )
             (feature_dir / "06_review").mkdir(parents=True)
-            (feature_dir / "06_review" / "review.md").write_text("Verdict: pass\n", encoding="utf-8")
+            (feature_dir / "06_review" / "review.md").write_text(
+                "Verdict: pass\n", encoding="utf-8"
+            )
 
             with patch(
                 "agentmux.integrations.github.subprocess.run",
                 side_effect=[
-                    subprocess.CompletedProcess(args=["git", "checkout"], returncode=0, stdout="", stderr=""),
-                    subprocess.CalledProcessError(returncode=1, cmd=["git", "push"], stderr="rejected"),
+                    subprocess.CompletedProcess(
+                        args=["git", "checkout"], returncode=0, stdout="", stderr=""
+                    ),
+                    subprocess.CalledProcessError(
+                        returncode=1, cmd=["git", "push"], stderr="rejected"
+                    ),
                 ],
             ):
                 result = create_branch_and_pr(
@@ -225,12 +247,15 @@ class PipelineIssueTriggerTests(unittest.TestCase):
             max_review_iterations=3,
             github=GitHubConfig(),
             agents={
-                "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
+                "architect": AgentConfig(
+                    role="architect", cli="claude", model="opus", args=[]
+                ),
             },
         )
 
     def test_parse_args_accepts_issue_flag(self) -> None:
         from agentmux.pipeline.cli import build_parser
+
         with patch("sys.argv", ["agentmux", "issue", "42"]):
             args = build_parser().parse_args()
         self.assertEqual("42", args.number_or_url)
@@ -240,15 +265,26 @@ class PipelineIssueTriggerTests(unittest.TestCase):
             project_dir = Path(td)
             app = application.PipelineApplication(project_dir)
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config", return_value=self._loaded_config()
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists", return_value=False
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
-            ), patch(
-                "agentmux.integrations.github.check_gh_available", return_value=False
-            ), self.assertRaises(SystemExit) as ctx:
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=self._loaded_config(),
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.integrations.github.check_gh_available",
+                    return_value=False,
+                ),
+                self.assertRaises(SystemExit) as ctx,
+            ):
                 app.run_issue("42", keep_session=False, product_manager=False)
 
         self.assertIn("gh CLI is required for --issue", str(ctx.exception))
@@ -256,38 +292,101 @@ class PipelineIssueTriggerTests(unittest.TestCase):
     def test_main_bootstraps_prompt_and_state_from_issue(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=lambda _message: None))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=lambda _message: None)
+            )
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config", return_value=self._loaded_config()
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists", return_value=False
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
-                return_value=self._loaded_config().agents,
-            ), patch(
-                "agentmux.integrations.github.check_gh_available", return_value=True
-            ), patch(
-                "agentmux.integrations.github.check_gh_authenticated", return_value=True
-            ), patch(
-                "agentmux.integrations.github.fetch_issue",
-                return_value={"title": "Fix API auth flow", "body": "Issue-sourced requirements"},
-            ), patch(
-                "agentmux.sessions.datetime"
-            ) as datetime_mock, patch(
-                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
-            ), patch(
-                "agentmux.pipeline.application.PipelineApplication._start_background_orchestrator", return_value=None
-            ), patch(
-                "agentmux.pipeline.application.subprocess.run", return_value=None
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=self._loaded_config(),
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=self._loaded_config().agents,
+                ),
+                patch(
+                    "agentmux.integrations.github.check_gh_available", return_value=True
+                ),
+                patch(
+                    "agentmux.integrations.github.check_gh_authenticated",
+                    return_value=True,
+                ),
+                patch(
+                    "agentmux.integrations.github.fetch_issue",
+                    return_value={
+                        "title": "Fix API auth flow",
+                        "body": "Issue-sourced requirements",
+                    },
+                ),
+                patch("agentmux.sessions.datetime") as datetime_mock,
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch(
+                    "agentmux.pipeline.application.PipelineApplication._start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.integrations.github.subprocess.run",
+                    side_effect=[
+                        # create_branch calls: git rev-parse (on main), show-ref (branch doesn't exist), checkout -b, push
+                        subprocess.CompletedProcess(
+                            args=["git", "rev-parse"],
+                            returncode=0,
+                            stdout="main\n",
+                            stderr="",
+                        ),
+                        subprocess.CompletedProcess(
+                            args=["git", "show-ref"], returncode=1, stdout="", stderr=""
+                        ),
+                        subprocess.CompletedProcess(
+                            args=["git", "checkout"], returncode=0, stdout="", stderr=""
+                        ),
+                        subprocess.CompletedProcess(
+                            args=["git", "push"], returncode=0, stdout="", stderr=""
+                        ),
+                        # Additional calls if needed
+                        subprocess.CompletedProcess(
+                            args=[], returncode=0, stdout="", stderr=""
+                        ),
+                        subprocess.CompletedProcess(
+                            args=[], returncode=0, stdout="", stderr=""
+                        ),
+                        subprocess.CompletedProcess(
+                            args=[], returncode=0, stdout="", stderr=""
+                        ),
+                    ],
+                ),
             ):
                 datetime_mock.now.return_value.strftime.return_value = "20260322-203228"
-                result = app.run_issue("https://github.com/acme/demo/issues/42", keep_session=False, product_manager=False)
+                result = app.run_issue(
+                    "https://github.com/acme/demo/issues/42",
+                    keep_session=False,
+                    product_manager=False,
+                )
 
             self.assertEqual(0, result)
-            feature_dir = project_dir / ".agentmux" / ".sessions" / "20260322-203228-fix-api-auth-flow"
+            feature_dir = (
+                project_dir
+                / ".agentmux"
+                / ".sessions"
+                / "20260322-203228-fix-api-auth-flow"
+            )
             self.assertTrue(feature_dir.exists())
             req_text = (feature_dir / "requirements.md").read_text(encoding="utf-8")
             self.assertIn("Issue-sourced requirements", req_text)
@@ -301,33 +400,53 @@ class PipelineIssueTriggerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             messages: list[str] = []
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=messages.append))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=messages.append)
+            )
 
-            with patch.object(app, "ensure_dependencies", return_value=None), patch(
-                "agentmux.pipeline.application.load_layered_config", return_value=self._loaded_config()
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists", return_value=False
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config", return_value=None
-            ), patch(
-                "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
-                return_value=self._loaded_config().agents,
-            ), patch(
-                "agentmux.integrations.github.check_gh_available", return_value=False
-            ), patch(
-                "agentmux.pipeline.application.TmuxRuntimeFactory.create", return_value=object()
-            ), patch(
-                "agentmux.pipeline.application.PipelineApplication._start_background_orchestrator", return_value=None
-            ), patch(
-                "agentmux.pipeline.application.subprocess.run", return_value=None
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=self._loaded_config(),
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=self._loaded_config().agents,
+                ),
+                patch(
+                    "agentmux.integrations.github.check_gh_available",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch(
+                    "agentmux.pipeline.application.PipelineApplication._start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run", return_value=None
+                ),
             ):
-                result = app.run_prompt("normal run", name="demo", keep_session=False, product_manager=False)
+                result = app.run_prompt(
+                    "normal run", name="demo", keep_session=False, product_manager=False
+                )
 
             self.assertEqual(0, result)
             state = json.loads(
-                (project_dir / ".agentmux" / ".sessions" / "demo" / "state.json").read_text(
-                    encoding="utf-8"
-                )
+                (
+                    project_dir / ".agentmux" / ".sessions" / "demo" / "state.json"
+                ).read_text(encoding="utf-8")
             )
             self.assertFalse(state["gh_available"])
             printed = "\n".join(messages)
@@ -337,9 +456,13 @@ class PipelineIssueTriggerTests(unittest.TestCase):
 class GitHubBootstrapperTests(unittest.TestCase):
     def test_detect_pr_availability_warns_when_tools_unavailable(self) -> None:
         messages: list[str] = []
-        bootstrapper = GitHubBootstrapper(Path("/tmp/project"), GitHubConfig(), output=messages.append)
+        bootstrapper = GitHubBootstrapper(
+            Path("/tmp/project"), GitHubConfig(), output=messages.append
+        )
 
-        with patch("agentmux.integrations.github.check_gh_available", return_value=False):
+        with patch(
+            "agentmux.integrations.github.check_gh_available", return_value=False
+        ):
             available = bootstrapper.detect_pr_availability()
 
         self.assertFalse(available)

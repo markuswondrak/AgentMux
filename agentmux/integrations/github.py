@@ -21,7 +21,9 @@ def check_gh_available() -> bool:
 
 def check_gh_authenticated() -> bool:
     try:
-        subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, check=True)
+        subprocess.run(
+            ["gh", "auth", "status"], capture_output=True, text=True, check=True
+        )
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
     return True
@@ -36,7 +38,9 @@ def fetch_issue(issue_ref: str) -> dict[str, str]:
             check=True,
         )
     except FileNotFoundError as exc:
-        raise RuntimeError("gh CLI is required for --issue. Install: https://cli.github.com") from exc
+        raise RuntimeError(
+            "gh CLI is required for --issue. Install: https://cli.github.com"
+        ) from exc
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
         raise RuntimeError(
@@ -46,7 +50,9 @@ def fetch_issue(issue_ref: str) -> dict[str, str]:
     try:
         payload = json.loads(result.stdout or "{}")
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Failed to parse issue payload from gh issue view for '{issue_ref}'.") from exc
+        raise RuntimeError(
+            f"Failed to parse issue payload from gh issue view for '{issue_ref}'."
+        ) from exc
 
     title = str(payload.get("title", "")).strip()
     body = str(payload.get("body", ""))
@@ -70,7 +76,9 @@ def extract_issue_number(issue_ref: str) -> str:
         if segments and segments[-1].isdigit():
             return segments[-1]
 
-    raise ValueError(f"Invalid issue reference: {issue_ref}. Expected an issue number or GitHub issue URL.")
+    raise ValueError(
+        f"Invalid issue reference: {issue_ref}. Expected an issue number or GitHub issue URL."
+    )
 
 
 @dataclass(frozen=True)
@@ -96,12 +104,16 @@ class GitHubBootstrapper:
     def detect_pr_availability(self) -> bool:
         gh_available = check_gh_available() and check_gh_authenticated()
         if not gh_available:
-            self.output("Warning: gh CLI not available or not authenticated. PR creation will be skipped.")
+            self.output(
+                "Warning: gh CLI not available or not authenticated. PR creation will be skipped."
+            )
         return gh_available
 
     def resolve_issue(self, issue_ref: str) -> IssueBootstrap:
         if not check_gh_available():
-            raise SystemExit("gh CLI is required for --issue. Install: https://cli.github.com")
+            raise SystemExit(
+                "gh CLI is required for --issue. Install: https://cli.github.com"
+            )
         if not check_gh_authenticated():
             raise SystemExit("gh is not authenticated. Run: gh auth login")
         try:
@@ -124,7 +136,9 @@ class GitHubBootstrapper:
             self.output(f"Pulled latest from origin/{self.github_config.base_branch}.")
         except subprocess.CalledProcessError as exc:
             stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
-            self.output(f"Warning: could not pull origin/{self.github_config.base_branch}: {stderr}")
+            self.output(
+                f"Warning: could not pull origin/{self.github_config.base_branch}: {stderr}"
+            )
 
         return IssueBootstrap(
             prompt_text=payload["body"].strip() or payload["title"],
@@ -210,15 +224,59 @@ def assemble_pr_body(feature_dir: Path, issue_number: str | None) -> str:
 
 
 def create_branch(project_dir: Path, branch_name: str) -> bool:
-    """Create a new branch and push it to origin. Returns True on success."""
+    """Create a new branch and push it to origin. Returns True on success.
+
+    Handles the case where the branch already exists or we're already on it.
+    """
     try:
-        subprocess.run(
-            ["git", "checkout", "-b", branch_name],
+        # Check if we're already on the target branch
+        current = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=project_dir,
             capture_output=True,
             text=True,
             check=True,
         )
+        if current.stdout.strip() == branch_name:
+            # Already on the target branch, just need to push
+            subprocess.run(
+                ["git", "push", "-u", "origin", branch_name],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return True
+
+        # Check if the branch already exists locally
+        branch_exists = subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch_name}"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if branch_exists.returncode == 0:
+            # Branch exists, checkout to it
+            subprocess.run(
+                ["git", "checkout", branch_name],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        else:
+            # Branch doesn't exist, create it
+            subprocess.run(
+                ["git", "checkout", "-b", branch_name],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+        # Push to origin
         subprocess.run(
             ["git", "push", "-u", "origin", branch_name],
             cwd=project_dir,
@@ -303,7 +361,9 @@ def create_branch_and_pr(
             )
         except subprocess.CalledProcessError as exc:
             stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
-            print(f"Warning: could not switch back to {github_config.base_branch}: {stderr}")
+            print(
+                f"Warning: could not switch back to {github_config.base_branch}: {stderr}"
+            )
 
         return {
             "branch": branch_name,
@@ -313,7 +373,11 @@ def create_branch_and_pr(
         print(f"PR creation skipped because required CLI was not found: {exc}")
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
-        cmd_text = " ".join(str(item) for item in exc.cmd) if isinstance(exc.cmd, list) else str(exc.cmd)
+        cmd_text = (
+            " ".join(str(item) for item in exc.cmd)
+            if isinstance(exc.cmd, list)
+            else str(exc.cmd)
+        )
         print(f"PR creation step failed for command `{cmd_text}`: {stderr}")
     except Exception as exc:  # pragma: no cover - defensive guard
         print(f"PR creation step failed unexpectedly: {exc}")
