@@ -1,0 +1,204 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from ..sessions.state_store import now_iso, write_state
+from .transitions import PipelineContext
+
+if TYPE_CHECKING:
+    from .event_router import WorkflowEvent
+
+
+def send_to_role(
+    ctx: PipelineContext,
+    role: str,
+    prompt_file: Path,
+    *,
+    display_label: str | None = None,
+) -> None:
+    ctx.runtime.send(role, prompt_file, display_label=display_label)
+
+
+def write_phase(
+    ctx: PipelineContext,
+    state: dict,
+    phase: str,
+    last_event: str,
+    **extra_fields: object,
+) -> None:
+    state["phase"] = phase
+    state["last_event"] = last_event
+    state["updated_at"] = now_iso()
+    state["updated_by"] = "pipeline"
+    state.update(extra_fields)
+    write_state(ctx.files.state, state)
+    ctx.entered_phase = None
+
+
+def reset_markers(feature_dir: Path, pattern: str) -> None:
+    for path in feature_dir.glob(pattern):
+        if path.is_file():
+            path.unlink()
+
+
+def load_plan_meta(planning_dir: Path) -> dict[str, object]:
+    path = planning_dir / "plan_meta.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+# =============================================================================
+# NEW HELPER FUNCTIONS - Event-driven handler shared functionality
+# =============================================================================
+
+
+def filter_file_created_event(event: "WorkflowEvent") -> str | None:
+    """Filter events to only return path for file.created events.
+
+    Args:
+        event: The workflow event to filter.
+
+    Returns:
+        The relative path if event is file.created, None otherwise.
+
+    Usage:
+        path = filter_file_created_event(event)
+        if path is None:
+            return {}, None
+        # ... handle path
+    """
+    if event.kind != "file.created":
+        return None
+    return event.path
+
+
+def dispatch_research_task(
+    role: str,
+    topic: str,
+    state: dict,
+    ctx: "PipelineContext",
+) -> tuple[dict, str | None]:
+    """Dispatch a research task (code-researcher or web-researcher).
+
+    Handles:
+    - Checking if already dispatched
+    - Removing stale done markers
+    - Building and writing the prompt
+    - Spawning the task
+
+    Args:
+        role: Either "code-researcher" or "web-researcher"
+        topic: The research topic (e.g., "auth", "api")
+        state: Current state dict (read-only)
+        ctx: Pipeline context
+
+    Returns:
+        Tuple of (state_updates, None) - never transitions phase
+    """
+    from .prompts import (
+        build_code_researcher_prompt,
+        build_web_researcher_prompt,
+        write_prompt_file,
+    )
+
+    # Determine state key and prefix
+    is_code = role == "code-researcher"
+    tasks_key = "research_tasks" if is_code else "web_research_tasks"
+    prefix = "code-" if is_code else "web-"
+
+    # Check if already dispatched
+    tasks = dict(state.get(tasks_key, {}))
+    if topic in tasks:
+        return {}, None
+
+    # Remove stale done marker if exists
+    done_marker = ctx.files.research_dir / f"{prefix}{topic}" / "done"
+    if done_marker.exists():
+        done_marker.unlink()
+
+    # Build and write prompt
+    research_dir = ctx.files.research_dir / f"{prefix}{topic}"
+    prompt_builder = (
+        build_code_researcher_prompt if is_code else build_web_researcher_prompt
+    )
+    write_prompt_file(
+        ctx.files.feature_dir,
+        ctx.files.relative_path(research_dir / "prompt.md"),
+        prompt_builder(topic, ctx.files),
+    )
+
+    # Spawn task
+    ctx.runtime.spawn_task(role, topic, research_dir)
+
+    # Update state
+    tasks[topic] = "dispatched"
+    return {tasks_key: tasks}, None
+
+
+def notify_research_complete(
+    role: str,
+    topic: str,
+    state: dict,
+    ctx: "PipelineContext",
+    notify_target: str,
+) -> tuple[dict, str | None]:
+    """Notify that a research task is complete.
+
+    Handles:
+    - Finishing the task in runtime
+    - Notifying the target role with summary path
+    - Updating state
+
+    Args:
+        role: Either "code-researcher" or "web-researcher"
+        topic: The research topic
+        state: Current state dict (read-only)
+        ctx: Pipeline context
+        notify_target: Role to notify (e.g., "architect", "product-manager")
+
+    Returns:
+        Tuple of (state_updates, None) - never transitions phase
+    """
+    # Finish task
+    ctx.runtime.finish_task(role, topic)
+
+    # Notify target
+    is_code = role == "code-researcher"
+    prefix = "code-" if is_code else "web-"
+    role_name = "Code-research" if is_code else "Web research"
+
+    summary_path = ctx.files.relative_path(
+        ctx.files.research_dir / f"{prefix}{topic}" / "summary.md"
+    )
+    ctx.runtime.notify(
+        notify_target,
+        f"{role_name} on '{topic}' is complete. Read {summary_path} and continue from there.",
+    )
+
+    # Update state
+    tasks_key = "research_tasks" if is_code else "web_research_tasks"
+    tasks = dict(state.get(tasks_key, {}))
+    tasks[topic] = "done"
+    return {tasks_key: tasks}, None
+
+
+def apply_role_preferences(ctx: "PipelineContext", role: str) -> None:
+    """Apply approved preferences for a role if they exist.
+
+    Args:
+        ctx: Pipeline context with files
+        role: Role name (e.g., "architect", "product-manager", "reviewer")
+    """
+    from .preference_memory import (
+        apply_preference_proposal,
+        load_preference_proposal,
+        proposal_artifact_for_source,
+    )
+
+    proposal_path = proposal_artifact_for_source(ctx.files, role)
+    proposal = load_preference_proposal(proposal_path)
+    if proposal:
+        apply_preference_proposal(ctx.files.project_dir, proposal)

@@ -7,17 +7,57 @@ from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from agentmux import monitor
-from agentmux.shared.models import SESSION_DIR_NAMES
+from agentmux.shared.models import SESSION_DIR_NAMES, RuntimeFiles
 from agentmux.monitor.state_reader import EVENT_LABELS, OPTIONAL_PHASES, PIPELINE_STATES
+
+
+def _make_test_files(feature_dir: Path) -> RuntimeFiles:
+    """Create a minimal RuntimeFiles for testing."""
+    return RuntimeFiles(
+        project_dir=feature_dir.parent,
+        feature_dir=feature_dir,
+        product_management_dir=feature_dir / SESSION_DIR_NAMES["product_management"],
+        planning_dir=feature_dir / SESSION_DIR_NAMES["planning"],
+        research_dir=feature_dir / SESSION_DIR_NAMES["research"],
+        design_dir=feature_dir / SESSION_DIR_NAMES["design"],
+        implementation_dir=feature_dir / SESSION_DIR_NAMES["implementation"],
+        review_dir=feature_dir / SESSION_DIR_NAMES["review"],
+        completion_dir=feature_dir / SESSION_DIR_NAMES["completion"],
+        context=feature_dir / "context.md",
+        requirements=feature_dir / "requirements.md",
+        plan=feature_dir / SESSION_DIR_NAMES["planning"] / "plan.md",
+        tasks=feature_dir / SESSION_DIR_NAMES["planning"] / "tasks.md",
+        execution_plan=feature_dir
+        / SESSION_DIR_NAMES["planning"]
+        / "execution_plan.json",
+        design=feature_dir / SESSION_DIR_NAMES["design"] / "design.md",
+        review=feature_dir / SESSION_DIR_NAMES["review"] / "review.md",
+        fix_request=feature_dir / SESSION_DIR_NAMES["review"] / "fix_request.md",
+        changes=feature_dir / SESSION_DIR_NAMES["completion"] / "changes.md",
+        pm_preference_proposal=feature_dir
+        / SESSION_DIR_NAMES["product_management"]
+        / "approved_preferences.json",
+        architect_preference_proposal=feature_dir
+        / SESSION_DIR_NAMES["planning"]
+        / "approved_preferences.json",
+        reviewer_preference_proposal=feature_dir
+        / SESSION_DIR_NAMES["completion"]
+        / "approved_preferences.json",
+        state=feature_dir / "state.json",
+        runtime_state=feature_dir / "runtime_state.json",
+        orchestrator_log=feature_dir / "orchestrator.log",
+        created_files_log=feature_dir / "created_files.log",
+        status_log=feature_dir / "status_log.txt",
+    )
 
 
 class MonitorTests(unittest.TestCase):
     def _render(self, feature_dir: Path, *, width: int = 40, height: int = 24) -> str:
+        files = _make_test_files(feature_dir)
         with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
             return monitor.render(
                 session_name="session-x",
-                state_path=feature_dir / "state.json",
-                runtime_state_path=feature_dir / "runtime_state.json",
+                files=files,
                 agents={},
                 width=width,
                 height=height,
@@ -351,10 +391,9 @@ class MonitorTests(unittest.TestCase):
     def test_render_agents_hides_inactive_roles_and_shows_active_only(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            state_path.write_text('{"phase": "reviewing"}', encoding="utf-8")
-            runtime_state_path.write_text(
+            files = _make_test_files(feature_dir)
+            files.state.write_text('{"phase": "reviewing"}', encoding="utf-8")
+            files.runtime_state.write_text(
                 '{"primary": {"architect": "%1", "reviewer": "%2", "coder": "%3"}}',
                 encoding="utf-8",
             )
@@ -379,8 +418,7 @@ class MonitorTests(unittest.TestCase):
                     output = self._strip_ansi(
                         monitor.render(
                             session_name="session-x",
-                            state_path=state_path,
-                            runtime_state_path=runtime_state_path,
+                            files=files,
                             agents=agents,
                             width=60,
                             height=24,
@@ -397,9 +435,8 @@ class MonitorTests(unittest.TestCase):
     def test_render_agents_uses_formatted_labels_for_parallel_coders(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            planning_dir = feature_dir / "02_planning"
+            files = _make_test_files(feature_dir)
+            planning_dir = files.planning_dir
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_2.md").write_text(
                 "## Sub-plan 2: API wiring\n", encoding="utf-8"
@@ -408,8 +445,8 @@ class MonitorTests(unittest.TestCase):
                 '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", "plans": [{"file": "plan_2.md", "name": "API wiring"}]}]}',
                 encoding="utf-8",
             )
-            state_path.write_text('{"phase": "implementing"}', encoding="utf-8")
-            runtime_state_path.write_text(
+            files.state.write_text('{"phase": "implementing"}', encoding="utf-8")
+            files.runtime_state.write_text(
                 '{"primary": {"coder": "%2"}, "parallel": {"coder": {"2": "%2"}}}',
                 encoding="utf-8",
             )
@@ -428,8 +465,7 @@ class MonitorTests(unittest.TestCase):
                     output = self._strip_ansi(
                         monitor.render(
                             session_name="session-x",
-                            state_path=state_path,
-                            runtime_state_path=runtime_state_path,
+                            files=files,
                             agents=agents,
                             width=60,
                             height=24,
@@ -444,12 +480,11 @@ class MonitorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "tmp"
             feature_dir.mkdir(parents=True, exist_ok=True)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            state_path.write_text(
+            files = _make_test_files(feature_dir)
+            files.state.write_text(
                 '{"phase": "reviewing", "review_iteration": 1}', encoding="utf-8"
             )
-            runtime_state_path.write_text(
+            files.runtime_state.write_text(
                 '{"primary": {"reviewer": "%4", "designer": "%5"}}', encoding="utf-8"
             )
 
@@ -468,8 +503,7 @@ class MonitorTests(unittest.TestCase):
                     output = self._strip_ansi(
                         monitor.render(
                             session_name="session-x",
-                            state_path=state_path,
-                            runtime_state_path=runtime_state_path,
+                            files=files,
                             agents=agents,
                             width=70,
                             height=24,
@@ -483,12 +517,10 @@ class MonitorTests(unittest.TestCase):
     def test_render_shows_log_section_without_box_frame(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            log_path = feature_dir / "status_log.txt"
-            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
-            log_path.write_text(
+            files = _make_test_files(feature_dir)
+            files.state.write_text('{"phase": "planning"}', encoding="utf-8")
+            files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
+            files.status_log.write_text(
                 "2026-03-21 11:20:05  planning\n2026-03-21 11:20:08  implementing\n",
                 encoding="utf-8",
             )
@@ -497,13 +529,12 @@ class MonitorTests(unittest.TestCase):
                 output = self._strip_ansi(
                     monitor.render(
                         session_name="session-x",
-                        state_path=state_path,
-                        runtime_state_path=runtime_state_path,
+                        files=files,
                         agents={},
                         width=40,
                         height=24,
                         start_time=0.0,
-                        log_path=log_path,
+                        log_path=files.status_log,
                     )
                 )
 
@@ -515,23 +546,22 @@ class MonitorTests(unittest.TestCase):
     def test_render_phase_log_entries_in_white_for_contrast(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            log_path = feature_dir / "status_log.txt"
-            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
-            log_path.write_text("2026-03-21 11:20:05  planning\n", encoding="utf-8")
+            files = _make_test_files(feature_dir)
+            files.state.write_text('{"phase": "planning"}', encoding="utf-8")
+            files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
+            files.status_log.write_text(
+                "2026-03-21 11:20:05  planning\n", encoding="utf-8"
+            )
 
             with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
                 output = monitor.render(
                     session_name="session-x",
-                    state_path=state_path,
-                    runtime_state_path=runtime_state_path,
+                    files=files,
                     agents={},
                     width=40,
                     height=24,
                     start_time=0.0,
-                    log_path=log_path,
+                    log_path=files.status_log,
                 )
 
             self.assertIn(f"{monitor.WHITE}> planning{monitor.RESET}", output)
@@ -539,18 +569,15 @@ class MonitorTests(unittest.TestCase):
     def test_render_merges_phase_log_with_allowed_created_files(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            status_log_path = feature_dir / "status_log.txt"
-            created_files_log_path = feature_dir / "created_files.log"
+            files = _make_test_files(feature_dir)
 
-            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
-            status_log_path.write_text(
+            files.state.write_text('{"phase": "planning"}', encoding="utf-8")
+            files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
+            files.status_log.write_text(
                 "2026-03-21 11:20:05  planning\n2026-03-21 11:20:09  implementing\n",
                 encoding="utf-8",
             )
-            created_files_log_path.write_text(
+            files.created_files_log.write_text(
                 "\n".join(
                     [
                         "2026-03-21 11:20:06  context.md",
@@ -568,13 +595,12 @@ class MonitorTests(unittest.TestCase):
                 output = self._strip_ansi(
                     monitor.render(
                         session_name="session-x",
-                        state_path=state_path,
-                        runtime_state_path=runtime_state_path,
+                        files=files,
                         agents={},
                         width=60,
                         height=30,
                         start_time=0.0,
-                        log_path=status_log_path,
+                        log_path=files.status_log,
                     )
                 )
 
@@ -597,14 +623,11 @@ class MonitorTests(unittest.TestCase):
     def test_render_shows_allowed_created_file_entries_without_status_log(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            status_log_path = feature_dir / "status_log.txt"
-            created_files_log_path = feature_dir / "created_files.log"
+            files = _make_test_files(feature_dir)
 
-            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
-            created_files_log_path.write_text(
+            files.state.write_text('{"phase": "planning"}', encoding="utf-8")
+            files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
+            files.created_files_log.write_text(
                 "2026-03-21 11:20:08  06_review/review.md\n",
                 encoding="utf-8",
             )
@@ -613,13 +636,12 @@ class MonitorTests(unittest.TestCase):
                 output = self._strip_ansi(
                     monitor.render(
                         session_name="session-x",
-                        state_path=state_path,
-                        runtime_state_path=runtime_state_path,
+                        files=files,
                         agents={},
                         width=50,
                         height=24,
                         start_time=0.0,
-                        log_path=status_log_path,
+                        log_path=files.status_log,
                     )
                 )
 
@@ -690,14 +712,11 @@ class MonitorTests(unittest.TestCase):
     def test_render_file_log_entries_contain_osc8_hyperlinks(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            status_log_path = feature_dir / "status_log.txt"
-            created_files_log_path = feature_dir / "created_files.log"
+            files = _make_test_files(feature_dir)
 
-            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
-            created_files_log_path.write_text(
+            files.state.write_text('{"phase": "planning"}', encoding="utf-8")
+            files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
+            files.created_files_log.write_text(
                 "2026-03-21 11:20:08  02_planning/plan.md\n",
                 encoding="utf-8",
             )
@@ -705,13 +724,12 @@ class MonitorTests(unittest.TestCase):
             with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
                 output = monitor.render(
                     session_name="session-x",
-                    state_path=state_path,
-                    runtime_state_path=runtime_state_path,
+                    files=files,
                     agents={},
                     width=60,
                     height=24,
                     start_time=0.0,
-                    log_path=status_log_path,
+                    log_path=files.status_log,
                 )
 
             # Raw output should contain OSC 8 hyperlink sequences
@@ -722,17 +740,14 @@ class MonitorTests(unittest.TestCase):
     def test_render_phase_log_entries_do_not_contain_osc8_hyperlinks(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            status_log_path = feature_dir / "status_log.txt"
-            created_files_log_path = feature_dir / "created_files.log"
+            files = _make_test_files(feature_dir)
 
-            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
-            status_log_path.write_text(
+            files.state.write_text('{"phase": "planning"}', encoding="utf-8")
+            files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
+            files.status_log.write_text(
                 "2026-03-21 11:20:05  planning\n", encoding="utf-8"
             )
-            created_files_log_path.write_text(
+            files.created_files_log.write_text(
                 "2026-03-21 11:20:08  02_planning/plan.md\n",
                 encoding="utf-8",
             )
@@ -740,13 +755,12 @@ class MonitorTests(unittest.TestCase):
             with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
                 output = monitor.render(
                     session_name="session-x",
-                    state_path=state_path,
-                    runtime_state_path=runtime_state_path,
+                    files=files,
                     agents={},
                     width=60,
                     height=24,
                     start_time=0.0,
-                    log_path=status_log_path,
+                    log_path=files.status_log,
                 )
 
             # Split output to find phase event lines vs file event lines
@@ -770,14 +784,11 @@ class MonitorTests(unittest.TestCase):
     def test_strip_ansi_removes_osc8_sequences(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            state_path = feature_dir / "state.json"
-            runtime_state_path = feature_dir / "runtime_state.json"
-            status_log_path = feature_dir / "status_log.txt"
-            created_files_log_path = feature_dir / "created_files.log"
+            files = _make_test_files(feature_dir)
 
-            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
-            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
-            created_files_log_path.write_text(
+            files.state.write_text('{"phase": "planning"}', encoding="utf-8")
+            files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
+            files.created_files_log.write_text(
                 "2026-03-21 11:20:08  02_planning/plan.md\n",
                 encoding="utf-8",
             )
@@ -785,13 +796,12 @@ class MonitorTests(unittest.TestCase):
             with patch("agentmux.monitor.render_module.time.time", return_value=0.0):
                 output = monitor.render(
                     session_name="session-x",
-                    state_path=state_path,
-                    runtime_state_path=runtime_state_path,
+                    files=files,
                     agents={},
                     width=60,
                     height=24,
                     start_time=0.0,
-                    log_path=status_log_path,
+                    log_path=files.status_log,
                 )
 
             stripped = self._strip_ansi(output)

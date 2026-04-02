@@ -12,29 +12,26 @@ from ..runtime.interruption_sources import (
 )
 from ..sessions.state_store import load_state
 from ..shared.models import BATCH_AGENT_ROLES, GitHubConfig, WorkflowSettings
+from .event_router import WorkflowEvent, WorkflowEventRouter
+from .handlers import PHASE_HANDLERS
 from .interruptions import InterruptionService
 from .prompts import build_initial_prompts
-from .transitions import EXIT_FAILURE, EXIT_SUCCESS, PipelineContext
-from .phases import run_phase_cycle
-
-
-def _determine_research_owner(state: dict, role: str) -> str | None:
-    """Determine which agent owns a research task based on current phase.
-
-    During product_management phase, the product-manager owns the research.
-    During planning phase, the architect owns the research.
-    """
-    phase = state.get("phase", "")
-    if phase == "product_management":
-        return "product-manager"
-    elif phase in ("planning", "implementing"):
-        return "architect"
-    return None
+from .transitions import PipelineContext
 
 
 class PipelineOrchestrator:
+    """Event-driven pipeline orchestrator.
+
+    Replaces the polling loop with an event-driven callback pattern.
+    Uses WorkflowEventRouter to route events to phase-specific handlers.
+    """
+
     def __init__(self, interruptions: InterruptionService | None = None) -> None:
         self.interruptions = interruptions or InterruptionService()
+        self._router = WorkflowEventRouter(PHASE_HANDLERS)
+        self._exit_code: int | None = None
+        self._exit_event: threading.Event | None = None
+        self._ctx: PipelineContext | None = None
 
     def create_context(
         self,
@@ -45,6 +42,7 @@ class PipelineOrchestrator:
         github_config: GitHubConfig,
         workflow_settings: WorkflowSettings | None = None,
     ) -> PipelineContext:
+        """Create a pipeline context with initial prompts."""
         return PipelineContext(
             files=files,
             runtime=runtime,
@@ -56,6 +54,7 @@ class PipelineOrchestrator:
         )
 
     def build_event_bus(self, files, runtime, wake_event: threading.Event) -> EventBus:
+        """Build the event bus with file and interruption sources."""
         bus = EventBus(
             sources=[
                 FileEventSource(files.feature_dir),
@@ -66,75 +65,126 @@ class PipelineOrchestrator:
         bus.register(CreatedFilesLogListener(files.created_files_log).handle_event)
         return bus
 
+    def _normalize_event(self, event: SessionEvent) -> WorkflowEvent:
+        """Convert SessionEvent to WorkflowEvent.
+
+        File events get their relative_path extracted to the path field.
+        Interruption events keep their full payload.
+        """
+        if event.kind.startswith("file."):
+            return WorkflowEvent(
+                kind=event.kind,
+                path=event.payload.get("relative_path"),
+                payload=event.payload,
+            )
+        return WorkflowEvent(
+            kind=event.kind,
+            path=None,
+            payload=event.payload,
+        )
+
+    def _handle_interruption(self, event: WorkflowEvent, ctx: PipelineContext) -> None:
+        """Handle pane exit interruption.
+
+        Notifies the appropriate agent if a researcher subagent crashed,
+        persists the interruption report, and sets the exit code.
+        """
+        payload = event.payload
+        role = str(payload.get("role", ""))
+        task_id = payload.get("task_id")
+        pane_scope = str(payload.get("pane_scope", ""))
+
+        # Check if this is a researcher subagent that crashed
+        if role in BATCH_AGENT_ROLES and task_id and pane_scope == "parallel":
+            state = load_state(ctx.files.state)
+            owner = self._determine_research_owner(state, role)
+
+            if owner:
+                message = str(payload.get("message", "Task failed")).strip()
+                ctx.runtime.notify(
+                    owner,
+                    f"RESEARCH TASK FAILED: {role} task '{task_id}' crashed unexpectedly.\n"
+                    f"Error: {message}\n"
+                    f"You may need to retry this research task or proceed without it.",
+                )
+
+        report = self.interruptions.build_canceled(
+            ctx.files.feature_dir,
+            str(payload.get("message", "")).strip()
+            or "An agent pane exited unexpectedly.",
+            files=ctx.files,
+        )
+        self.interruptions.persist(ctx.files, report)
+        self._exit_code = 130
+        if self._exit_event:
+            self._exit_event.set()
+
+    def _determine_research_owner(self, state: dict, role: str) -> str | None:
+        """Determine which agent owns a research task based on current phase.
+
+        During product_management phase, the product-manager owns the research.
+        During planning/implementing phases, the architect owns the research.
+        """
+        phase = state.get("phase", "")
+        if phase == "product_management":
+            return "product-manager"
+        elif phase in ("planning", "implementing"):
+            return "architect"
+        return None
+
+    def _on_event(self, event: SessionEvent) -> None:
+        """Event callback - routes events to handlers.
+
+        This is the main entry point for all events. It normalizes the event,
+        handles interruptions specially, and routes other events to the
+        appropriate phase handler via the router.
+        """
+        if self._exit_code is not None:
+            return  # Already exiting
+
+        if self._ctx is None:
+            return  # Not initialized
+
+        # Convert to workflow event
+        wf_event = self._normalize_event(event)
+
+        # Handle interruption specially
+        if wf_event.kind == INTERRUPTION_EVENT_PANE_EXITED:
+            self._handle_interruption(wf_event, self._ctx)
+            return
+
+        # Route to phase handler
+        state = load_state(self._ctx.files.state)
+        updates, exit_code = self._router.handle(wf_event, state, self._ctx)
+
+        if exit_code is not None:
+            self._exit_code = exit_code
+            if self._exit_event:
+                self._exit_event.set()
+
     def run(self, ctx: PipelineContext, keep_session: bool) -> int:
+        """Run the pipeline - event-driven, no loop.
+
+        Registers the event callback with the event bus, starts the bus,
+        and blocks until an exit signal is received.
+        """
+        self._ctx = ctx
+        self._exit_code = None
+        self._exit_event = threading.Event()
+
+        # Build event bus with our callback
         wake_event = threading.Event()
-        event_bus = self.build_event_bus(ctx.files, ctx.runtime, wake_event)
-        pending_interruption: dict[str, object] | None = None
-        interruption_lock = threading.Lock()
-
-        def _handle_interruption(event: SessionEvent) -> None:
-            nonlocal pending_interruption
-            if event.kind != INTERRUPTION_EVENT_PANE_EXITED:
-                return
-            with interruption_lock:
-                if pending_interruption is None:
-                    pending_interruption = dict(event.payload)
-            wake_event.set()
-
-        event_bus.register(_handle_interruption)
-        event_bus.start()
+        bus = self.build_event_bus(ctx.files, ctx.runtime, wake_event)
+        bus.register(self._on_event)
+        bus.start()
 
         try:
-            while True:
-                wake_event.wait(timeout=1.0)
-                wake_event.clear()
-                with interruption_lock:
-                    interruption = pending_interruption
-                if interruption is not None:
-                    # Check if this is a researcher subagent that crashed
-                    role = str(interruption.get("role", ""))
-                    task_id = interruption.get("task_id")
-                    pane_scope = str(interruption.get("pane_scope", ""))
-
-                    if (
-                        role in BATCH_AGENT_ROLES
-                        and task_id
-                        and pane_scope == "parallel"
-                    ):
-                        # Load state to determine the owner
-                        state = load_state(ctx.files.state)
-                        owner = _determine_research_owner(state, role)
-
-                        if owner:
-                            # Notify the parent agent about the failure
-                            message = str(
-                                interruption.get("message", "Task failed")
-                            ).strip()
-                            ctx.runtime.notify(
-                                owner,
-                                f"RESEARCH TASK FAILED: {role} task '{task_id}' crashed unexpectedly.\n"
-                                f"Error: {message}\n"
-                                f"You may need to retry this research task or proceed without it.",
-                            )
-
-                    report = self.interruptions.build_canceled(
-                        ctx.files.feature_dir,
-                        str(interruption.get("message", "")).strip()
-                        or "An agent pane exited unexpectedly.",
-                        files=ctx.files,
-                    )
-                    self.interruptions.persist(ctx.files, report)
-                    return 130
-
-                state = load_state(ctx.files.state)
-                result = run_phase_cycle(state, ctx)
-                if result == EXIT_SUCCESS:
-                    return 0
-                if result == EXIT_FAILURE:
-                    return 1
+            # Block until exit signal (no loop!)
+            self._exit_event.wait()
+            return self._exit_code or 0
         finally:
             try:
-                event_bus.stop()
+                bus.stop()
             finally:
                 try:
                     cleanup_mcp(ctx.files.feature_dir, ctx.files.project_dir)

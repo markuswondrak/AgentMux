@@ -6,11 +6,11 @@ import textwrap
 import time
 from pathlib import Path
 
+from ..shared.models import RuntimeFiles, SESSION_DIR_NAMES
 from .state_reader import (
     MonitorLogEntry,
     OPTIONAL_PHASES,
     PIPELINE_STATES,
-    SESSION_DIR_NAMES,
     format_event,
     get_role_labels,
     get_role_states,
@@ -772,93 +772,121 @@ def _render_research_section(width: int, state: dict, feature_dir: Path) -> list
     return rows
 
 
+class Monitor:
+    """Monitor renderer with static configuration captured at instantiation."""
+
+    def __init__(
+        self,
+        session_name: str,
+        files: RuntimeFiles,
+        agents: dict[str, dict[str, str]],
+    ):
+        self.session_name = session_name
+        self.files = files
+        self.agents = agents
+        self._start_time = time.time()
+
+    def render(self, width: int, height: int) -> str:
+        """Render a single frame given current terminal dimensions."""
+        state = load_state(self.files.state)
+        role_states = get_role_states(self.session_name, self.files.runtime_state)
+        role_labels = get_role_labels(self.files.state, self.files.runtime_state)
+        created_files_log_path = self.files.created_files_log
+
+        status = state.get("phase", "waiting…")
+        last_event = str(state.get("last_event", "")).strip()
+        interruption_cause = str(state.get("interruption_cause", "")).strip()
+        review_iter = state.get("review_iteration", 0)
+        subplan_count = state.get("subplan_count", 0)
+
+        body: list[str] = []
+        header_rows = _render_feature_header(width, self.files.state)
+        if header_rows:
+            body.extend(header_rows)
+        body.append(_separator(width))
+        body.append("")
+        body.extend(
+            _render_pipeline_section(
+                width,
+                state=state,
+                status=status,
+                last_event=last_event,
+                interruption_cause=interruption_cause,
+                review_iter=review_iter,
+                subplan_count=subplan_count,
+            )
+        )
+
+        agent_rows = _render_agents_section(
+            width, agents=self.agents, role_states=role_states, role_labels=role_labels
+        )
+        if agent_rows:
+            body.append("")
+            body.extend(agent_rows)
+
+        research_rows = _render_research_section(width, state, self.files.feature_dir)
+        if research_rows:
+            body.append("")
+            body.extend(research_rows)
+
+        elapsed_seconds = max(0, int(time.time() - self._start_time))
+        hours = elapsed_seconds // 3600
+        minutes = (elapsed_seconds % 3600) // 60
+        seconds = elapsed_seconds % 60
+        footer = [
+            _separator(width),
+            f"{DIM}◷ {hours}:{minutes:02d}:{seconds:02d}{RESET}",
+        ]
+
+        log_rows: list[str] = []
+        log_path = self.files.status_log
+        if log_path is not None:
+            reserved = len(body) + len(footer)
+            available_for_log = height - reserved - 1
+            if available_for_log >= 2:
+                entries = read_monitor_log_entries(
+                    log_path, created_files_log_path, max(1, available_for_log - 2)
+                )
+                if entries:
+                    log_rows = [_section_title("LOG"), ""]
+                    max_message = max(1, width - 8)
+                    feature_dir = self.files.feature_dir
+                    for entry in entries:
+                        message = _truncate_text(entry.message, max_message)
+                        # Wrap file paths in OSC 8 hyperlinks for IDE Ctrl-click support
+                        if entry.relative_path and message.startswith("+ "):
+                            visible_path = message[2:]  # Strip "+ " prefix
+                            abs_path = feature_dir / entry.relative_path
+                            message = f"+ {file_hyperlink(abs_path, visible_path)}"
+                        rendered = (
+                            f"{WHITE}{message}{RESET}" if entry.phase_event else message
+                        )
+                        log_rows.append(f" {DIM}{entry.time_str}{RESET} {rendered}")
+
+        lines = list(body)
+        if log_rows:
+            lines.append("")
+            lines.extend(log_rows)
+
+        target_body = max(0, height - len(footer))
+        while len(lines) < target_body:
+            lines.append("")
+        return "\n".join((lines[:target_body] + footer)[:height])
+
+
 def render(
     session_name: str,
-    state_path: Path,
-    runtime_state_path: Path,
+    files: RuntimeFiles,
     agents: dict[str, dict[str, str]],
     width: int,
     height: int,
     start_time: float,
     log_path: Path | None = None,
 ) -> str:
-    state = load_state(state_path)
-    role_states = get_role_states(session_name, runtime_state_path)
-    role_labels = get_role_labels(state_path, runtime_state_path)
-    created_files_log_path = state_path.parent / "created_files.log"
+    """Legacy render function - creates Monitor instance and renders frame.
 
-    status = state.get("phase", "waiting…")
-    last_event = str(state.get("last_event", "")).strip()
-    interruption_cause = str(state.get("interruption_cause", "")).strip()
-    review_iter = state.get("review_iteration", 0)
-    subplan_count = state.get("subplan_count", 0)
-
-    body: list[str] = []
-    header_rows = _render_feature_header(width, state_path)
-    if header_rows:
-        body.extend(header_rows)
-    body.append(_separator(width))
-    body.append("")
-    body.extend(
-        _render_pipeline_section(
-            width,
-            state=state,
-            status=status,
-            last_event=last_event,
-            interruption_cause=interruption_cause,
-            review_iter=review_iter,
-            subplan_count=subplan_count,
-        )
-    )
-
-    agent_rows = _render_agents_section(
-        width, agents=agents, role_states=role_states, role_labels=role_labels
-    )
-    if agent_rows:
-        body.append("")
-        body.extend(agent_rows)
-
-    research_rows = _render_research_section(width, state, state_path.parent)
-    if research_rows:
-        body.append("")
-        body.extend(research_rows)
-
-    elapsed_seconds = max(0, int(time.time() - start_time))
-    hours = elapsed_seconds // 3600
-    minutes = (elapsed_seconds % 3600) // 60
-    seconds = elapsed_seconds % 60
-    footer = [_separator(width), f"{DIM}◷ {hours}:{minutes:02d}:{seconds:02d}{RESET}"]
-
-    log_rows: list[str] = []
-    if log_path is not None:
-        reserved = len(body) + len(footer)
-        available_for_log = height - reserved - 1
-        if available_for_log >= 2:
-            entries = read_monitor_log_entries(
-                log_path, created_files_log_path, max(1, available_for_log - 2)
-            )
-            if entries:
-                log_rows = [_section_title("LOG"), ""]
-                max_message = max(1, width - 8)
-                feature_dir = state_path.parent
-                for entry in entries:
-                    message = _truncate_text(entry.message, max_message)
-                    # Wrap file paths in OSC 8 hyperlinks for IDE Ctrl-click support
-                    if entry.relative_path and message.startswith("+ "):
-                        visible_path = message[2:]  # Strip "+ " prefix
-                        abs_path = feature_dir / entry.relative_path
-                        message = f"+ {file_hyperlink(abs_path, visible_path)}"
-                    rendered = (
-                        f"{WHITE}{message}{RESET}" if entry.phase_event else message
-                    )
-                    log_rows.append(f" {DIM}{entry.time_str}{RESET} {rendered}")
-
-    lines = list(body)
-    if log_rows:
-        lines.append("")
-        lines.extend(log_rows)
-
-    target_body = max(0, height - len(footer))
-    while len(lines) < target_body:
-        lines.append("")
-    return "\n".join((lines[:target_body] + footer)[:height])
+    Kept for backwards compatibility. New code should use Monitor class directly.
+    """
+    monitor = Monitor(session_name, files, agents)
+    monitor._start_time = start_time  # Override start time for compatibility
+    return monitor.render(width, height)

@@ -11,32 +11,28 @@ class Provider:
     name: str
     cli: str
     model_flag: str
-    models: dict[str, str]
     trust_snippet: str | None
     default_args: dict[str, list[str]]
+    batch_subcommand: str | None = None
 
 
 def _build_builtin_providers() -> dict[str, Provider]:
     raw = load_builtin_catalog()
-    launchers = raw.get("launchers", {})
-    profiles = raw.get("profiles", {})
-    providers: dict[str, Provider] = {}
-    for name, launcher in launchers.items():
-        providers[str(name)] = Provider(
+    providers = raw.get("providers", {})
+    result: dict[str, Provider] = {}
+    for name, provider in providers.items():
+        result[str(name)] = Provider(
             name=str(name),
-            cli=str(launcher.get("command", name)),
-            model_flag=str(launcher.get("model_flag", "--model")),
-            models={
-                str(profile_name): str(profile_cfg["model"])
-                for profile_name, profile_cfg in dict(profiles.get(name, {})).items()
-            },
-            trust_snippet=launcher.get("trust_snippet"),
+            cli=str(provider.get("command", name)),
+            model_flag=str(provider.get("model_flag", "--model")),
+            trust_snippet=provider.get("trust_snippet"),
             default_args={
                 str(role): [str(arg) for arg in args]
-                for role, args in dict(launcher.get("role_args", {})).items()
+                for role, args in dict(provider.get("role_args", {})).items()
             },
+            batch_subcommand=provider.get("batch_subcommand"),
         )
-    return providers
+    return result
 
 
 PROVIDERS: dict[str, Provider] = _build_builtin_providers()
@@ -58,14 +54,8 @@ def resolve_agent(
     provider_name = role_config.get("provider")
     provider = get_provider(provider_name) if provider_name else global_provider
 
-    profile = str(role_config.get("profile", "standard"))
-    try:
-        model = provider.models[profile]
-    except KeyError as exc:
-        valid_profiles = ", ".join(sorted(provider.models))
-        raise ValueError(
-            f"Unknown profile '{profile}' for provider '{provider.name}'. Expected one of: {valid_profiles}"
-        ) from exc
+    # In v2, model is specified directly in role_config
+    model = str(role_config.get("model", "sonnet"))
 
     args = role_config.get("args")
     if args is None:
@@ -78,4 +68,5 @@ def resolve_agent(
         model_flag=provider.model_flag,
         args=list(args),
         trust_snippet=provider.trust_snippet,
+        batch_subcommand=provider.batch_subcommand,
     )

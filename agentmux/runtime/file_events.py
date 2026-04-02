@@ -21,6 +21,16 @@ FILE_EVENT_KIND_CREATED = "file.created"
 FILE_EVENT_SOURCE = "file"
 CREATED_FILES_LOG_NAME = "created_files.log"
 
+# Runtime files written by the orchestrator that should not trigger events
+# to prevent feedback loops
+RUNTIME_FILE_NAMES = {
+    "orchestrator.log",
+    "state.json",
+    "runtime_state.json",
+    "created_files.log",
+    "status_log.txt",
+}
+
 
 def ensure_watchdog_available() -> None:
     if Observer is None:
@@ -85,7 +95,8 @@ def seed_existing_files(feature_dir: Path, bus: EventBus) -> None:
             relative_path = candidate.resolve().relative_to(feature_root).as_posix()
         except ValueError:
             continue
-        if relative_path == CREATED_FILES_LOG_NAME:
+        # Skip runtime files
+        if Path(relative_path).name in RUNTIME_FILE_NAMES:
             continue
         relative_paths.append(relative_path)
 
@@ -117,9 +128,18 @@ class FeatureEventHandler(FileSystemEventHandler):
         event_type = str(getattr(event, "event_type", ""))
         src_relative = self._normalize_path(getattr(event, "src_path", None))
 
+        # Exclude runtime files written by the orchestrator to prevent feedback loop
+        if src_relative is not None:
+            filename = Path(src_relative).name
+            if filename in RUNTIME_FILE_NAMES:
+                return
+
         if event_type == "moved":
             dest_relative = self._normalize_path(getattr(event, "dest_path", None))
             if dest_relative is not None:
+                # Also check dest for runtime files
+                if Path(dest_relative).name in RUNTIME_FILE_NAMES:
+                    return
                 publish_file_event(self._bus, FILE_EVENT_CREATED, dest_relative)
                 publish_file_event(self._bus, FILE_EVENT_ACTIVITY, dest_relative)
                 return
@@ -144,7 +164,11 @@ class FileEventSource:
         ensure_watchdog_available()
         seed_existing_files(self._feature_dir, bus)
         observer = Observer()
-        observer.schedule(FeatureEventHandler(self._feature_dir, bus), str(self._feature_dir), recursive=True)
+        observer.schedule(
+            FeatureEventHandler(self._feature_dir, bus),
+            str(self._feature_dir),
+            recursive=True,
+        )
         observer.start()
         self._observer = observer
 

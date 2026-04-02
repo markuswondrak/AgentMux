@@ -26,8 +26,8 @@ Use `agentmux init` to scaffold a new project with configuration:
 
 Interactive init first asks for a default provider, then offers:
 
-- **Use default provider for all roles** — keeps built-in role profile defaults and skips per-role provider/profile prompts
-- **Customize roles** — preserves the original per-role provider/profile flow
+- **Use default provider for all roles** — keeps built-in role defaults and skips per-role provider/model prompts
+- **Customize roles** — prompts for per-role provider and model
 
 After config validation, init checks the effective `architect` and `product-manager` providers. If their persistent `agentmux-research` MCP entry is missing, init asks once to add it to the provider's native config scope.
 
@@ -36,12 +36,12 @@ After config validation, init checks the effective `architect` and `product-mana
 The preferred project-level file is `.agentmux/config.yaml`:
 
 ```yaml
-version: 1
+version: 2
 
 defaults:
   session_name: multi-agent-mvp
   provider: claude
-  profile: standard
+  model: sonnet
   max_review_iterations: 3
   completion:
     skip_final_approval: false
@@ -53,36 +53,35 @@ github:
 
 roles:
   architect:
-    profile: max
+    model: opus
   reviewer:
-    profile: standard
+    model: sonnet
   coder:
     provider: codex
-    profile: standard
+    model: gpt-5.3-codex
 ```
 
 ## Config structure
 
+- `version` — **Required**. Must be `2` for new configs. Configs without `version` or with `version: 1` will fail with a helpful migration message.
 - `defaults.session_name` — legacy fallback used only when resuming old sessions that do not yet persist `state.json.session_name`; new runs derive tmux names from the feature directory (`agentmux-<feature_dir_name>`)
-- `defaults.provider` — default provider/launcher name for roles that do not override it
-- `defaults.profile` — default profile name, usually `max`, `standard`, or `low`
+- `defaults.provider` — default provider name for roles that do not override it
+- `defaults.model` — default model name (e.g., `sonnet`, `opus`, `gpt-5.3-codex`)
 - `defaults.max_review_iterations` — caps automatic reviewer→coder fix loops
 - `defaults.completion.skip_final_approval` — when `true`, skips reviewer confirmation in `completing` and auto-prepares approval (default: `false`)
 - `github.base_branch` — default PR base branch (default: `main`)
 - `github.draft` — whether PRs created at completion are draft PRs by default (default: `true`)
 - `github.branch_prefix` — prefix for completion branches created before opening a PR (default: `feature/`)
 - `roles.<role>.provider` — optional provider override per role
-- `roles.<role>.profile` — profile to resolve for that role
+- `roles.<role>.model` — model name for that role (direct model selection, no profiles)
 - `roles.<role>.args` — optional full override of the resolved CLI args for that role
 
 Built-in and user-level configs may additionally define:
 
-- `launchers.<name>.command` — CLI binary or wrapper command
-- `launchers.<name>.model_flag` — model switch, default `--model`
-- `launchers.<name>.trust_snippet` — auto-accept text for trust prompts
-- `launchers.<name>.role_args.<role>` — default CLI args for a role
-- `profiles.<provider>.<profile>.model` — concrete model name
-- `profiles.<provider>.<profile>.args` — optional extra args appended after launcher role args
+- `providers.<name>.command` — CLI binary or wrapper command
+- `providers.<name>.model_flag` — model switch, default `--model`
+- `providers.<name>.trust_snippet` — auto-accept text for trust prompts
+- `providers.<name>.role_args.<role>` — default CLI args for a role
 
 ## Completion settings boundary
 
@@ -93,53 +92,92 @@ There is one runtime completion-settings owner: `workflow_settings.completion`.
 
 ## Project vs user scope
 
-Project config is intentionally limited to safe selection-level overrides. Auto-discovered project config may set `defaults` and `roles`, but it may not define `launchers` or `profiles`.
+Project config can define `defaults`, `roles`, `github`, and now also `providers` (in v2). This allows teams to ship complete project-specific configurations.
 
-Custom CLIs, wrapper commands, trust snippets, and custom profile catalogs belong in user config or an explicit `--config` file.
+User config can define `defaults`, `roles`, `github`, and `providers`.
 
 Example user config:
 
 ```yaml
-launchers:
+version: 2
+providers:
   kimi:
     command: kimi
     model_flag: --model-name
     trust_snippet: Trust this folder?
     role_args:
       coder: [--sandbox, workspace-write]
-
-profiles:
-  kimi:
-    low:
-      model: kimi-2.5
 ```
 
 After that, a project can safely select it:
 
 ```yaml
+version: 2
 roles:
   coder:
     provider: kimi
-    profile: low
+    model: kimi-2.5
 ```
 
 ## Strict schema
 
 Unsupported legacy forms now fail fast:
 
+- `profile` key (use `model` directly)
+- `launchers:` key (renamed to `providers:`)
+- `profiles:` section (removed entirely)
 - top-level role config outside `roles`
 - top-level defaults such as `session_name`, `provider`, or `max_review_iterations`
 - `defaults.skip_final_approval`
 - `defaults.completion.require_final_approval`
 - role `tier`
 
-## Built-in profiles
+## Migration from v1 to v2
 
-| Profile | claude | codex | gemini | opencode |
-|---------|--------|-------|--------|----------|
-| max | `opus` | `gpt-5.4` | `gemini-2.5-pro` | `anthropic/claude-opus-4-6` |
-| standard | `sonnet` | `gpt-5.3-codex` | `gemini-2.5-flash` | `anthropic/claude-sonnet-4-20250514` |
-| low | `haiku` | `gpt-5.1-codex-mini` | `gemini-2.5-flash-lite` | `anthropic/claude-haiku-4-5-20251001` |
+If you have an existing v1 config, you'll see an error like:
+
+```
+Legacy config detected (version: 1). Please migrate to version: 2.
+- Rename 'launchers:' to 'providers:'
+- Replace 'profile: <name>' with 'model: <model-name>'
+- Remove 'profiles:' section
+```
+
+To migrate:
+
+1. Change `version: 1` to `version: 2`
+2. Rename `launchers:` to `providers:`
+3. Replace `profile: <profile_name>` with `model: <model_name>` directly
+4. Remove the entire `profiles:` section
+5. Remove any custom profiles you defined (models are now specified directly)
+
+Example migration:
+
+```yaml
+# v1 config
+version: 1
+defaults:
+  provider: claude
+  profile: standard
+roles:
+  architect:
+    profile: max
+  coder:
+    provider: codex
+    profile: standard
+
+# Becomes v2 config
+version: 2
+defaults:
+  provider: claude
+  model: sonnet
+roles:
+  architect:
+    model: opus
+  coder:
+    provider: codex
+    model: gpt-5.3-codex
+```
 
 ## Resolution
 

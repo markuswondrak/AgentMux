@@ -10,11 +10,17 @@ import agentmux.pipeline as pipeline
 from agentmux import monitor
 from agentmux.configuration import load_explicit_config
 from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
-from agentmux.workflow.phases import PHASES, ProductManagementPhase
+from agentmux.workflow.handlers import PHASE_HANDLERS, ProductManagementHandler
 from agentmux.workflow.prompts import build_product_manager_prompt
 from agentmux.runtime import TmuxAgentRuntime
-from agentmux.sessions.state_store import create_feature_files, infer_resume_phase, load_state, write_state
+from agentmux.sessions.state_store import (
+    create_feature_files,
+    infer_resume_phase,
+    load_state,
+    write_state,
+)
 from agentmux.workflow.transitions import PipelineContext
+from agentmux.workflow.event_router import WorkflowEvent
 
 PRODUCT_MANAGEMENT_DIR = SESSION_DIR_NAMES["product_management"]
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
@@ -26,14 +32,25 @@ class FakeRuntime:
         self.calls: list[tuple[str, object]] = []
         self.primary_panes = {"product-manager": "%7"}
 
-    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
+    def send(
+        self, role: str, prompt_file: Path, display_label: str | None = None
+    ) -> None:
         self.calls.append(("send", role, prompt_file.name))
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
-        self.calls.append(("send_many", role, [Path(getattr(item, "prompt_file", item)).name for item in prompt_specs]))
+        self.calls.append(
+            (
+                "send_many",
+                role,
+                [
+                    Path(getattr(item, "prompt_file", item)).name
+                    for item in prompt_specs
+                ],
+            )
+        )
 
-    def spawn_task(self, role: str, task_id: str, prompt_file: Path) -> None:
-        self.calls.append(("spawn_task", role, task_id, prompt_file.name))
+    def spawn_task(self, role: str, task_id: str, research_dir: Path) -> None:
+        self.calls.append(("spawn_task", role, task_id, research_dir.name))
 
     def finish_task(self, role: str, task_id: str) -> None:
         self.calls.append(("finish_task", role, task_id))
@@ -61,7 +78,9 @@ class ProductManagerRequirementsTests(unittest.TestCase):
     def _make_ctx(self, feature_dir: Path) -> tuple[PipelineContext, Path]:
         project_dir = feature_dir.parent / "project"
         project_dir.mkdir(parents=True, exist_ok=True)
-        files = create_feature_files(project_dir, feature_dir, "add product manager", "session-x")
+        files = create_feature_files(
+            project_dir, feature_dir, "add product manager", "session-x"
+        )
 
         prompts = {"architect": feature_dir / PLANNING_DIR / "architect_prompt.md"}
         for prompt in prompts.values():
@@ -69,11 +88,21 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             prompt.write_text(prompt.name, encoding="utf-8")
 
         agents = {
-            "architect": AgentConfig(role="architect", cli="claude", model="opus", args=[]),
-            "coder": AgentConfig(role="coder", cli="codex", model="gpt-5.3-codex", args=[]),
-            "product-manager": AgentConfig(role="product-manager", cli="claude", model="opus", args=[]),
-            "code-researcher": AgentConfig(role="code-researcher", cli="claude", model="haiku", args=[]),
-            "web-researcher": AgentConfig(role="web-researcher", cli="claude", model="sonnet", args=[]),
+            "architect": AgentConfig(
+                role="architect", cli="claude", model="opus", args=[]
+            ),
+            "coder": AgentConfig(
+                role="coder", cli="codex", model="gpt-5.3-codex", args=[]
+            ),
+            "product-manager": AgentConfig(
+                role="product-manager", cli="claude", model="opus", args=[]
+            ),
+            "code-researcher": AgentConfig(
+                role="code-researcher", cli="claude", model="haiku", args=[]
+            ),
+            "web-researcher": AgentConfig(
+                role="web-researcher", cli="claude", model="sonnet", args=[]
+            ),
         }
 
         ctx = PipelineContext(
@@ -87,18 +116,26 @@ class ProductManagerRequirementsTests(unittest.TestCase):
 
     def test_parse_args_accepts_product_manager_flag(self) -> None:
         from agentmux.pipeline.cli import build_parser
-        with patch("sys.argv", ["agentmux", "run", "ship feature", "--product-manager"]):
+
+        with patch(
+            "sys.argv", ["agentmux", "run", "ship feature", "--product-manager"]
+        ):
             args = build_parser().parse_args()
         self.assertTrue(args.product_manager)
 
     def test_load_config_parses_optional_product_manager(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             cfg = {
-                "defaults": {"session_name": "s", "provider": "claude"},
+                "version": 2,
+                "defaults": {
+                    "session_name": "s",
+                    "provider": "claude",
+                    "model": "sonnet",
+                },
                 "roles": {
-                    "architect": {"profile": "max"},
-                    "coder": {"provider": "codex", "profile": "max"},
-                    "product-manager": {"profile": "max"},
+                    "architect": {"model": "opus"},
+                    "coder": {"provider": "codex", "model": "gpt-5.4"},
+                    "product-manager": {"model": "opus"},
                 },
             }
             cfg_path = Path(td) / "config.json"
@@ -110,7 +147,9 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             self.assertEqual("claude", agents["product-manager"].cli)
             self.assertEqual("opus", agents["product-manager"].model)
 
-    def test_create_feature_files_sets_product_management_state_when_flag_enabled(self) -> None:
+    def test_create_feature_files_sets_product_management_state_when_flag_enabled(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td) / "project"
             feature_dir = Path(td) / "feature"
@@ -128,7 +167,9 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             self.assertEqual("product_management", state["phase"])
             self.assertTrue(state["product_manager"])
 
-    def test_build_product_manager_prompt_renders_paths_and_design_handoff_rules(self) -> None:
+    def test_build_product_manager_prompt_renders_paths_and_design_handoff_rules(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td) / "project"
             feature_dir = Path(td) / "feature"
@@ -155,19 +196,28 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             state["phase"] = "product_management"
             write_state(state_path, state)
 
-            phase = ProductManagementPhase()
-            phase.on_enter(load_state(state_path), ctx)
-            self.assertEqual(("send", "product-manager", "product_manager_prompt.md"), ctx.runtime.calls[-1])
+            handler = ProductManagementHandler()
+            handler.enter(load_state(state_path), ctx)
+            self.assertEqual(
+                ("send", "product-manager", "product_manager_prompt.md"),
+                ctx.runtime.calls[-1],
+            )
 
             (feature_dir / PRODUCT_MANAGEMENT_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / PRODUCT_MANAGEMENT_DIR / "done").touch()
-            event = phase.detect_event(load_state(state_path), ctx)
-            self.assertEqual("pm_completed", event)
 
-            phase.handle_event(load_state(state_path), "pm_completed", ctx)
-            updated = load_state(state_path)
-            self.assertEqual("planning", updated["phase"])
-            self.assertEqual("pm_completed", updated["last_event"])
+            # Create workflow event for done file creation
+            event = WorkflowEvent(
+                kind="file.created",
+                path="01_product_management/done",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
+            )
+            # Handler returns next_phase as the phase name, not in updates
+            self.assertEqual("planning", next_phase)
+            self.assertEqual("pm_completed", updates.get("last_event"))
             self.assertIn(("kill_primary", "product-manager"), ctx.runtime.calls)
             self.assertNotIn(("deactivate", "product-manager"), ctx.runtime.calls)
 
@@ -181,25 +231,54 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             state["research_tasks"] = {}
             write_state(state_path, state)
 
-            (feature_dir / RESEARCH_DIR / "code-market-fit").mkdir(parents=True, exist_ok=True)
-            (feature_dir / RESEARCH_DIR / "code-market-fit" / "request.md").write_text("analyze", encoding="utf-8")
+            (feature_dir / RESEARCH_DIR / "code-market-fit").mkdir(
+                parents=True, exist_ok=True
+            )
+            (feature_dir / RESEARCH_DIR / "code-market-fit" / "request.md").write_text(
+                "analyze", encoding="utf-8"
+            )
 
-            phase = ProductManagementPhase()
-            self.assertEqual("code_batch_requested", phase.detect_event(load_state(state_path), ctx))
+            handler = ProductManagementHandler()
+            # Simulate file.created event for research request
+            event = WorkflowEvent(
+                kind="file.created",
+                path="03_research/code-market-fit/request.md",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(
+                event, load_state(state_path), ctx
+            )
 
-            phase.handle_event(load_state(state_path), "code_batch_requested", ctx)
-            self.assertEqual(("spawn_task", "code-researcher", "market-fit", "prompt.md"), ctx.runtime.calls[-1])
-            updated = load_state(state_path)
-            self.assertEqual("dispatched", updated["research_tasks"]["market-fit"])
+            # spawn_task now receives the research directory
+            self.assertEqual(
+                ("spawn_task", "code-researcher", "market-fit", "code-market-fit"),
+                ctx.runtime.calls[-1],
+            )
+            self.assertEqual(
+                "dispatched", updates.get("research_tasks", {}).get("market-fit")
+            )
 
-            updated["research_tasks"] = {"market-fit": "dispatched"}
-            write_state(state_path, updated)
+            # Simulate research completion - update state with dispatched task
+            state = load_state(state_path)
+            state["research_tasks"] = {"market-fit": "dispatched"}
+            write_state(state_path, state)
             (feature_dir / RESEARCH_DIR / "code-market-fit" / "done").touch()
-            phase.handle_event(load_state(state_path), "task_completed:market-fit", ctx)
 
-            self.assertEqual(("notify", "product-manager",
-                "Code-research on 'market-fit' is complete. Read 03_research/code-market-fit/summary.md and continue from there.",
-            ), ctx.runtime.calls[-1])
+            done_event = WorkflowEvent(
+                kind="file.created",
+                path="03_research/code-market-fit/done",
+                payload={},
+            )
+            handler.handle_event(done_event, load_state(state_path), ctx)
+
+            self.assertEqual(
+                (
+                    "notify",
+                    "product-manager",
+                    "Code-research on 'market-fit' is complete. Read 03_research/code-market-fit/summary.md and continue from there.",
+                ),
+                ctx.runtime.calls[-1],
+            )
 
     def test_infer_resume_phase_handles_product_management_marker(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -207,12 +286,16 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             (feature_dir / PRODUCT_MANAGEMENT_DIR).mkdir(parents=True, exist_ok=True)
 
             state = {"phase": "planning", "product_manager": True}
-            self.assertEqual("product_management", infer_resume_phase(feature_dir, state))
+            self.assertEqual(
+                "product_management", infer_resume_phase(feature_dir, state)
+            )
 
             (feature_dir / PRODUCT_MANAGEMENT_DIR / "done").touch()
             self.assertEqual("planning", infer_resume_phase(feature_dir, state))
 
-    def test_runtime_create_uses_product_manager_as_initial_pane_when_selected(self) -> None:
+    def test_runtime_create_uses_product_manager_as_initial_pane_when_selected(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             agents = {
@@ -238,20 +321,30 @@ class ProductManagerRequirementsTests(unittest.TestCase):
                 session_name: str,
                 agents_arg: dict[str, AgentConfig],
                 feature_dir_arg: Path,
+                project_dir_arg: Path,
                 config_path: Path,
                 trust_snippet: str | None,
                 primary_role: str,
             ) -> tuple[dict[str, str | None], object]:
-                _ = (session_name, agents_arg, feature_dir_arg, config_path)
+                _ = (
+                    session_name,
+                    agents_arg,
+                    feature_dir_arg,
+                    project_dir_arg,
+                    config_path,
+                )
                 args_seen.append((primary_role, trust_snippet))
                 return (
                     {"_control": "%0", "architect": None, "product-manager": "%9"},
                     type("ZoneStub", (), {"visible": []})(),
                 )
 
-            with patch("agentmux.runtime.tmux_new_session", side_effect=fake_tmux_new_session):
+            with patch(
+                "agentmux.runtime.tmux_new_session", side_effect=fake_tmux_new_session
+            ):
                 TmuxAgentRuntime.create(
                     feature_dir=feature_dir,
+                    project_dir=Path("/project"),
                     session_name="session-x",
                     agents=agents,
                     config_path=feature_dir / "config.json",
@@ -264,7 +357,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
         self.assertIn("product_management", monitor.PIPELINE_STATES)
 
     def test_phase_registry_includes_product_management(self) -> None:
-        self.assertIn("product_management", PHASES)
+        self.assertIn("product_management", PHASE_HANDLERS)
 
 
 if __name__ == "__main__":

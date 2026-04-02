@@ -9,18 +9,23 @@ from unittest.mock import patch
 from agentmux.integrations.completion import CompletionResult
 from agentmux.sessions.state_store import create_feature_files, load_state
 from agentmux.shared.models import GitHubConfig
-from agentmux.workflow.phases import COMPLETION_SERVICE, CompletingPhase
+from agentmux.workflow.handlers import PHASE_HANDLERS
 from agentmux.workflow.transitions import EXIT_SUCCESS, PipelineContext
+from agentmux.workflow.event_router import WorkflowEvent
 
 
 class _FakeRuntime:
     pass
 
 
-def _make_ctx(feature_dir: Path, *, branch_prefix: str = "feature/") -> tuple[PipelineContext, dict]:
+def _make_ctx(
+    feature_dir: Path, *, branch_prefix: str = "feature/"
+) -> tuple[PipelineContext, dict]:
     project_dir = feature_dir.parent / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
-    files = create_feature_files(project_dir, feature_dir, "persist completion summary", "session-x")
+    files = create_feature_files(
+        project_dir, feature_dir, "persist completion summary", "session-x"
+    )
     completion_dir = files.completion_dir
     completion_dir.mkdir(parents=True, exist_ok=True)
     (completion_dir / "approval.json").write_text(
@@ -45,22 +50,36 @@ class CompletionDataPersistenceTests(unittest.TestCase):
             feature_dir = Path(td) / "20260328-082756-add-welcome-and-goodbye-screen"
             ctx, state = _make_ctx(feature_dir, branch_prefix="work/")
 
-            with patch("agentmux.workflow.phases._git_status_porcelain", return_value=""), patch.object(
-                COMPLETION_SERVICE,
-                "resolve_commit_message",
-                return_value="feat: summary",
-            ), patch.object(
-                COMPLETION_SERVICE,
-                "finalize_approval",
-                return_value=CompletionResult(
-                    commit_hash="abc1234",
-                    pr_url="https://example.com/pr/123",
-                    cleaned_up=True,
+            handler = PHASE_HANDLERS.get("completing")
+            assert handler is not None
+
+            with (
+                patch(
+                    "agentmux.workflow.handlers.completing._git_status_porcelain",
+                    return_value="",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.resolve_commit_message",
+                    return_value="feat: summary",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.finalize_approval",
+                    return_value=CompletionResult(
+                        commit_hash="abc1234",
+                        pr_url="https://example.com/pr/123",
+                        cleaned_up=True,
+                    ),
                 ),
             ):
-                result = CompletingPhase().handle_event(state, "approval_received", ctx)
+                event = WorkflowEvent(
+                    kind="file.created",
+                    path="08_completion/approval.json",
+                    payload={},
+                )
+                updates, next_phase = handler.handle_event(event, state, ctx)
 
-            self.assertEqual(EXIT_SUCCESS, result)
+            self.assertEqual({"__exit__": 0}, updates)
+            self.assertIsNone(next_phase)
             summary_path = ctx.files.project_dir / ".agentmux" / ".last_completion.json"
             self.assertTrue(summary_path.exists())
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -79,22 +98,36 @@ class CompletionDataPersistenceTests(unittest.TestCase):
             feature_dir = Path(td) / "20260328-082756-add-welcome-and-goodbye-screen"
             ctx, state = _make_ctx(feature_dir)
 
-            with patch("agentmux.workflow.phases._git_status_porcelain", return_value=""), patch.object(
-                COMPLETION_SERVICE,
-                "resolve_commit_message",
-                return_value="feat: summary",
-            ), patch.object(
-                COMPLETION_SERVICE,
-                "finalize_approval",
-                return_value=CompletionResult(
-                    commit_hash=None,
-                    pr_url=None,
-                    cleaned_up=False,
+            handler = PHASE_HANDLERS.get("completing")
+            assert handler is not None
+
+            with (
+                patch(
+                    "agentmux.workflow.handlers.completing._git_status_porcelain",
+                    return_value="",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.resolve_commit_message",
+                    return_value="feat: summary",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.finalize_approval",
+                    return_value=CompletionResult(
+                        commit_hash=None,
+                        pr_url=None,
+                        cleaned_up=False,
+                    ),
                 ),
             ):
-                result = CompletingPhase().handle_event(state, "approval_received", ctx)
+                event = WorkflowEvent(
+                    kind="file.created",
+                    path="08_completion/approval.json",
+                    payload={},
+                )
+                updates, next_phase = handler.handle_event(event, state, ctx)
 
-            self.assertEqual(EXIT_SUCCESS, result)
+            self.assertEqual({"__exit__": 0}, updates)
+            self.assertIsNone(next_phase)
             summary_path = ctx.files.project_dir / ".agentmux" / ".last_completion.json"
             self.assertFalse(summary_path.exists())
 
@@ -103,22 +136,36 @@ class CompletionDataPersistenceTests(unittest.TestCase):
             feature_dir = Path(td) / "20260328-082756-add-welcome-and-goodbye-screen"
             ctx, state = _make_ctx(feature_dir, branch_prefix="feature/")
 
-            with patch("agentmux.workflow.phases._git_status_porcelain", return_value=""), patch.object(
-                COMPLETION_SERVICE,
-                "resolve_commit_message",
-                return_value="feat: summary",
-            ), patch.object(
-                COMPLETION_SERVICE,
-                "finalize_approval",
-                return_value=CompletionResult(
-                    commit_hash="deadbeef",
-                    pr_url=None,
-                    cleaned_up=True,
+            handler = PHASE_HANDLERS.get("completing")
+            assert handler is not None
+
+            with (
+                patch(
+                    "agentmux.workflow.handlers.completing._git_status_porcelain",
+                    return_value="",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.resolve_commit_message",
+                    return_value="feat: summary",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.finalize_approval",
+                    return_value=CompletionResult(
+                        commit_hash="deadbeef",
+                        pr_url=None,
+                        cleaned_up=True,
+                    ),
                 ),
             ):
-                result = CompletingPhase().handle_event(state, "approval_received", ctx)
+                event = WorkflowEvent(
+                    kind="file.created",
+                    path="08_completion/approval.json",
+                    payload={},
+                )
+                updates, next_phase = handler.handle_event(event, state, ctx)
 
-            self.assertEqual(EXIT_SUCCESS, result)
+            self.assertEqual({"__exit__": 0}, updates)
+            self.assertIsNone(next_phase)
             summary_path = ctx.files.project_dir / ".agentmux" / ".last_completion.json"
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(

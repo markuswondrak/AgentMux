@@ -20,11 +20,15 @@ class ProviderAbstractionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             get_provider("unknown-provider")
 
-    def test_resolve_agent_uses_role_provider_tier_and_args_override(self) -> None:
+    def test_resolve_agent_uses_role_provider_model_and_args_override(self) -> None:
         agent = resolve_agent(
             global_provider=get_provider("claude"),
             role="coder",
-            role_config={"provider": "codex", "profile": "low", "args": ["--x"]},
+            role_config={
+                "provider": "codex",
+                "model": "gpt-5.1-codex-mini",
+                "args": ["--x"],
+            },
         )
         self.assertEqual("coder", agent.role)
         self.assertEqual(PROVIDERS["codex"].cli, agent.cli)
@@ -36,11 +40,16 @@ class ProviderAbstractionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             cfg_path = Path(td) / "config.json"
             cfg = {
-                "defaults": {"session_name": "s", "provider": "claude"},
+                "version": 2,
+                "defaults": {
+                    "session_name": "s",
+                    "provider": "claude",
+                    "model": "sonnet",
+                },
                 "roles": {
-                    "architect": {"profile": "max"},
-                    "reviewer": {"profile": "standard"},
-                    "coder": {"provider": "codex", "profile": "standard"},
+                    "architect": {"model": "opus"},
+                    "reviewer": {"model": "sonnet"},
+                    "coder": {"provider": "codex", "model": "gpt-5.3-codex"},
                 },
             }
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
@@ -60,7 +69,7 @@ class ProviderAbstractionTests(unittest.TestCase):
             self.assertEqual("gpt-5.3-codex", agents["coder"].model)
             self.assertNotIn("docs", agents)
 
-    def test_load_layered_config_supports_yaml_profiles_and_custom_launcher(self) -> None:
+    def test_load_layered_config_supports_yaml_and_custom_provider(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td) / "project"
             project_dir.mkdir()
@@ -69,21 +78,18 @@ class ProviderAbstractionTests(unittest.TestCase):
             user_cfg_path = user_cfg_dir / "config.yaml"
             user_cfg_path.write_text(
                 """
-launchers:
+version: 2
+providers:
   kimi:
     command: kimi
     model_flag: --model-name
-    trust_snippet: Trust custom launcher?
+    trust_snippet: Trust custom provider?
     role_args:
       coder: [--sandbox, workspace-write]
-profiles:
-  kimi:
-    low:
-      model: kimi-2.5
 roles:
   coder:
     provider: kimi
-    profile: low
+    model: kimi-2.5
 """.strip()
                 + "\n",
                 encoding="utf-8",
@@ -92,10 +98,11 @@ roles:
             project_cfg_dir.mkdir()
             (project_cfg_dir / "config.yaml").write_text(
                 """
+version: 2
 roles:
   coder:
     provider: kimi
-    profile: low
+    model: kimi-2.5
 """.strip()
                 + "\n",
                 encoding="utf-8",
@@ -109,14 +116,17 @@ roles:
             self.assertEqual("--model-name", coder.model_flag)
             self.assertEqual("kimi-2.5", coder.model)
             self.assertEqual(["--sandbox", "workspace-write"], coder.args)
-            self.assertEqual("Trust custom launcher?", coder.trust_snippet)
+            self.assertEqual("Trust custom provider?", coder.trust_snippet)
 
     def test_load_layered_config_defaults_skip_final_approval_to_false(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td) / "project"
             project_dir.mkdir()
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
                 loaded = load_layered_config(project_dir)
 
             self.assertFalse(loaded.workflow_settings.completion.skip_final_approval)
@@ -126,7 +136,10 @@ roles:
             project_dir = Path(td) / "project"
             project_dir.mkdir()
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
                 loaded = load_layered_config(project_dir)
 
             self.assertFalse(loaded.workflow_settings.completion.skip_final_approval)
@@ -140,6 +153,7 @@ roles:
             project_cfg.mkdir()
             (project_cfg / "config.yaml").write_text(
                 """
+version: 2
 defaults:
   completion:
     skip_final_approval: true
@@ -148,7 +162,10 @@ defaults:
                 encoding="utf-8",
             )
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
                 loaded = load_layered_config(project_dir)
 
             self.assertTrue(loaded.workflow_settings.completion.skip_final_approval)
@@ -161,6 +178,7 @@ defaults:
             project_cfg.mkdir()
             (project_cfg / "config.yaml").write_text(
                 """
+version: 2
 defaults:
   completion:
     skip_final_approval: true
@@ -169,7 +187,10 @@ defaults:
                 encoding="utf-8",
             )
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
                 loaded = load_layered_config(project_dir)
 
             self.assertTrue(loaded.workflow_settings.completion.skip_final_approval)
@@ -183,6 +204,7 @@ defaults:
             project_cfg.mkdir()
             (project_cfg / "config.yaml").write_text(
                 """
+version: 2
 defaults:
   completion:
     require_final_approval: false
@@ -191,13 +213,18 @@ defaults:
                 encoding="utf-8",
             )
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
                 with self.assertRaises(ValueError) as exc:
                     load_layered_config(project_dir)
 
             self.assertIn("no longer supported", str(exc.exception))
 
-    def test_invalid_completion_settings_conflicting_booleans_fail_validation(self) -> None:
+    def test_invalid_completion_settings_conflicting_booleans_fail_validation(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td) / "project"
             project_dir.mkdir()
@@ -205,6 +232,7 @@ defaults:
             project_cfg.mkdir()
             (project_cfg / "config.yaml").write_text(
                 """
+version: 2
 defaults:
   completion:
     skip_final_approval: true
@@ -214,7 +242,10 @@ defaults:
                 encoding="utf-8",
             )
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
                 with self.assertRaises(ValueError) as exc:
                     load_layered_config(project_dir)
 
@@ -228,6 +259,7 @@ defaults:
             project_cfg.mkdir()
             (project_cfg / "config.yaml").write_text(
                 """
+version: 2
 defaults:
   skip_final_approval: maybe
 """.strip()
@@ -235,24 +267,30 @@ defaults:
                 encoding="utf-8",
             )
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
                 with self.assertRaises(ValueError) as exc:
                     load_layered_config(project_dir)
 
-            self.assertIn("Legacy defaults keys are no longer supported", str(exc.exception))
+            self.assertIn(
+                "Legacy defaults keys are no longer supported", str(exc.exception)
+            )
 
     def test_built_in_defaults_include_skip_final_approval_false(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         config = yaml.safe_load(
-            (repo_root / "agentmux" / "configuration" / "defaults" / "config.yaml").read_text(
-                encoding="utf-8"
-            )
+            (
+                repo_root / "agentmux" / "configuration" / "defaults" / "config.yaml"
+            ).read_text(encoding="utf-8")
         )
 
         self.assertIn("completion", config["defaults"])
         self.assertFalse(config["defaults"]["completion"]["skip_final_approval"])
 
-    def test_project_config_cannot_define_launchers_or_profiles(self) -> None:
+    def test_project_config_can_define_providers(self) -> None:
+        """In v2, project configs CAN define custom providers."""
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td) / "project"
             project_dir.mkdir()
@@ -260,29 +298,41 @@ defaults:
             project_cfg_dir.mkdir()
             (project_cfg_dir / "config.yaml").write_text(
                 """
-launchers:
+version: 2
+providers:
   kimi:
     command: kimi
-profiles:
-  kimi:
-    low:
-      model: kimi-2.5
+    model_flag: --model-name
+roles:
+  coder:
+    provider: kimi
+    model: kimi-2.5
 """.strip()
                 + "\n",
                 encoding="utf-8",
             )
 
-            with patch("agentmux.configuration.USER_CONFIG_PATH", Path(td) / "missing-user-config.yaml"):
-                with self.assertRaises(ValueError):
-                    load_layered_config(project_dir)
+            with patch(
+                "agentmux.configuration.USER_CONFIG_PATH",
+                Path(td) / "missing-user-config.yaml",
+            ):
+                loaded = load_layered_config(project_dir)
+
+            # In v2, project configs CAN define providers
+            coder = loaded.agents["coder"]
+            self.assertEqual("kimi", coder.cli)
+            self.assertEqual("kimi-2.5", coder.model)
 
     def test_accept_trust_prompt_skips_when_no_snippet(self) -> None:
-        with patch("agentmux.runtime.tmux_control.capture_pane") as capture_pane, patch("agentmux.runtime.tmux_control.run_command") as run_command:
+        with (
+            patch("agentmux.runtime.tmux_control.capture_pane") as capture_pane,
+            patch("agentmux.runtime.tmux_control.run_command") as run_command,
+        ):
             accept_trust_prompt("%1", snippet=None)
         capture_pane.assert_not_called()
         run_command.assert_not_called()
 
-    def test_build_agent_command_uses_launcher_specific_model_flag(self) -> None:
+    def test_build_agent_command_uses_provider_specific_model_flag(self) -> None:
         command = build_agent_command(
             AgentConfig(
                 role="coder",
@@ -292,17 +342,22 @@ profiles:
                 args=["--sandbox", "workspace-write"],
             )
         )
-        self.assertEqual("kimi --model-name kimi-2.5 --sandbox workspace-write", command)
+        self.assertEqual(
+            "kimi --model-name kimi-2.5 --sandbox workspace-write", command
+        )
 
     def test_accept_trust_prompt_accepts_when_snippet_is_present(self) -> None:
         commands: list[list[str]] = []
 
-        with patch(
-            "agentmux.runtime.tmux_control.capture_pane",
-            side_effect=["some output", "Trust this folder?"],
-        ), patch(
-            "agentmux.runtime.tmux_control.run_command",
-            side_effect=lambda args, cwd=None, check=True: commands.append(args),
+        with (
+            patch(
+                "agentmux.runtime.tmux_control.capture_pane",
+                side_effect=["some output", "Trust this folder?"],
+            ),
+            patch(
+                "agentmux.runtime.tmux_control.run_command",
+                side_effect=lambda args, cwd=None, check=True: commands.append(args),
+            ),
         ):
             accept_trust_prompt("%1", snippet="Trust this folder?", timeout_seconds=0.5)
 
@@ -313,6 +368,86 @@ profiles:
             ],
             commands,
         )
+
+    # New v2-specific tests
+    def test_v1_config_produces_migration_error(self) -> None:
+        """v1 config without version key produces helpful migration error."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.json"
+            cfg = {
+                "defaults": {"provider": "claude"},
+                "roles": {"architect": {"profile": "max"}},  # v1 uses profile
+            }
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+            with self.assertRaises(ValueError) as exc:
+                load_explicit_config(cfg_path)
+
+            error_msg = str(exc.exception)
+            self.assertIn("Legacy config detected", error_msg)
+            self.assertIn("version: 2", error_msg)
+            self.assertIn("Rename 'launchers:' to 'providers:'", error_msg)
+            self.assertIn(
+                "Replace 'profile: <name>' with 'model: <model-name>'", error_msg
+            )
+
+    def test_profile_key_in_v2_produces_error(self) -> None:
+        """Using profile key in v2 config produces error."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.json"
+            cfg = {
+                "version": 2,
+                "defaults": {"provider": "claude"},
+                "roles": {"architect": {"profile": "max"}},  # profile not allowed in v2
+            }
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+            with self.assertRaises(ValueError) as exc:
+                load_explicit_config(cfg_path)
+
+            self.assertIn("Profiles are removed in v2", str(exc.exception))
+
+    def test_v2_config_parses_correctly(self) -> None:
+        """v2 config with providers and model keys parses correctly."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.json"
+            cfg = {
+                "version": 2,
+                "defaults": {"provider": "claude", "model": "sonnet"},
+                "roles": {
+                    "architect": {"model": "opus"},
+                    "coder": {"provider": "codex", "model": "gpt-5.3-codex"},
+                },
+            }
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+            loaded = load_explicit_config(cfg_path)
+
+            self.assertEqual("opus", loaded.agents["architect"].model)
+            self.assertEqual("gpt-5.3-codex", loaded.agents["coder"].model)
+
+    def test_direct_model_selection_per_role_works(self) -> None:
+        """Roles can specify different models per provider."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.json"
+            cfg = {
+                "version": 2,
+                "defaults": {"provider": "claude", "model": "sonnet"},
+                "roles": {
+                    "architect": {"model": "opus"},
+                    "reviewer": {"model": "sonnet"},
+                    "coder": {"provider": "codex", "model": "gpt-5.3-codex"},
+                    "code-researcher": {"model": "haiku"},
+                },
+            }
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+            loaded = load_explicit_config(cfg_path)
+
+            self.assertEqual("opus", loaded.agents["architect"].model)
+            self.assertEqual("sonnet", loaded.agents["reviewer"].model)
+            self.assertEqual("gpt-5.3-codex", loaded.agents["coder"].model)
+            self.assertEqual("haiku", loaded.agents["code-researcher"].model)
 
 
 if __name__ == "__main__":

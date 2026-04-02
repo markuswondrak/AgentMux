@@ -11,7 +11,7 @@ from pathlib import Path
 import time
 from typing import Any
 
-from ..shared.models import RuntimeFiles
+from ..shared.models import ProjectPaths, RuntimeFiles
 from .state_store import (
     create_feature_files,
     infer_resume_phase,
@@ -56,7 +56,8 @@ class SessionService:
         self.project_dir = project_dir
 
     def root_dir(self) -> Path:
-        return self.project_dir / ".agentmux" / ".sessions"
+        paths = ProjectPaths.from_project(self.project_dir)
+        return paths.sessions_root
 
     def list_resumable_sessions(self) -> list[SessionRecord]:
         root = self.root_dir()

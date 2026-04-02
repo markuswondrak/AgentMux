@@ -99,6 +99,7 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         runtime_state=feature_dir / "runtime_state.json",
         orchestrator_log=feature_dir / "orchestrator.log",
         created_files_log=feature_dir / "created_files.log",
+        status_log=feature_dir / "status_log.txt",
     )
 
 

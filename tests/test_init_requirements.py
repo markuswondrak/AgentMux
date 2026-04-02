@@ -44,7 +44,9 @@ class InitRequirementsTests(unittest.TestCase):
         render_logo(console)
 
         rendered = "\n".join(
-            re.sub(r"\[/?(?:blue|bold cyan|bold bright_cyan|bold magenta|dim)\]", "", line)
+            re.sub(
+                r"\[/?(?:blue|bold cyan|bold bright_cyan|bold magenta|dim)\]", "", line
+            )
             for line in console.lines
         )
         expected = "\n".join(
@@ -70,10 +72,18 @@ class InitRequirementsTests(unittest.TestCase):
         self.assertEqual(expected, rendered)
 
     def test_pipeline_main_routes_init_subcommand_before_parse_args(self) -> None:
-        with patch("sys.argv", ["agentmux", "init", "--defaults"]), patch(
-            "agentmux.pipeline.application.PipelineApplication.__init__",
-            side_effect=AssertionError("PipelineApplication should not be constructed for init subcommand"),
-        ), patch("agentmux.pipeline.init_command.run_init", return_value=0) as run_init_mock:
+        with (
+            patch("sys.argv", ["agentmux", "init", "--defaults"]),
+            patch(
+                "agentmux.pipeline.application.PipelineApplication.__init__",
+                side_effect=AssertionError(
+                    "PipelineApplication should not be constructed for init subcommand"
+                ),
+            ),
+            patch(
+                "agentmux.pipeline.init_command.run_init", return_value=0
+            ) as run_init_mock,
+        ):
             result = pipeline.main()
 
         self.assertEqual(0, result)
@@ -86,7 +96,10 @@ class InitRequirementsTests(unittest.TestCase):
             "gemini": None,
             "opencode": None,
         }
-        with patch("agentmux.pipeline.init_command.shutil.which", side_effect=lambda name: lookup.get(name)):
+        with patch(
+            "agentmux.pipeline.init_command.shutil.which",
+            side_effect=lambda name: lookup.get(name),
+        ):
             detected = detect_clis()
 
         self.assertEqual(
@@ -94,13 +107,15 @@ class InitRequirementsTests(unittest.TestCase):
             detected,
         )
 
-    def test_generate_config_writes_minimal_version_only_when_no_overrides(self) -> None:
+    def test_generate_config_writes_minimal_version_only_when_no_overrides(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             target = generate_config({}, project_dir, console=None, defaults_mode=True)
             parsed = yaml.safe_load(target.read_text(encoding="utf-8"))
 
-        self.assertEqual({"version": 1}, parsed)
+        self.assertEqual({"version": 2}, parsed)
 
     def test_prompt_role_config_returns_only_role_override_diffs(self) -> None:
         defaults = load_builtin_catalog()
@@ -109,30 +124,34 @@ class InitRequirementsTests(unittest.TestCase):
                 "claude",
                 "Customize roles",
                 "default",
-                "max",
+                "opus",  # architect model
                 "default",
-                "max",
+                "opus",  # product-manager model
                 "default",
-                "standard",
+                "sonnet",  # reviewer model
                 "default",
-                "standard",
+                "gpt-5.3-codex",  # coder model (different provider)
                 "default",
-                "standard",
-                "default",
-                "low",
+                "sonnet",  # designer model
             ]
         )
 
         def fake_select(*_args, **_kwargs):
             return _FakePrompt(next(answers))
 
-        fake_questionary = SimpleNamespace(select=fake_select)
+        def fake_text(*_args, **_kwargs):
+            return _FakePrompt(next(answers))
+
+        fake_questionary = SimpleNamespace(select=fake_select, text=fake_text)
         with patch("agentmux.pipeline.init_command.questionary", fake_questionary):
             overrides = prompt_role_config(["claude", "codex"], defaults)
 
+        # coder has different provider in defaults, so it should appear
         self.assertEqual({"roles": {"coder": {"provider": "claude"}}}, overrides)
 
-    def test_prompt_role_config_quick_setup_uses_default_provider_for_all_roles(self) -> None:
+    def test_prompt_role_config_quick_setup_uses_default_provider_for_all_roles(
+        self,
+    ) -> None:
         defaults = load_builtin_catalog()
         answers = iter(
             [
@@ -175,44 +194,57 @@ class InitRequirementsTests(unittest.TestCase):
     def test_run_init_defaults_creates_minimal_config_and_claude_template(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            with patch("agentmux.pipeline.init_command.Path.cwd", return_value=project_dir):
+            with patch(
+                "agentmux.pipeline.init_command.Path.cwd", return_value=project_dir
+            ):
                 exit_code = run_init(defaults_mode=True)
 
-            config = yaml.safe_load((project_dir / ".agentmux" / "config.yaml").read_text(encoding="utf-8"))
+            config = yaml.safe_load(
+                (project_dir / ".agentmux" / "config.yaml").read_text(encoding="utf-8")
+            )
             claude = (project_dir / "CLAUDE.md").read_text(encoding="utf-8")
 
         self.assertEqual(0, exit_code)
-        self.assertEqual({"version": 1}, config)
+        self.assertEqual({"version": 2}, config)
         self.assertIn("# ", claude)
         self.assertIn("Build Command", claude)
         self.assertIn("Test Command", claude)
         self.assertIn("Lint Command", claude)
         self.assertFalse((project_dir / ".agentmux" / "prompts" / "agents").exists())
 
-    def test_run_init_defaults_overwrites_config_and_preserves_existing_claude(self) -> None:
+    def test_run_init_defaults_overwrites_config_and_preserves_existing_claude(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             config_path = project_dir / ".agentmux" / "config.yaml"
             config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text("version: 999\nroles:\n  coder:\n    provider: wrong\n", encoding="utf-8")
+            config_path.write_text(
+                "version: 2\nroles:\n  coder:\n    provider: wrong\n    model: wrong-model\n",
+                encoding="utf-8",
+            )
             claude_path = project_dir / "CLAUDE.md"
             claude_path.write_text("keep me", encoding="utf-8")
 
-            with patch("agentmux.pipeline.init_command.Path.cwd", return_value=project_dir):
+            with patch(
+                "agentmux.pipeline.init_command.Path.cwd", return_value=project_dir
+            ):
                 exit_code = run_init(defaults_mode=True)
 
             config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
             claude_text = claude_path.read_text(encoding="utf-8")
 
         self.assertEqual(0, exit_code)
-        self.assertEqual({"version": 1}, config)
+        self.assertEqual({"version": 2}, config)
         self.assertEqual("keep me", claude_text)
 
     def test_validate_config_loads_generated_project_config(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             (project_dir / ".agentmux").mkdir(parents=True, exist_ok=True)
-            (project_dir / ".agentmux" / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+            (project_dir / ".agentmux" / "config.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
+            )
 
             self.assertTrue(validate_config(project_dir, console=None))
 

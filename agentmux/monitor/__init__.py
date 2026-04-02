@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Control pane monitor for the multi-agent pipeline."""
+
 from __future__ import annotations
 
 import argparse
@@ -10,14 +11,17 @@ import time
 from pathlib import Path
 
 from ..configuration import infer_project_dir, load_layered_config
+from ..sessions.state_store import load_runtime_files
 from ..terminal_ui.layout import MONITOR_WIDTH
 from . import render as render_module
 from . import state_reader as state_reader_module
-from .render import RESET, WHITE, _ANSI_RE, render
+from .render import _ANSI_RE, RESET, WHITE, render
 from .state_reader import PIPELINE_STATES, get_role_states, load_state
 
 
-def append_status_change(log_path: Path, prev_status: str | None, status: str) -> str | None:
+def append_status_change(
+    log_path: Path, prev_status: str | None, status: str
+) -> str | None:
     if not status:
         return prev_status
     if status == prev_status:
@@ -37,12 +41,13 @@ def main() -> None:
     args = parser.parse_args()
 
     feature_dir = Path(args.feature_dir)
-    state_path = feature_dir / "state.json"
-    runtime_state_path = feature_dir / "runtime_state.json"
+    project_dir = infer_project_dir(feature_dir)
+    files = load_runtime_files(project_dir, feature_dir)
+
     config_path = Path(args.config).resolve() if args.config else None
 
     loaded = load_layered_config(
-        infer_project_dir(feature_dir),
+        project_dir,
         explicit_config_path=config_path,
     )
     agents = {
@@ -51,7 +56,6 @@ def main() -> None:
     }
 
     start_time = time.time()
-    status_log_path = feature_dir / "status_log.txt"
     prev_status: str | None = None
 
     sys.stdout.write("\033[?25l")
@@ -64,24 +68,32 @@ def main() -> None:
                 own_pane = os.environ.get("TMUX_PANE", "")
                 if own_pane:
                     subprocess.run(
-                        ["tmux", "resize-pane", "-t", own_pane, "-x", str(MONITOR_WIDTH)],
+                        [
+                            "tmux",
+                            "resize-pane",
+                            "-t",
+                            own_pane,
+                            "-x",
+                            str(MONITOR_WIDTH),
+                        ],
                         check=False,
                     )
                     width, height = os.get_terminal_size()
             output = render(
                 session_name=args.session_name,
-                state_path=state_path,
-                runtime_state_path=runtime_state_path,
+                files=files,
                 agents=agents,
                 width=width,
                 height=height,
                 start_time=start_time,
-                log_path=status_log_path,
+                log_path=files.status_log,
             )
             sys.stdout.write("\033[H\033[2J" + output)
             sys.stdout.flush()
-            state = load_state(state_path)
-            prev_status = append_status_change(status_log_path, prev_status, state.get("phase", ""))
+            state = load_state(files.state)
+            prev_status = append_status_change(
+                files.status_log, prev_status, state.get("phase", "")
+            )
             time.sleep(1.0)
     except KeyboardInterrupt:
         pass

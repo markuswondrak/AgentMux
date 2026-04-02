@@ -7,8 +7,14 @@ from pathlib import Path
 
 from agentmux.shared.models import AgentConfig
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
-from agentmux.workflow.phases import get_phase, run_phase_cycle
+from agentmux.workflow.handlers import (
+    ImplementingHandler,
+    ReviewingHandler,
+    FixingHandler,
+    CompletingHandler,
+)
 from agentmux.workflow.transitions import PipelineContext
+from agentmux.workflow.event_router import WorkflowEvent
 
 
 def _prompt_names(prompt_specs: list[object]) -> list[str]:
@@ -24,7 +30,9 @@ class FakeRuntime:
         self.calls: list[tuple[str, object]] = []
         self.parallel_specs: list[list[tuple[int | str, str, str | None]]] = []
 
-    def send(self, role: str, prompt_file: Path, display_label: str | None = None) -> None:
+    def send(
+        self, role: str, prompt_file: Path, display_label: str | None = None
+    ) -> None:
         self.calls.append(("send", role, prompt_file.name, display_label))
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
@@ -62,7 +70,9 @@ class FakeRuntime:
 def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
     project_dir = feature_dir.parent / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
-    files = create_feature_files(project_dir, feature_dir, "on demand prompt generation", "session-x")
+    files = create_feature_files(
+        project_dir, feature_dir, "on demand prompt generation", "session-x"
+    )
     files.plan.parent.mkdir(parents=True, exist_ok=True)
     files.plan.write_text("# Plan\n", encoding="utf-8")
     files.tasks.parent.mkdir(parents=True, exist_ok=True)
@@ -89,13 +99,19 @@ def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
     return ctx, files.state
 
 
-def _write_execution_plan(feature_dir: Path, plans: list[tuple[int, str]], *, mode: str) -> None:
+def _write_execution_plan(
+    feature_dir: Path, plans: list[tuple[int, str]], *, mode: str
+) -> None:
     planning_dir = feature_dir / "02_planning"
     planning_dir.mkdir(parents=True, exist_ok=True)
     (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
     for index, name in plans:
-        (planning_dir / f"plan_{index}.md").write_text(f"## Sub-plan {index}: {name}\n", encoding="utf-8")
-    (planning_dir / "tasks.md").write_text("# Tasks\n\n- [ ] execute sub-plan\n", encoding="utf-8")
+        (planning_dir / f"plan_{index}.md").write_text(
+            f"## Sub-plan {index}: {name}\n", encoding="utf-8"
+        )
+    (planning_dir / "tasks.md").write_text(
+        "# Tasks\n\n- [ ] execute sub-plan\n", encoding="utf-8"
+    )
     (planning_dir / "execution_plan.json").write_text(
         json.dumps(
             {
@@ -104,7 +120,10 @@ def _write_execution_plan(feature_dir: Path, plans: list[tuple[int, str]], *, mo
                     {
                         "group_id": "g1",
                         "mode": mode,
-                        "plans": [{"file": f"plan_{index}.md", "name": name} for index, name in plans],
+                        "plans": [
+                            {"file": f"plan_{index}.md", "name": name}
+                            for index, name in plans
+                        ],
                     }
                 ],
             }
@@ -114,87 +133,132 @@ def _write_execution_plan(feature_dir: Path, plans: list[tuple[int, str]], *, mo
 
 
 class OnDemandPromptHandlerTests(unittest.TestCase):
-    def test_enter_implementing_builds_numbered_coder_prompt_for_single_plan_fallback(self) -> None:
+    def test_enter_implementing_builds_numbered_coder_prompt_for_single_plan_fallback(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = _make_ctx(tmp_path / "feature")
-            _write_execution_plan(ctx.files.feature_dir, [(1, "implementation")], mode="serial")
+            _write_execution_plan(
+                ctx.files.feature_dir, [(1, "implementation")], mode="serial"
+            )
             state = load_state(state_path)
             state["phase"] = "implementing"
             write_state(state_path, state)
 
-            run_phase_cycle(load_state(state_path), ctx)
+            handler = ImplementingHandler()
+            updates = handler.enter(load_state(state_path), ctx)
             updated = load_state(state_path)
+            updated.update(updates)
 
-            self.assertTrue((ctx.files.implementation_dir / "coder_prompt_1.txt").exists())
-            self.assertEqual(
-                [("kill_primary", "coder"), ("send", "coder", "coder_prompt_1.txt", "[coder] implementation")],
-                ctx.runtime.calls,
+            self.assertTrue(
+                (ctx.files.implementation_dir / "coder_prompt_1.txt").exists()
             )
-            self.assertEqual(1, updated["implementation_group_total"])
-            self.assertEqual(1, updated["implementation_group_index"])
-            self.assertEqual("serial", updated["implementation_group_mode"])
-            self.assertEqual(["plan_1"], updated["implementation_active_plan_ids"])
-            self.assertEqual([], updated["implementation_completed_group_ids"])
-
-    def test_enter_implementing_with_subplans_records_parallel_group_progress(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            ctx, state_path = _make_ctx(tmp_path / "feature")
-            _write_execution_plan(ctx.files.feature_dir, [(1, "A"), (2, "B")], mode="parallel")
-            state = load_state(state_path)
-            state["phase"] = "implementing"
-            write_state(state_path, state)
-
-            run_phase_cycle(load_state(state_path), ctx)
-            updated = load_state(state_path)
-
-            self.assertEqual(
-                [("kill_primary", "coder"), ("send_many", "coder", ["coder_prompt_1.txt", "coder_prompt_2.txt"])],
-                ctx.runtime.calls,
-            )
-            self.assertEqual(
-                [[(1, "coder_prompt_1.txt", "[coder] A"), (2, "coder_prompt_2.txt", "[coder] B")]],
-                ctx.runtime.parallel_specs,
-            )
-            self.assertEqual(1, updated["implementation_group_total"])
-            self.assertEqual(1, updated["implementation_group_index"])
-            self.assertEqual("parallel", updated["implementation_group_mode"])
-            self.assertEqual(["plan_1", "plan_2"], updated["implementation_active_plan_ids"])
-            self.assertEqual([], updated["implementation_completed_group_ids"])
-
-    def test_implementing_hides_completed_subplan_when_other_coders_remain(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            ctx, state_path = _make_ctx(tmp_path / "feature")
-            _write_execution_plan(ctx.files.feature_dir, [(1, "A"), (2, "B")], mode="parallel")
-            state = load_state(state_path)
-            state["phase"] = "implementing"
-            write_state(state_path, state)
-
-            run_phase_cycle(load_state(state_path), ctx)
-            phase = get_phase(load_state(state_path))
-            self.assertEqual("parallel", load_state(state_path)["implementation_group_mode"])
-
-            ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
-            (ctx.files.implementation_dir / "done_1").write_text("", encoding="utf-8")
-            event = phase.detect_event(load_state(state_path), ctx)
-            self.assertEqual("subplan_completed:1", event)
-
-            result = phase.handle_event(load_state(state_path), event, ctx)
-
-            self.assertIsNone(result)
             self.assertEqual(
                 [
                     ("kill_primary", "coder"),
-                    ("send_many", "coder", ["coder_prompt_1.txt", "coder_prompt_2.txt"]),
+                    ("send", "coder", "coder_prompt_1.txt", "[coder] implementation"),
+                ],
+                ctx.runtime.calls,
+            )
+            self.assertEqual(1, updated.get("implementation_group_total"))
+            self.assertEqual(1, updated.get("implementation_group_index"))
+            self.assertEqual("serial", updated.get("implementation_group_mode"))
+            self.assertEqual(["plan_1"], updated.get("implementation_active_plan_ids"))
+            self.assertEqual([], updated.get("implementation_completed_group_ids"))
+
+    def test_enter_implementing_with_subplans_records_parallel_group_progress(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            ctx, state_path = _make_ctx(tmp_path / "feature")
+            _write_execution_plan(
+                ctx.files.feature_dir, [(1, "A"), (2, "B")], mode="parallel"
+            )
+            state = load_state(state_path)
+            state["phase"] = "implementing"
+            write_state(state_path, state)
+
+            handler = ImplementingHandler()
+            updates = handler.enter(load_state(state_path), ctx)
+            updated = load_state(state_path)
+            updated.update(updates)
+
+            self.assertEqual(
+                [
+                    ("kill_primary", "coder"),
+                    (
+                        "send_many",
+                        "coder",
+                        ["coder_prompt_1.txt", "coder_prompt_2.txt"],
+                    ),
+                ],
+                ctx.runtime.calls,
+            )
+            self.assertEqual(
+                [
+                    [
+                        (1, "coder_prompt_1.txt", "[coder] A"),
+                        (2, "coder_prompt_2.txt", "[coder] B"),
+                    ]
+                ],
+                ctx.runtime.parallel_specs,
+            )
+            self.assertEqual(1, updated.get("implementation_group_total"))
+            self.assertEqual(1, updated.get("implementation_group_index"))
+            self.assertEqual("parallel", updated.get("implementation_group_mode"))
+            self.assertEqual(
+                ["plan_1", "plan_2"], updated.get("implementation_active_plan_ids")
+            )
+            self.assertEqual([], updated.get("implementation_completed_group_ids"))
+
+    def test_implementing_hides_completed_subplan_when_other_coders_remain(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            ctx, state_path = _make_ctx(tmp_path / "feature")
+            _write_execution_plan(
+                ctx.files.feature_dir, [(1, "A"), (2, "B")], mode="parallel"
+            )
+            state = load_state(state_path)
+            state["phase"] = "implementing"
+            write_state(state_path, state)
+
+            handler = ImplementingHandler()
+            updates = handler.enter(load_state(state_path), ctx)
+            state = load_state(state_path)
+            state.update(updates)
+            write_state(state_path, state)
+
+            self.assertEqual("parallel", state.get("implementation_group_mode"))
+
+            ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+            (ctx.files.implementation_dir / "done_1").write_text("", encoding="utf-8")
+            event = WorkflowEvent(
+                kind="file.created",
+                path="05_implementation/done_1",
+                payload={},
+            )
+            updates, next_phase = handler.handle_event(event, state, ctx)
+            state.update(updates)
+            write_state(state_path, state)
+
+            self.assertIsNone(next_phase)
+            self.assertEqual(
+                [
+                    ("kill_primary", "coder"),
+                    (
+                        "send_many",
+                        "coder",
+                        ["coder_prompt_1.txt", "coder_prompt_2.txt"],
+                    ),
                     ("hide_task", "coder", 1),
                 ],
                 ctx.runtime.calls,
             )
-            updated = load_state(state_path)
-            self.assertEqual([1], updated["completed_subplans"])
-            self.assertIsNone(phase.detect_event(updated, ctx))
+            self.assertEqual([1], state.get("completed_subplans"))
 
     def test_enter_reviewing_builds_review_prompt_inline(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -204,10 +268,14 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             state["phase"] = "reviewing"
             write_state(state_path, state)
 
-            run_phase_cycle(load_state(state_path), ctx)
+            handler = ReviewingHandler()
+            handler.enter(load_state(state_path), ctx)
 
             self.assertTrue((ctx.files.review_dir / "review_prompt.md").exists())
-            self.assertEqual([("send", "reviewer", "review_prompt.md", "[reviewer] iteration 1")], ctx.runtime.calls)
+            self.assertEqual(
+                [("send", "reviewer", "review_prompt.md", "[reviewer] iteration 1")],
+                ctx.runtime.calls,
+            )
 
     def test_enter_fixing_kills_stale_coder_and_builds_fix_prompt_inline(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -217,11 +285,15 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             state["phase"] = "fixing"
             write_state(state_path, state)
 
-            run_phase_cycle(load_state(state_path), ctx)
+            handler = FixingHandler()
+            handler.enter(load_state(state_path), ctx)
 
             self.assertTrue((ctx.files.review_dir / "fix_prompt.txt").exists())
             self.assertEqual(
-                [("kill_primary", "coder"), ("send", "coder", "fix_prompt.txt", "[coder] fix 1")],
+                [
+                    ("kill_primary", "coder"),
+                    ("send", "coder", "fix_prompt.txt", "[coder] fix 1"),
+                ],
                 ctx.runtime.calls,
             )
 
@@ -233,10 +305,23 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             state["phase"] = "completing"
             write_state(state_path, state)
 
-            run_phase_cycle(load_state(state_path), ctx)
+            handler = CompletingHandler()
+            handler.enter(load_state(state_path), ctx)
 
-            self.assertTrue((ctx.files.completion_dir / "confirmation_prompt.md").exists())
-            self.assertEqual([("send", "reviewer", "confirmation_prompt.md", "[reviewer] iteration 1")], ctx.runtime.calls)
+            self.assertTrue(
+                (ctx.files.completion_dir / "confirmation_prompt.md").exists()
+            )
+            self.assertEqual(
+                [
+                    (
+                        "send",
+                        "reviewer",
+                        "confirmation_prompt.md",
+                        "[reviewer] iteration 1",
+                    )
+                ],
+                ctx.runtime.calls,
+            )
 
 
 if __name__ == "__main__":

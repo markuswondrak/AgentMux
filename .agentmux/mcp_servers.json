@@ -2,7 +2,7 @@
   "mcpServers": {
     "agentmux-research": {
       "type": "stdio",
-      "command": "/home/markus/.local/share/pipx/venvs/agentmux/bin/python",
+      "command": "/home/markus/workspace/agentmux/.venv/bin/python3",
       "args": [
         "-m",
         "agentmux.integrations.mcp_research_server"

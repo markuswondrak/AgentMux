@@ -161,7 +161,7 @@ Fix:
 
 ## Next Steps
 
-- Tune provider/profile settings in [Configuration](configuration.md)
+- Tune provider/model settings in [Configuration](configuration.md)
 - Add a requirements-refinement phase with `--product-manager`
 - Bootstrap runs from GitHub issues with `--issue <number-or-url>`
 - Continue interrupted work with `--resume` (see [Session Resumption](session-resumption.md))

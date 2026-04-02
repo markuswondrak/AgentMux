@@ -36,7 +36,7 @@ Documentation updates are expected to be delivered during implementation and ver
 
 7. **Branch + PR creation (best effort)** — If startup state indicates GitHub is available (`gh_available: true`), `CompletionService` creates a branch (`<github.branch_prefix><feature-slug>`), pushes it, and runs `gh pr create` against `github.base_branch`. PRs default to draft (`github.draft: true`). The PR body is assembled from `requirements.md`, `02_planning/plan.md`, and `06_review/review.md`, and includes `Closes #<N>` when the run started with `--issue`.
 
-8. **Completion summary artifact is written before cleanup** — On successful completion (when a commit hash exists), completion writes `<project_dir>/.agentmux/.last_completion.json` before removing the feature directory. The launcher reads this artifact after tmux exits to render the final goodbye screen in the original terminal.
+8. **Completion summary artifact is written before cleanup** — On successful completion (when a commit hash exists), completion writes `<project_dir>/.agentmux/.last_completion.json` before removing the feature directory. The pipeline reads this artifact after tmux exits to render the final goodbye screen in the original terminal.
    - JSON schema:
      ```json
      {
