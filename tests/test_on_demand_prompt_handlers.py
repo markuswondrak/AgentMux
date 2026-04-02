@@ -111,7 +111,8 @@ def _write_execution_plan(
         )
         # Create per-plan tasks file for each plan
         (planning_dir / f"tasks_{index}.md").write_text(
-            f"# Tasks for plan {index}\n\n- [ ] execute sub-plan {index}\n", encoding="utf-8"
+            f"# Tasks for plan {index}\n\n- [ ] execute sub-plan {index}\n",
+            encoding="utf-8",
         )
     (planning_dir / "execution_plan.json").write_text(
         json.dumps(
@@ -272,9 +273,16 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             handler = ReviewingHandler()
             handler.enter(load_state(state_path), ctx)
 
-            self.assertTrue((ctx.files.review_dir / "review_prompt.md").exists())
+            self.assertTrue((ctx.files.review_dir / "review_logic_prompt.md").exists())
             self.assertEqual(
-                [("send", "reviewer", "review_prompt.md", "[reviewer] iteration 1")],
+                [
+                    (
+                        "send",
+                        "reviewer_logic",
+                        "review_logic_prompt.md",
+                        "[reviewer_logic]",
+                    )
+                ],
                 ctx.runtime.calls,
             )
 

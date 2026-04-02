@@ -7,9 +7,17 @@ from typing import TYPE_CHECKING
 from agentmux.workflow.event_router import PhaseHandler, WorkflowEvent
 from agentmux.workflow.phase_helpers import (
     filter_file_created_event,
+    load_plan_meta,
+    select_reviewer_type,
     send_to_role,
 )
-from agentmux.workflow.prompts import build_reviewer_prompt, write_prompt_file
+from agentmux.workflow.prompts import (
+    build_reviewer_expert_prompt,
+    build_reviewer_logic_prompt,
+    build_reviewer_prompt,
+    build_reviewer_quality_prompt,
+    write_prompt_file,
+)
 from agentmux.agent_labels import role_display_label
 
 if TYPE_CHECKING:
@@ -22,21 +30,52 @@ class ReviewingHandler:
     def enter(self, state: dict, ctx: "PipelineContext") -> dict:
         """Called when entering reviewing phase.
 
-        Sends reviewer prompt.
+        Sends reviewer prompt based on review_strategy routing.
         """
         if ctx.files.review.exists():
             ctx.files.review.unlink()
+ 
+        # Load plan_meta and determine reviewer type
+        plan_meta = load_plan_meta(ctx.files.planning_dir)
+        reviewer_type = select_reviewer_type(plan_meta)
+ 
+        # Map reviewer types to their configuration
+        reviewer_config = {
+            "logic": {
+                "role": "reviewer_logic",
+                "prompt_builder": build_reviewer_logic_prompt,
+                "prompt_path": ctx.files.review_logic_prompt,
+            },
+            "quality": {
+                "role": "reviewer_quality",
+                "prompt_builder": build_reviewer_quality_prompt,
+                "prompt_path": ctx.files.review_quality_prompt,
+            },
+            "expert": {
+                "role": "reviewer_expert",
+                "prompt_builder": build_reviewer_expert_prompt,
+                "prompt_path": ctx.files.review_expert_prompt,
+            },
+        }
+ 
+        config = reviewer_config[reviewer_type]
+ 
+        # Build the command prompt (review.md) combined with agent prompt
+        agent_prompt = config["prompt_builder"](ctx.files)
+        command_prompt = build_reviewer_prompt(ctx.files, is_review=True)
+        full_prompt = f"{agent_prompt}\n\n{command_prompt}"
+ 
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
-            ctx.files.relative_path(ctx.files.review_dir / "review_prompt.md"),
-            build_reviewer_prompt(ctx.files, is_review=True),
+            ctx.files.relative_path(config["prompt_path"]),
+            full_prompt,
         )
         send_to_role(
             ctx,
-            "reviewer",
+            config["role"],
             prompt_file,
             display_label=role_display_label(
-                ctx.files.feature_dir, "reviewer", state=state
+                ctx.files.feature_dir, config["role"], state=state
             ),
         )
         return {}

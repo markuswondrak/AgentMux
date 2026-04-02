@@ -1,5 +1,4 @@
 version: 2
-
 defaults:
   session_name: multi-agent-mvp
   provider: claude
@@ -9,12 +8,10 @@ defaults:
     skip_final_approval: false
   compression:
     enabled: false
-
 github:
   base_branch: main
   draft: true
-  branch_prefix: "feature/"
-
+  branch_prefix: feature/
 providers:
   claude:
     command: claude
@@ -22,73 +19,182 @@ providers:
     trust_snippet: Do you trust the contents of this directory?
     role_args:
       architect:
-        - --permission-mode
-        - acceptEdits
-        - --allowedTools
-        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
+      - --permission-mode
+      - acceptEdits
+      - --allowedTools
+      - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
       product-manager:
-        - --permission-mode
-        - acceptEdits
-        - --allowedTools
-        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
+      - --permission-mode
+      - acceptEdits
+      - --allowedTools
+      - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
       reviewer:
-        - --permission-mode
-        - acceptEdits
-        - --allowedTools
-        - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+      - --permission-mode
+      - acceptEdits
+      - --allowedTools
+      - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*)
       coder:
-        - --permission-mode
-        - acceptEdits
+      - --permission-mode
+      - acceptEdits
       designer:
-        - --permission-mode
-        - acceptEdits
+      - --permission-mode
+      - acceptEdits
       code-researcher:
-        - --permission-mode
-        - acceptEdits
-        - --allowedTools
-        - Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+      - --permission-mode
+      - acceptEdits
+      - --allowedTools
+      - Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*)
+        Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
       web-researcher:
-        - --permission-mode
-        - acceptEdits
-        - --allowedTools
-        - WebFetch WebSearch Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(head:*) Bash(tail:*)
-
+      - --permission-mode
+      - acceptEdits
+      - --allowedTools
+      - WebFetch WebSearch Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(head:*)
+        Bash(tail:*)
+      reviewer_expert:
+      - --permission-mode
+      - acceptEdits
+      - --allowedTools
+      - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+      reviewer_logic:
+      - --permission-mode
+      - acceptEdits
+      - --allowedTools
+      - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+      reviewer_quality:
+      - --permission-mode
+      - acceptEdits
+      - --allowedTools
+      - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*)
   codex:
     command: codex
     model_flag: --model
-    trust_snippet:
+    trust_snippet: null
     role_args:
-      architect: [-s, workspace-write, -a, never]
-      product-manager: [-s, workspace-write, -a, never]
-      reviewer: [-s, workspace-write, -a, never]
-      coder: [-s, workspace-write, -a, never]
-      designer: [-s, workspace-write, -a, never]
-      code-researcher: [-s, workspace-write, -a, never]
-      web-researcher: [-s, workspace-write, -a, never]
-
+      architect:
+      - -s
+      - workspace-write
+      - -a
+      - never
+      product-manager:
+      - -s
+      - workspace-write
+      - -a
+      - never
+      reviewer:
+      - -s
+      - workspace-write
+      - -a
+      - never
+      coder:
+      - -s
+      - workspace-write
+      - -a
+      - never
+      designer:
+      - -s
+      - workspace-write
+      - -a
+      - never
+      code-researcher:
+      - -s
+      - workspace-write
+      - -a
+      - never
+      web-researcher:
+      - -s
+      - workspace-write
+      - -a
+      - never
+      reviewer_expert:
+      - -s
+      - workspace-write
+      - -a
+      - never
+      reviewer_logic:
+      - -s
+      - workspace-write
+      - -a
+      - never
+      reviewer_quality:
+      - -s
+      - workspace-write
+      - -a
+      - never
   gemini:
     command: gemini
     model_flag: --model
     trust_snippet: Trust this folder?
     role_args:
-      architect: [--approval-mode, yolo]
-      product-manager: [--approval-mode, yolo]
-      reviewer: [--approval-mode, yolo]
-      coder: [--approval-mode, yolo]
-      designer: [--approval-mode, yolo]
-      code-researcher: [--approval-mode, yolo]
-      web-researcher: [--approval-mode, yolo]
-
+      architect:
+      - --approval-mode
+      - yolo
+      product-manager:
+      - --approval-mode
+      - yolo
+      reviewer:
+      - --approval-mode
+      - yolo
+      coder:
+      - --approval-mode
+      - yolo
+      designer:
+      - --approval-mode
+      - yolo
+      code-researcher:
+      - --approval-mode
+      - yolo
+      web-researcher:
+      - --approval-mode
+      - yolo
+      reviewer_expert:
+      - --approval-mode
+      - yolo
+      reviewer_logic:
+      - --approval-mode
+      - yolo
+      reviewer_quality:
+      - --approval-mode
+      - yolo
   opencode:
     command: opencode
     model_flag: --model
-    trust_snippet:
+    trust_snippet: null
     batch_subcommand: run
     role_args:
-      architect: [--agent, agentmux-architect]
-      product-manager: [--agent, agentmux-product-manager]
-      reviewer: [--agent, agentmux-reviewer]
-      coder: [--agent, agentmux-coder]
-      designer: [--agent, agentmux-designer]
-      code-researcher: [--agent, agentmux-code-researcher]
-      web-researcher: [--agent, agentmux-web-researcher]
+      architect:
+      - --agent
+      - agentmux-architect
+      product-manager:
+      - --agent
+      - agentmux-product-manager
+      reviewer:
+      - --agent
+      - agentmux-reviewer
+      coder:
+      - --agent
+      - agentmux-coder
+      designer:
+      - --agent
+      - agentmux-designer
+      code-researcher:
+      - --agent
+      - agentmux-code-researcher
+      web-researcher:
+      - --agent
+      - agentmux-web-researcher
+      reviewer_expert:
+      - --agent
+      - agentmux-reviewer
+      reviewer_logic:
+      - --agent
+      - agentmux-reviewer
+      reviewer_quality:
+      - --agent
+      - agentmux-reviewer

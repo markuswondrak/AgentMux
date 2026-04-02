@@ -114,7 +114,12 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             handler.enter(load_state(state_path), ctx)
 
             self.assertIn(
-                ("send", "reviewer", "review_prompt.md", "[reviewer] iteration 1"),
+                (
+                    "send",
+                    "reviewer_logic",
+                    "review_logic_prompt.md",
+                    "[reviewer_logic]",
+                ),
                 ctx.runtime.calls,
             )
             self.assertFalse(ctx.files.review.exists())

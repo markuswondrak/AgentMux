@@ -22,6 +22,9 @@ PROMPT_AGENT_ROLES: tuple[str, ...] = (
     "designer",
     "product-manager",
     "reviewer",
+    "reviewer_expert",
+    "reviewer_logic",
+    "reviewer_quality",
     "web-researcher",
 )
 
@@ -96,6 +99,10 @@ class RuntimeFiles:
     orchestrator_log: Path
     created_files_log: Path
     status_log: Path
+    # Specialized reviewer prompt paths (for review_strategy routing)
+    review_logic_prompt: Path | None = None
+    review_quality_prompt: Path | None = None
+    review_expert_prompt: Path | None = None
 
     def relative_path(self, path: Path) -> str:
         return path.relative_to(self.feature_dir).as_posix()

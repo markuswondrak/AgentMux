@@ -97,7 +97,10 @@ product_management? → planning → designing? → implementing → reviewing
 Role routing in these phases:
 - `product-manager`: product management phase only
 - `architect`: planning/replanning only
-- `reviewer`: reviewing and final confirmation/completion prompts
+- `reviewer`: reviewing and final confirmation/completion prompts (dynamically routed to specialized reviewers based on `plan_meta.review_strategy`):
+  - `reviewer_logic`: Logic & Alignment reviewer (functional correctness vs plan)
+  - `reviewer_quality`: Quality & Style reviewer (clean code, naming, standards)  
+  - `reviewer_expert`: Deep-Dive Expert reviewer (security, performance, edge cases)
 - `coder`: implementing/fixing
 
 `state.json` persists the durable `phase` and optional metadata such as `last_event`, `review_iteration`, `subplan_count`, `product_manager`, `research_tasks` (a dict tracking code-researcher task status by topic), `web_research_tasks` (a dict tracking web-researcher task status by topic), and GitHub integration keys like `gh_available` / `issue_number`. Agents no longer write workflow statuses directly.
@@ -146,12 +149,18 @@ agentmux/integrations/compression.py — headroom proxy lifecycle and agent env 
 agentmux/prompts/agents/            — role-level prompts (define what each agent is)
   product-manager.md           —   product management phase
   architect.md                 —   planning phase
-  reviewer.md                  —   review + confirmation phases
+  reviewer.md                  —   review + confirmation phases (legacy, backward compat)
+  reviewer_logic.md            —   Logic & Alignment reviewer (functional correctness vs plan)
+  reviewer_quality.md          —   Quality & Style reviewer (clean code, naming, standards)
+  reviewer_expert.md           —   Deep-Dive Expert reviewer (security, performance, edge cases)
   coder.md                     —   implementation phase
   code-researcher.md           —   codebase analysis on architect request
   web-researcher.md            —   internet search on architect request
 agentmux/prompts/commands/          — phase-specific command prompts (what to do at each step)
-  review.md                    —   code review
+  review.md                    —   code review (legacy)
+  review_logic.md              —   logic alignment review
+  review_quality.md            —   quality/style review
+  review_expert.md             —   security/performance expert review
   fix.md                       —   fix review findings
   confirmation.md              —   user approval / changes gate
   change.md                    —   re-plan after user requests changes
