@@ -131,12 +131,17 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             cfg = {
-                "defaults": {"session_name": "s", "provider": "claude"},
+                "version": 2,
+                "defaults": {
+                    "session_name": "s",
+                    "provider": "claude",
+                    "model": "sonnet",
+                },
                 "roles": {
-                    "architect": {"profile": "max"},
-                    "coder": {"provider": "codex", "profile": "max"},
+                    "architect": {"model": "opus"},
+                    "coder": {"provider": "codex", "model": "gpt-5.4"},
                     "code-researcher": {
-                        "profile": "low",
+                        "model": "haiku",
                         "args": ["--permission-mode", "acceptEdits"],
                     },
                 },

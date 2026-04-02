@@ -60,10 +60,12 @@ Test command:
 There are no lint commands in this repository.
 
 Default config resolution is layered:
-- built-in defaults from `agentmux/configuration/defaults/config.yaml`
-- optional user config from `~/.config/agentmux/config.yaml`
-- project config from `.agentmux/config.yaml`
+- built-in defaults from `agentmux/configuration/defaults/config.yaml` (v2 schema)
+- optional user config from `~/.config/agentmux/config.yaml` (v2 schema)
+- project config from `.agentmux/config.yaml` (v2 schema)
 - explicit `--config <path>` override
+
+**Note:** Configs must use `version: 2`. The `profile` concept and `launchers` key have been removed. Use direct `model` selection and `providers` instead.
 
 ## Architecture
 
@@ -107,8 +109,8 @@ agentmux/pipeline/__init__.py       — CLI parsing and `main()`
 agentmux/pipeline/application.py    — PipelineApplication, launcher flow, hidden `--orchestrate` mode
 agentmux/pipeline/init_command.py   — project initialization wizard
 
-agentmux/configuration/             — layered config loading, provider/profile resolution, built-in defaults
-agentmux/configuration/providers.py — built-in provider helpers for launcher/profile resolution
+agentmux/configuration/             — layered config loading, provider/model resolution, built-in defaults (v2 schema)
+agentmux/configuration/providers.py — built-in provider helpers for provider/model resolution
 
 agentmux/shared/models.py           — AgentConfig, GitHubConfig, RuntimeFiles
 agentmux/sessions/__init__.py       — SessionService, session creation/resume
@@ -186,7 +188,7 @@ Rules:
 Deeper context on specific subsystems:
 
 - `docs/file-protocol.md` — Shared file protocol, workflow artifacts per phase
-- `docs/configuration.md` — layered config schema, launchers/profiles
+- `docs/configuration.md` — layered config schema, providers/model selection (v2)
 - `docs/tmux-layout.md` — Tmux session layout, pane lifecycle, zone approach
 - `docs/research-dispatch.md` — Code-researcher and web-researcher task dispatch
 - `docs/completing-phase.md` — Approval flow, commit selection, cleanup

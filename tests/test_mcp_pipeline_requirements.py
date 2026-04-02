@@ -352,7 +352,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
         )
 
-        role_args = config["launchers"]["claude"]["role_args"]
+        role_args = config["providers"]["claude"]["role_args"]
         self.assertIn("mcp__agentmux-research__*", role_args["architect"][-1])
         self.assertIn("mcp__agentmux-research__*", role_args["product-manager"][-1])
 

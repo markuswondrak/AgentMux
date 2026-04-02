@@ -1,30 +1,30 @@
-version: 1
+version: 2
 
 defaults:
   session_name: multi-agent-mvp
   provider: claude
-  profile: standard
+  model: sonnet
   max_review_iterations: 3
 
 roles:
   architect:
     provider: opencode
-    profile: max
+    model: kimi-k2.5
   product-manager:
     provider: opencode
-    profile: max
+    model: kimi-k2.5
   reviewer:
     provider: opencode
-    profile: standard
+    model: kimi-k2.5
   coder:
     provider: opencode
-    profile: standard
+    model: gpt-5.1-codex-mini
   designer:
     provider: opencode
-    profile: standard
+    model: kimi-k2.5
   code-researcher:
     provider: opencode
-    profile: low
+    model: kimi-k2.5
   web-researcher:
     provider: opencode
-    profile: low
+    model: kimi-k2.5

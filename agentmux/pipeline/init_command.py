@@ -37,7 +37,6 @@ except ImportError:  # pragma: no cover - optional at import time in this enviro
 KNOWN_PROVIDERS = ("claude", "codex", "gemini", "opencode")
 PROMPTED_ROLES = ("architect", "product-manager", "reviewer", "coder", "designer")
 PROMPT_STUB_ROLES = ("coder", "reviewer", "architect", "product-manager", "designer")
-PROFILE_CHOICES = ("max", "standard", "low")
 
 INIT_STYLE = Style(
     [
@@ -327,7 +326,7 @@ def prompt_role_config(
     defaults = dict(defaults_config.get("defaults", {}))
     role_defaults = dict(defaults_config.get("roles", {}))
     builtin_default_provider = str(defaults.get("provider", "claude"))
-    builtin_default_profile = str(defaults.get("profile", "standard"))
+    builtin_default_model = str(defaults.get("model", "sonnet"))
     selected_default = _select(
         "Default provider",
         detected_providers,
@@ -367,7 +366,7 @@ def prompt_role_config(
             else {}
         )
         baseline_provider = str(role_cfg.get("provider", selected_default))
-        baseline_profile = str(role_cfg.get("profile", builtin_default_profile))
+        baseline_model = str(role_cfg.get("model", builtin_default_model))
         provider_prompt_default = str(role_cfg.get("provider", "default"))
         if (
             provider_prompt_default != "default"
@@ -380,22 +379,20 @@ def prompt_role_config(
             ["default", *detected_providers],
             default=provider_prompt_default,
         )
-        selected_profile = _select(
-            f"{role}: profile",
-            list(PROFILE_CHOICES),
-            default=baseline_profile
-            if baseline_profile in PROFILE_CHOICES
-            else "standard",
+        selected_model = _text(
+            f"{role}: model",
+            default=baseline_model,
         )
 
         effective_provider = (
             selected_default if selected_provider == "default" else selected_provider
         )
+        effective_model = selected_model if selected_model else baseline_model
         role_override: dict[str, str] = {}
         if effective_provider != baseline_provider:
             role_override["provider"] = effective_provider
-        if selected_profile != baseline_profile:
-            role_override["profile"] = selected_profile
+        if effective_model != baseline_model:
+            role_override["model"] = effective_model
         if role_override:
             roles_override[role] = role_override
 
@@ -559,7 +556,7 @@ def generate_config(
                 "Aborted. Existing .agentmux/config.yaml was not overwritten."
             )
 
-    data: dict[str, Any] = {"version": 1}
+    data: dict[str, Any] = {"version": 2}
     for section in ("defaults", "roles", "github"):
         section_data = overrides.get(section)
         if isinstance(section_data, dict) and section_data:

@@ -1,9 +1,9 @@
-version: 1
+version: 2
 
 defaults:
   session_name: multi-agent-mvp
   provider: claude
-  profile: standard
+  model: sonnet
   max_review_iterations: 3
   completion:
     skip_final_approval: false
@@ -15,7 +15,7 @@ github:
   draft: true
   branch_prefix: "feature/"
 
-launchers:
+providers:
   claude:
     command: claude
     model_flag: --model
@@ -93,52 +93,19 @@ launchers:
       code-researcher: [--agent, agentmux-code-researcher]
       web-researcher: [--agent, agentmux-web-researcher]
 
-profiles:
-  claude:
-    max:
-      model: opus
-    standard:
-      model: sonnet
-    low:
-      model: haiku
-
-  codex:
-    max:
-      model: gpt-5.4
-    standard:
-      model: gpt-5.3-codex
-    low:
-      model: gpt-5.1-codex-mini
-
-  gemini:
-    max:
-      model: gemini-2.5-pro
-    standard:
-      model: gemini-2.5-flash
-    low:
-      model: gemini-2.5-flash-lite
-
-  opencode:
-    max:
-      model: opencode-go/glm-5
-    standard:
-      model: opencode-go/kimi-k2.5
-    low:
-      model: opencode-go/kimi-k2.5
-
 roles:
   architect:
-    profile: max
+    model: opus
   product-manager:
-    profile: max
+    model: opus
   reviewer:
-    profile: standard
+    model: sonnet
   coder:
     provider: codex
-    profile: standard
+    model: gpt-5.3-codex
   designer:
-    profile: standard
+    model: sonnet
   code-researcher:
-    profile: low
+    model: haiku
   web-researcher:
-    profile: standard
+    model: sonnet

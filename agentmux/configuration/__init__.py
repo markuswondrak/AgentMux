@@ -147,29 +147,59 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
             f"Move them under `defaults`/`roles`: {found_csv}."
         )
 
+    # Version detection (do this before profile check for better error messages)
+    version = int(raw.get("version", 1))
+    if version == 1:
+        # Check if it's actually a v1 config (uses launchers/profiles)
+        if (
+            raw.get("launchers")
+            or raw.get("profiles")
+            or "profile" in str(raw.get("defaults", {}))
+            or any(
+                "profile" in str(role_cfg) for role_cfg in raw.get("roles", {}).values()
+            )
+        ):
+            raise ValueError(
+                "Legacy config detected (version: 1). Please migrate to version: 2.\n"
+                "- Rename 'launchers:' to 'providers:'\n"
+                "- Replace 'profile: <name>' with 'model: <model-name>'\n"
+                "- Remove 'profiles:' section\n"
+                "See docs/configuration.md for the new schema."
+            )
+
+    # Check for profile key usage (removed in v2)
+    if "profile" in raw.get("defaults", {}):
+        raise ValueError(
+            "Profiles are removed in v2. Use 'model: <model-name>' directly."
+        )
+    for role in ROLES:
+        if role in raw.get("roles", {}) and "profile" in raw["roles"][role]:
+            raise ValueError(
+                f"Profiles are removed in v2. Use 'model: <model-name>' directly in roles.{role}."
+            )
+
+    # Also support legacy 'launchers' key for v2 migration detection
+    if raw.get("launchers") and not raw.get("providers"):
+        raise ValueError(
+            "Legacy config uses 'launchers:' instead of 'providers:'. "
+            "Please update to version: 2 and rename 'launchers:' to 'providers:'."
+        )
+
     normalized: dict[str, Any] = {
-        "version": int(raw.get("version", 1)),
+        "version": version,
         "defaults": _normalize_defaults(raw.get("defaults", {})),
         "github": _normalize_github(raw.get("github", {})),
-        "launchers": {},
-        "profiles": {},
+        "providers": {},
         "roles": {},
     }
 
-    launchers = (
-        dict(raw.get("launchers", {})) if isinstance(raw.get("launchers"), dict) else {}
+    providers = (
+        dict(raw.get("providers", {})) if isinstance(raw.get("providers"), dict) else {}
     )
-    normalized["launchers"] = {
-        str(name): _normalize_launcher(str(name), launcher_raw)
-        for name, launcher_raw in launchers.items()
-    }
 
-    profiles = (
-        dict(raw.get("profiles", {})) if isinstance(raw.get("profiles"), dict) else {}
-    )
-    normalized["profiles"] = {
-        str(provider): _normalize_profile_map(str(provider), profile_map)
-        for provider, profile_map in profiles.items()
+    normalized["providers"] = {
+        str(name): _normalize_provider(str(name), provider_raw)
+        for name, provider_raw in providers.items()
     }
 
     nested_roles = (
@@ -187,23 +217,22 @@ def _normalize_defaults(raw: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("defaults must be a mapping.")
     unsupported_keys = [
         key
-        for key in ("skip_final_approval", "require_final_approval", "tier")
+        for key in ("skip_final_approval", "require_final_approval", "tier", "profile")
         if key in raw
     ]
     if unsupported_keys:
         keys_csv = ", ".join(sorted(unsupported_keys))
         raise ValueError(
             "Legacy defaults keys are no longer supported. "
-            f"Use `defaults.profile` and `defaults.completion.skip_final_approval` instead: {keys_csv}."
+            f"Use `defaults.model` and `defaults.completion.skip_final_approval` instead: {keys_csv}."
         )
     defaults: dict[str, Any] = {}
     if "session_name" in raw:
         defaults["session_name"] = str(raw["session_name"])
     if "provider" in raw:
         defaults["provider"] = str(raw["provider"])
-    profile = raw.get("profile")
-    if profile is not None:
-        defaults["profile"] = str(profile)
+    if "model" in raw:
+        defaults["model"] = str(raw["model"])
     if "max_review_iterations" in raw:
         defaults["max_review_iterations"] = int(raw["max_review_iterations"])
     completion = _normalize_completion_defaults(
@@ -247,21 +276,21 @@ def _normalize_compression_defaults(raw: Any, label: str) -> dict[str, bool]:
     return compression
 
 
-def _normalize_launcher(name: str, raw: Any) -> dict[str, Any]:
+def _normalize_provider(name: str, raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
-        raise ValueError(f"Launcher '{name}' must be a mapping.")
+        raise ValueError(f"Provider '{name}' must be a mapping.")
     role_args = raw.get("role_args", {})
     if role_args is None:
         role_args = {}
     if not isinstance(role_args, dict):
-        raise ValueError(f"Launcher '{name}'.role_args must be a mapping.")
+        raise ValueError(f"Provider '{name}'.role_args must be a mapping.")
 
     # Start with required fields
     result: dict[str, Any] = {
         "command": str(raw.get("command", name)),
         "model_flag": str(raw.get("model_flag", "--model")),
         "role_args": {
-            str(role): _normalize_args(f"launchers.{name}.role_args.{role}", args)
+            str(role): _normalize_args(f"providers.{name}.role_args.{role}", args)
             for role, args in role_args.items()
         },
     }
@@ -275,41 +304,22 @@ def _normalize_launcher(name: str, raw: Any) -> dict[str, Any]:
     return result
 
 
-def _normalize_profile_map(provider: str, raw: Any) -> dict[str, Any]:
-    if not isinstance(raw, dict):
-        raise ValueError(f"Profiles for provider '{provider}' must be a mapping.")
-    return {
-        str(profile): _normalize_profile(provider, str(profile), profile_raw)
-        for profile, profile_raw in raw.items()
-    }
-
-
-def _normalize_profile(provider: str, profile: str, raw: Any) -> dict[str, Any]:
-    if not isinstance(raw, dict):
-        raise ValueError(f"Profile '{provider}.{profile}' must be a mapping.")
-    if "model" not in raw:
-        raise ValueError(f"Profile '{provider}.{profile}' must define 'model'.")
-    data = {"model": str(raw["model"])}
-    if "args" in raw:
-        data["args"] = _normalize_args(
-            f"profiles.{provider}.{profile}.args", raw["args"]
-        )
-    return data
-
-
 def _normalize_role_config(role: str, raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError(f"Role '{role}' must be a mapping.")
     if "tier" in raw:
         raise ValueError(
-            f"roles.{role}.tier is no longer supported. Use roles.{role}.profile."
+            f"roles.{role}.tier is no longer supported. Use roles.{role}.model."
+        )
+    if "profile" in raw:
+        raise ValueError(
+            f"roles.{role}.profile is no longer supported. Use roles.{role}.model: <model-name>."
         )
     data: dict[str, Any] = {}
     if "provider" in raw:
         data["provider"] = str(raw["provider"])
-    profile = raw.get("profile")
-    if profile is not None:
-        data["profile"] = str(profile)
+    if "model" in raw:
+        data["model"] = str(raw["model"])
     if "args" in raw:
         data["args"] = _normalize_args(f"roles.{role}.args", raw["args"])
     return data
@@ -362,16 +372,9 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 
 def _validate_project_config(raw: dict[str, Any], path: Path) -> None:
-    if raw.get("launchers"):
-        raise ValueError(
-            f"Project config may not define launchers: {path}. "
-            "Define custom launchers in user config (~/.config/agentmux/config.yaml) or an explicit --config file."
-        )
-    if raw.get("profiles"):
-        raise ValueError(
-            f"Project config may not define profiles: {path}. "
-            "Define custom profiles in user config (~/.config/agentmux/config.yaml) or an explicit --config file."
-        )
+    # In v2, project configs CAN define providers (removed restriction)
+    # We just validate that the structure is valid
+    pass
 
 
 def _resolve_loaded_config(
@@ -379,13 +382,12 @@ def _resolve_loaded_config(
 ) -> LoadedConfig:
     defaults = raw.get("defaults", {})
     github_raw = raw.get("github", {})
-    launchers = raw.get("launchers", {})
-    profiles = raw.get("profiles", {})
+    providers = raw.get("providers", {})
     roles = raw.get("roles", {})
 
     session_name = str(defaults.get("session_name", "multi-agent-mvp"))
     default_provider = str(defaults.get("provider", "claude"))
-    default_profile = str(defaults.get("profile", "standard"))
+    default_model = str(defaults.get("model", "sonnet"))
     max_review_iterations = int(defaults.get("max_review_iterations", 3))
     github = GitHubConfig(
         base_branch=str(github_raw.get("base_branch", "main")),
@@ -413,44 +415,29 @@ def _resolve_loaded_config(
 
         provider_name = str(role_config.get("provider", default_provider))
         try:
-            launcher = launchers[provider_name]
+            provider = providers[provider_name]
         except KeyError as exc:
-            available = ", ".join(sorted(launchers))
+            available = ", ".join(sorted(providers))
             raise ValueError(
                 f"Unknown provider '{provider_name}' for role '{role}'. Expected one of: {available}"
             ) from exc
 
-        try:
-            provider_profiles = profiles[provider_name]
-        except KeyError as exc:
-            raise ValueError(
-                f"No profiles configured for provider '{provider_name}'."
-            ) from exc
-
-        profile_name = str(role_config.get("profile", default_profile))
-        try:
-            profile = provider_profiles[profile_name]
-        except KeyError as exc:
-            valid_profiles = ", ".join(sorted(provider_profiles))
-            raise ValueError(
-                f"Unknown profile '{profile_name}' for provider '{provider_name}'. "
-                f"Expected one of: {valid_profiles}"
-            ) from exc
+        # In v2, model is specified directly in role config or defaults
+        model = str(role_config.get("model", default_model))
 
         args = role_config.get("args")
         if args is None:
-            args = list(launcher.get("role_args", {}).get(role, []))
-            args.extend(profile.get("args", []))
+            args = list(provider.get("role_args", {}).get(role, []))
 
         agents[role] = AgentConfig(
             role=role,
-            cli=str(launcher.get("command", provider_name)),
-            model=str(profile["model"]),
-            model_flag=str(launcher.get("model_flag", "--model")),
+            cli=str(provider.get("command", provider_name)),
+            model=model,
+            model_flag=str(provider.get("model_flag", "--model")),
             args=list(args),
-            trust_snippet=launcher.get("trust_snippet"),
+            trust_snippet=provider.get("trust_snippet"),
             provider=provider_name,
-            batch_subcommand=launcher.get("batch_subcommand"),
+            batch_subcommand=provider.get("batch_subcommand"),
         )
 
     return LoadedConfig(

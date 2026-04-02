@@ -42,4 +42,4 @@ AgentMux expects an MCP registration named `agentmux-research` for the effective
 
 For each run, AgentMux may inject `PYTHONPATH` into the launched `architect` / `product-manager` process so the MCP server can import the project checkout. Feature routing now comes from the `feature_dir` MCP tool argument.
 
-For Claude, default launcher args allow MCP calls via `mcp__agentmux-research__*` in `--allowedTools`.
+For Claude, default provider args allow MCP calls via `mcp__agentmux-research__*` in `--allowedTools`.
