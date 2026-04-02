@@ -15,7 +15,9 @@ class InterruptionEventCatalogTests(unittest.TestCase):
             interruption_events.INTERRUPTION_EVENT_FAILED,
             interruption_events.canonical_interruption_event("run_failed"),
         )
-        self.assertIsNone(interruption_events.canonical_interruption_event("keyboard_interrupt"))
+        self.assertIsNone(
+            interruption_events.canonical_interruption_event("keyboard_interrupt")
+        )
 
     def test_category_and_fallback_cause_are_resolved_from_catalog(self) -> None:
         self.assertEqual(

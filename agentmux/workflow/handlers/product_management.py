@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from agentmux.workflow.event_router import (
-    PhaseHandler,
     WorkflowEvent,
     extract_research_topic,
     path_matches,
@@ -29,7 +28,7 @@ if TYPE_CHECKING:
 class ProductManagementHandler:
     """Event-driven handler for product_management phase."""
 
-    def enter(self, state: dict, ctx: "PipelineContext") -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering product_management phase.
 
         Sends product-manager prompt.
@@ -48,7 +47,7 @@ class ProductManagementHandler:
         self,
         event: WorkflowEvent,
         state: dict,
-        ctx: "PipelineContext",
+        ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for product_management phase."""
         path = filter_file_created_event(event)
@@ -90,7 +89,7 @@ class ProductManagementHandler:
     def _handle_pm_completed(
         self,
         state: dict,
-        ctx: "PipelineContext",
+        ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle product management completion."""
         # Apply approved preferences

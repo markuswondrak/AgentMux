@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from contextlib import ExitStack
 import threading
+from contextlib import ExitStack
 
 from ..integrations.compression import cleanup_compression
 from ..integrations.mcp import cleanup_mcp
@@ -104,9 +104,10 @@ class PipelineOrchestrator:
                 message = str(payload.get("message", "Task failed")).strip()
                 ctx.runtime.notify(
                     owner,
-                    f"RESEARCH TASK FAILED: {role} task '{task_id}' crashed unexpectedly.\n"
+                    f"RESEARCH TASK FAILED: {role} task '{task_id}' "
+                    "crashed unexpectedly.\n"
                     f"Error: {message}\n"
-                    f"You may need to retry this research task or proceed without it.",
+                    "You may need to retry this research task or proceed without it.",
                 )
 
         report = self.interruptions.build_canceled(
@@ -180,7 +181,7 @@ class PipelineOrchestrator:
         bus.start()
 
         def handle_feature_dir_cleanup():
-            """Clean up feature directory if flagged in state and not keeping session."""
+            """Clean up feature dir if flagged in state and not keeping session."""
             if keep_session:
                 return  # Don't delete feature dir if keeping session
             state = load_state(ctx.files.state)
@@ -189,7 +190,7 @@ class PipelineOrchestrator:
 
         with ExitStack() as stack:
             # Register callbacks in REVERSE order of desired execution (LIFO)
-            # Execution order will be: bus.stop → cleanup_mcp → cleanup_compression → shutdown → cleanup_feature_dir
+            # Order: bus.stop, cleanup_mcp, cleanup_compression, shutdown, cleanup_dir
             stack.callback(handle_feature_dir_cleanup)
             stack.callback(ctx.runtime.shutdown, keep_session)
             stack.callback(cleanup_compression, ctx.files.feature_dir)

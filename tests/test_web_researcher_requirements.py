@@ -4,18 +4,17 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from agentmux.configuration import load_explicit_config
-from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
+from agentmux.sessions.state_store import create_feature_files, load_state, write_state
+from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig
+from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import PlanningHandler
 from agentmux.workflow.prompts import (
     build_architect_prompt,
     build_web_researcher_prompt,
 )
-from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.workflow.transitions import PipelineContext
-from agentmux.workflow.event_router import WorkflowEvent
 
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 RESEARCH_DIR = SESSION_DIR_NAMES["research"]
@@ -222,7 +221,7 @@ class WebResearcherRequirementsTests(unittest.TestCase):
                 "dispatched", updates.get("web_research_tasks", {}).get("openai-models")
             )
 
-    def test_planning_handle_web_task_completed_finishes_researcher_and_notifies_architect(
+    def test_planning_handle_web_task_completed_finishes_researcher(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -253,7 +252,9 @@ class WebResearcherRequirementsTests(unittest.TestCase):
                 (
                     "notify",
                     "architect",
-                    "Web research on 'openai-models' is complete. Read 03_research/web-openai-models/summary.md and continue from there.",
+                    "Web research on 'openai-models' is complete. "
+                    "Read 03_research/web-openai-models/summary.md "
+                    "and continue from there.",
                 ),
                 ctx.runtime.calls[-1],
             )

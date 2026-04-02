@@ -6,12 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import agentmux.pipeline as pipeline
 from agentmux import monitor
 from agentmux.configuration import load_explicit_config
-from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
-from agentmux.workflow.handlers import PHASE_HANDLERS, ProductManagementHandler
-from agentmux.workflow.prompts import build_product_manager_prompt
 from agentmux.runtime import TmuxAgentRuntime
 from agentmux.sessions.state_store import (
     create_feature_files,
@@ -19,8 +15,11 @@ from agentmux.sessions.state_store import (
     load_state,
     write_state,
 )
-from agentmux.workflow.transitions import PipelineContext
+from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig
 from agentmux.workflow.event_router import WorkflowEvent
+from agentmux.workflow.handlers import PHASE_HANDLERS, ProductManagementHandler
+from agentmux.workflow.prompts import build_product_manager_prompt
+from agentmux.workflow.transitions import PipelineContext
 
 PRODUCT_MANAGEMENT_DIR = SESSION_DIR_NAMES["product_management"]
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
@@ -275,7 +274,9 @@ class ProductManagerRequirementsTests(unittest.TestCase):
                 (
                     "notify",
                     "product-manager",
-                    "Code-research on 'market-fit' is complete. Read 03_research/code-market-fit/summary.md and continue from there.",
+                    "Code-research on 'market-fit' is complete. "
+                    "Read 03_research/code-market-fit/summary.md "
+                    "and continue from there.",
                 ),
                 ctx.runtime.calls[-1],
             )

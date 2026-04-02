@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..agent_labels import role_display_label
-from ..shared.models import SESSION_DIR_NAMES
 
 ALWAYS_VISIBLE_STATES = [
     "product_management",

@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 from urllib.parse import urlparse
 
 from ..shared.models import GitHubConfig
@@ -44,7 +44,8 @@ def fetch_issue(issue_ref: str) -> dict[str, str]:
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
         raise RuntimeError(
-            f"Failed to fetch GitHub issue '{issue_ref}'. Ensure the issue exists and gh is authenticated. {stderr}"
+            f"Failed to fetch GitHub issue '{issue_ref}'. "
+            f"Ensure the issue exists and gh is authenticated. {stderr}"
         ) from exc
 
     try:
@@ -77,7 +78,8 @@ def extract_issue_number(issue_ref: str) -> str:
             return segments[-1]
 
     raise ValueError(
-        f"Invalid issue reference: {issue_ref}. Expected an issue number or GitHub issue URL."
+        f"Invalid issue reference: {issue_ref}. "
+        "Expected an issue number or GitHub issue URL."
     )
 
 
@@ -105,7 +107,8 @@ class GitHubBootstrapper:
         gh_available = check_gh_available() and check_gh_authenticated()
         if not gh_available:
             self.output(
-                "Warning: gh CLI not available or not authenticated. PR creation will be skipped."
+                "Warning: gh CLI not available or not authenticated. "
+                "PR creation will be skipped."
             )
         return gh_available
 
@@ -137,7 +140,8 @@ class GitHubBootstrapper:
         except subprocess.CalledProcessError as exc:
             stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
             self.output(
-                f"Warning: could not pull origin/{self.github_config.base_branch}: {stderr}"
+                f"Warning: could not pull origin/{self.github_config.base_branch}: "
+                f"{stderr}"
             )
 
         return IssueBootstrap(

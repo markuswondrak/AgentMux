@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import yaml
 
-from agentmux.configuration import load_layered_config, load_explicit_config
+from agentmux.configuration import load_explicit_config, load_layered_config
 from agentmux.pipeline.init_command import generate_config, validate_config
 
 
@@ -237,7 +237,7 @@ class V2ConfigIntegrationTests(unittest.TestCase):
         )
 
     def test_direct_model_selection_without_profiles(self) -> None:
-        """Test: User can specify model name directly without knowing profile mappings."""
+        """Test: User can specify model directly without profile mappings."""
         with tempfile.TemporaryDirectory() as td:
             # User specifies model directly
             config = {

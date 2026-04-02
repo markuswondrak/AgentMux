@@ -79,7 +79,8 @@ STUB_TEMPLATES = {
     "architect": """<!-- Project-specific instructions for the architect role. -->
 - Example: Keep plan steps executable and aligned with existing module boundaries.
 """,
-    "product-manager": """<!-- Project-specific instructions for the product-manager role. -->
+    "product-manager": """\
+<!-- Project-specific instructions for the product-manager role. -->
 - Example: Make acceptance criteria explicit and testable before implementation.
 """,
     "designer": """<!-- Project-specific instructions for the designer role. -->
@@ -144,10 +145,7 @@ def _is_completion_enabled(config_path: Path, shell: str) -> bool:
             r"eval.*agentmux\s+completions\s+(bash|zsh)",
             r"agentmux\s+completions\s+(bash|zsh)",
         ]
-        for pattern in patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                return True
-        return False
+        return any(re.search(pattern, content, re.IGNORECASE) for pattern in patterns)
     except Exception:
         return False
 
@@ -171,7 +169,7 @@ def _enable_completions(config_path: Path, shell: str) -> bool:
         if existing_content and not existing_content.endswith("\n"):
             new_content += "\n"
 
-        new_content += f"\n# AgentMux Shell Completions\n"
+        new_content += "\n# AgentMux Shell Completions\n"
         new_content += f"{completion_line}\n"
 
         config_path.write_text(new_content, encoding="utf-8")
@@ -210,7 +208,8 @@ def prompt_shell_completions(console: Any | None = None) -> tuple[bool, str]:
             return (False, "failed")
     else:
         output.print(
-            f"[dim]Skipped shell completions (run 'agentmux completions {shell_type}' to see instructions)[/dim]"
+            "[dim]Skipped shell completions (run 'agentmux completions "
+            f"{shell_type}' to see instructions)[/dim]"
         )
         return (False, "skipped")
 
@@ -224,7 +223,8 @@ def _rule(title: str) -> object:
 def _require_questionary() -> Any:
     if questionary is None:
         raise SystemExit(
-            "Missing dependency: questionary. Install with `python3 -m pip install -r requirements.txt`."
+            "Missing dependency: questionary. "
+            "Install with `python3 -m pip install -r requirements.txt`."
         )
     return questionary
 
@@ -320,7 +320,8 @@ def prompt_role_config(
 ) -> dict[str, Any]:
     if not detected_providers:
         raise SystemExit(
-            "No supported provider CLI detected. Install one of: claude, codex, gemini, opencode."
+            "No supported provider CLI detected. "
+            "Install one of: claude, codex, gemini, opencode."
         )
 
     defaults = dict(defaults_config.get("defaults", {}))
@@ -446,7 +447,8 @@ def prompt_claude_md(
 
     if target.exists():
         output.print(
-            "[yellow]CLAUDE.md already exists. Replacing or symlinking will overwrite the current file.[/yellow]"
+            "[yellow]CLAUDE.md already exists. Replacing or symlinking will "
+            "overwrite the current file.[/yellow]"
         )
         choice = q.select(
             "CLAUDE.md setup",
@@ -516,7 +518,8 @@ def prompt_stubs(project_dir: Path, console: Any | None = None) -> list[str]:
     ]
     if existing:
         output.print(
-            f"[dim]Prompt stubs already exist and will be skipped: {', '.join(existing)}[/dim]"
+            f"[dim]Prompt stubs already exist and will be skipped: "
+            f"{', '.join(existing)}[/dim]"
         )
 
     available = [role for role in PROMPT_STUB_ROLES if role not in existing]
@@ -654,7 +657,8 @@ def run_init(defaults_mode: bool = False) -> int:
             )
         if not detected_providers:
             raise SystemExit(
-                "No supported provider CLI detected. Install one of: claude, codex, gemini, opencode."
+                "No supported provider CLI detected. "
+                "Install one of: claude, codex, gemini, opencode."
             )
         output.print(_rule("Role Configuration"))
         role_overrides = prompt_role_config(detected_providers, defaults_config)

@@ -9,17 +9,17 @@ from unittest.mock import patch
 
 from agentmux.integrations.completion import CompletionService
 from agentmux.integrations.git_manager import GitBranchManager
+from agentmux.sessions.state_store import create_feature_files, load_state
 from agentmux.shared.models import (
     AgentConfig,
     CompletionSettings,
     GitHubConfig,
     WorkflowSettings,
 )
+from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import CompletingHandler
 from agentmux.workflow.prompts import build_confirmation_prompt, build_reviewer_prompt
-from agentmux.sessions.state_store import create_feature_files, load_state
-from agentmux.workflow.transitions import EXIT_SUCCESS, PipelineContext
-from agentmux.workflow.event_router import WorkflowEvent
+from agentmux.workflow.transitions import PipelineContext
 
 
 class _FakeRuntime:
@@ -99,7 +99,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
             self.assertIn("complete approval flow", commit_message)
             self.assertIn("#54", commit_message)
 
-    def test_completion_service_resolve_commit_message_prefers_payload_and_falls_back_to_draft(
+    def test_completion_service_resolve_commit_message_prefers_payload(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -220,7 +220,11 @@ class CompletionCommitFlowTests(unittest.TestCase):
                     return_value=subprocess.CompletedProcess(
                         args=["git", "status", "--porcelain"],
                         returncode=0,
-                        stdout=" M agentmux/phases.py\n?? tests/skip.py\nR  old.py -> renamed.py\n",
+                        stdout=(
+                            " M agentmux/phases.py\n"
+                            "?? tests/skip.py\n"
+                            "R  old.py -> renamed.py\n"
+                        ),
                         stderr="",
                     ),
                 ),
@@ -228,7 +232,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                     CompletionService,
                     "draft_commit_message",
                     return_value="feat: drafted commit",
-                ) as draft_mock,
+                ),
                 patch.object(
                     GitBranchManager,
                     "commit_on_branch",

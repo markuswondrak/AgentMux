@@ -7,17 +7,17 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from agentmux.workflow.event_router import PhaseHandler, WorkflowEvent
+from agentmux.agent_labels import role_display_label
+from agentmux.integrations.completion import CompletionService
+from agentmux.sessions.state_store import feature_slug_from_dir
+from agentmux.shared.models import ProjectPaths
+from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.phase_helpers import (
     apply_role_preferences,
     filter_file_created_event,
     send_to_role,
 )
 from agentmux.workflow.prompts import build_confirmation_prompt, write_prompt_file
-from agentmux.agent_labels import role_display_label
-from agentmux.integrations.completion import CompletionService
-from agentmux.sessions.state_store import feature_slug_from_dir
-from agentmux.shared.models import ProjectPaths
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
@@ -59,7 +59,7 @@ def _parse_changed_paths(status_output: str) -> list[str]:
 class CompletingHandler:
     """Event-driven handler for completing phase."""
 
-    def enter(self, state: dict, ctx: "PipelineContext") -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering completing phase.
 
         Sends confirmation prompt or auto-approves if configured.
@@ -97,7 +97,7 @@ class CompletingHandler:
         self,
         event: WorkflowEvent,
         state: dict,
-        ctx: "PipelineContext",
+        ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for completing phase."""
         path = filter_file_created_event(event)
@@ -117,7 +117,7 @@ class CompletingHandler:
     def _handle_approval(
         self,
         state: dict,
-        ctx: "PipelineContext",
+        ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle approval received."""
         approval_path = ctx.files.completion_dir / "approval.json"
@@ -197,7 +197,8 @@ class CompletingHandler:
                     print("PR creation failed (commit preserved).")
         else:
             print(
-                "Completion approved, but commit step failed or was skipped. Feature directory retained."
+                "Completion approved, but commit step failed or was skipped. "
+                "Feature directory retained."
             )
 
         return {"__exit__": 0, "cleanup_feature_dir": result.should_cleanup}, None
@@ -205,7 +206,7 @@ class CompletingHandler:
     def _handle_changes_requested(
         self,
         state: dict,
-        ctx: "PipelineContext",
+        ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle changes requested."""
         ctx.runtime.deactivate_many(("reviewer", "coder", "designer"))

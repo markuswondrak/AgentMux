@@ -1,13 +1,13 @@
 """Phase handlers for the event-driven workflow router."""
 
-from .product_management import ProductManagementHandler
-from .planning import PlanningHandler
-from .designing import DesigningHandler
-from .implementing import ImplementingHandler
-from .reviewing import ReviewingHandler
-from .fixing import FixingHandler
 from .completing import CompletingHandler
+from .designing import DesigningHandler
 from .failed import FailedHandler
+from .fixing import FixingHandler
+from .implementing import ImplementingHandler
+from .planning import PlanningHandler
+from .product_management import ProductManagementHandler
+from .reviewing import ReviewingHandler
 
 PHASE_HANDLERS = {
     "product_management": ProductManagementHandler(),

@@ -113,9 +113,13 @@ def role_display_label(
     if role == "designer":
         return format_agent_label(role, design_subject(feature_dir))
     if role == "coder":
-        return format_agent_label(role, _coder_detail(feature_dir, current_state, task_id))
+        return format_agent_label(
+            role, _coder_detail(feature_dir, current_state, task_id)
+        )
     if role == "reviewer":
-        return format_agent_label(role, f"iteration {_review_iteration(current_state) + 1}")
+        return format_agent_label(
+            role, f"iteration {_review_iteration(current_state) + 1}"
+        )
     if role in BATCH_AGENT_ROLES and task_id is not None:
         return format_agent_label(role, str(task_id))
     if task_id is not None:

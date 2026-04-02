@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from agentmux.workflow.event_router import PhaseHandler, WorkflowEvent
+from agentmux.agent_labels import role_display_label
+from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.phase_helpers import (
     filter_file_created_event,
     reset_markers,
     send_to_role,
 )
 from agentmux.workflow.prompts import build_fix_prompt, write_prompt_file
-from agentmux.agent_labels import role_display_label
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 class FixingHandler:
     """Event-driven handler for fixing phase."""
 
-    def enter(self, state: dict, ctx: "PipelineContext") -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering fixing phase.
 
         Sends fix prompt to coder.
@@ -50,7 +50,7 @@ class FixingHandler:
         self,
         event: WorkflowEvent,
         state: dict,
-        ctx: "PipelineContext",
+        ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for fixing phase."""
         path = filter_file_created_event(event)

@@ -6,7 +6,6 @@ from pathlib import Path
 from ..runtime import AgentRuntime
 from ..shared.models import AgentConfig, GitHubConfig, RuntimeFiles, WorkflowSettings
 
-
 EXIT_SUCCESS = "EXIT_SUCCESS"
 EXIT_FAILURE = "EXIT_FAILURE"
 

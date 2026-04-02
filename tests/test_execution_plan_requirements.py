@@ -17,7 +17,9 @@ class ExecutionPlanRequirementsTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "required"):
                 load_execution_plan(planning_dir)
 
-    def test_load_execution_plan_accepts_valid_structure_and_existing_plan_files(self) -> None:
+    def test_load_execution_plan_accepts_valid_structure_and_existing_plan_files(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             planning_dir = Path(td) / "02_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
@@ -63,7 +65,9 @@ class ExecutionPlanRequirementsTests(unittest.TestCase):
                 json.dumps(
                     {
                         "version": 1,
-                        "groups": [{"group_id": "g1", "mode": "serial", "plans": ["plan_1.md"]}],
+                        "groups": [
+                            {"group_id": "g1", "mode": "serial", "plans": ["plan_1.md"]}
+                        ],
                     }
                 ),
                 encoding="utf-8",

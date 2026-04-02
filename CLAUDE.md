@@ -57,7 +57,28 @@ The `agentmux init` command scaffolds a new project with configuration, setup fi
 Test command:
 - `python -m pytest tests`
 
-There are no lint commands in this repository.
+## Linting and Formatting
+
+This project uses [Ruff](https://docs.astral.sh/ruff/) for Python linting and formatting.
+
+```bash
+# Check for lint issues
+ruff check agentmux tests
+
+# Auto-fix lint issues
+ruff check --fix agentmux tests
+
+# Check formatting without changes
+ruff format --check agentmux tests
+
+# Format code in place
+ruff format agentmux tests
+
+# Run all pre-commit hooks manually
+pre-commit run --all-files
+```
+
+Pre-commit hooks automatically run `ruff-check --fix` and `ruff-format` on every commit.
 
 Default config resolution is layered:
 - built-in defaults from `agentmux/configuration/defaults/config.yaml` (v2 schema)

@@ -29,7 +29,7 @@ from agentmux.workflow.handlers import (
 )
 
 if TYPE_CHECKING:
-    from agentmux.workflow.transitions import PipelineContext
+    pass
 
 
 @pytest.fixture
@@ -243,7 +243,7 @@ class TestPlanningHandler:
             mock_write.return_value = Path("/mock/prompt.md")
             mock_build.return_value = "architect prompt"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once_with(
@@ -273,7 +273,7 @@ class TestPlanningHandler:
             mock_write.return_value = Path("/mock/prompt.md")
             mock_build.return_value = "change prompt"
 
-            updates = handler.enter(state, mock_ctx)
+            handler.enter(state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once_with(
@@ -390,7 +390,7 @@ class TestDesigningHandler:
             mock_build.return_value = "designer prompt"
             mock_label.return_value = "[designer] design"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once_with(
@@ -567,7 +567,7 @@ class TestReviewingHandler:
             mock_build.return_value = "reviewer prompt"
             mock_label.return_value = "[reviewer] iteration 1"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files, is_review=True)
             mock_send.assert_called_once()
@@ -643,7 +643,7 @@ class TestFixingHandler:
             mock_build.return_value = "fix prompt"
             mock_label.return_value = "[coder] fix 1"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once_with(
@@ -692,7 +692,7 @@ class TestCompletingHandler:
             mock_build.return_value = "confirmation prompt"
             mock_label.return_value = "[reviewer] iteration 1"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once()
@@ -704,7 +704,7 @@ class TestCompletingHandler:
         handler = CompletingHandler()
         mock_ctx.workflow_settings.completion.skip_final_approval = True
 
-        updates = handler.enter(empty_state, mock_ctx)
+        handler.enter(empty_state, mock_ctx)
 
         # Should create approval.json with approve action
         approval_path = mock_ctx.files.completion_dir / "approval.json"
@@ -833,7 +833,6 @@ class TestPhaseHandlersRegistry:
 
     def test_all_handlers_implement_protocol(self) -> None:
         """Test that all handlers implement the PhaseHandler protocol."""
-        from agentmux.workflow.event_router import PhaseHandler
 
         for name, handler in PHASE_HANDLERS.items():
             assert hasattr(handler, "enter"), f"{name} missing enter()"
@@ -903,16 +902,16 @@ class TestPhaseHelpers:
 
     def test_filter_file_created_event_returns_path(self) -> None:
         """Test that file.created events return their path."""
-        from agentmux.workflow.phase_helpers import filter_file_created_event
         from agentmux.workflow.event_router import WorkflowEvent
+        from agentmux.workflow.phase_helpers import filter_file_created_event
 
         event = WorkflowEvent(kind="file.created", path="some/path.txt")
         assert filter_file_created_event(event) == "some/path.txt"
 
     def test_filter_file_created_event_returns_none_for_other_events(self) -> None:
         """Test that non-file.created events return None."""
-        from agentmux.workflow.phase_helpers import filter_file_created_event
         from agentmux.workflow.event_router import WorkflowEvent
+        from agentmux.workflow.phase_helpers import filter_file_created_event
 
         event = WorkflowEvent(kind="interruption.pane_exited", payload={"pane": "test"})
         assert filter_file_created_event(event) is None

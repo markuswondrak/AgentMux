@@ -6,16 +6,18 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
+from agentmux.runtime.tmux_control import (
+    MONITOR_MAX_WIDTH,
+    MONITOR_MIN_WIDTH,
+    ContentZone,
+    _enforce_monitor_min_width,
+    create_agent_pane,
+    send_prompt,
+    set_pane_identity,
+    tmux_new_session,
+    tmux_pane_exists,
+)
 from agentmux.shared.models import AgentConfig
-from agentmux.runtime.tmux_control import ContentZone
-from agentmux.runtime.tmux_control import MONITOR_MAX_WIDTH
-from agentmux.runtime.tmux_control import MONITOR_MIN_WIDTH
-from agentmux.runtime.tmux_control import _enforce_monitor_min_width
-from agentmux.runtime.tmux_control import create_agent_pane
-from agentmux.runtime.tmux_control import send_prompt
-from agentmux.runtime.tmux_control import set_pane_identity
-from agentmux.runtime.tmux_control import tmux_pane_exists
-from agentmux.runtime.tmux_control import tmux_new_session
 
 
 class TmuxPromptReferencesTests(unittest.TestCase):
@@ -225,8 +227,9 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             patch("agentmux.runtime.tmux_control.tmux_pane_exists", return_value=True),
             patch(
                 "agentmux.runtime.tmux_control._pane_in_window",
-                side_effect=lambda pane_id, window_name: window_name == "pipeline"
-                and pane_id != "%9",
+                side_effect=lambda pane_id, window_name: (
+                    window_name == "pipeline" and pane_id != "%9"
+                ),
             ),
             patch(
                 "agentmux.runtime.tmux_control.run_command",
@@ -270,8 +273,9 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             patch("agentmux.runtime.tmux_control.tmux_pane_exists", return_value=True),
             patch(
                 "agentmux.runtime.tmux_control._pane_in_window",
-                side_effect=lambda pane_id, window_name: window_name == "pipeline"
-                and pane_id != "%9",
+                side_effect=lambda pane_id, window_name: (
+                    window_name == "pipeline" and pane_id != "%9"
+                ),
             ),
             patch(
                 "agentmux.runtime.tmux_control.run_command",

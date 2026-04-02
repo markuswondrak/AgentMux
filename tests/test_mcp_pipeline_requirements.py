@@ -9,21 +9,21 @@ from unittest.mock import patch
 import yaml
 
 import agentmux.pipeline.application as application
-from agentmux.workflow.interruptions import InterruptionService
+from agentmux.runtime.tmux_control import build_agent_command
+from agentmux.sessions.state_store import create_feature_files
 from agentmux.shared.models import (
     AgentConfig,
     CompletionSettings,
     GitHubConfig,
     WorkflowSettings,
 )
+from agentmux.workflow.interruptions import InterruptionService
 from agentmux.workflow.orchestrator import PipelineOrchestrator
 from agentmux.workflow.prompts import (
     build_architect_prompt,
     build_product_manager_prompt,
 )
-from agentmux.sessions.state_store import create_feature_files
-from agentmux.runtime.tmux_control import build_agent_command
-from agentmux.workflow.transitions import EXIT_SUCCESS, PipelineContext
+from agentmux.workflow.transitions import PipelineContext
 
 
 class _FakeEventBus:
@@ -63,9 +63,9 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 "agentmux.pipeline.application.ensure_watchdog_available",
                 return_value=None,
             ),
+            self.assertRaises(SystemExit) as exc,
         ):
-            with self.assertRaises(SystemExit) as exc:
-                app.ensure_dependencies()
+            app.ensure_dependencies()
 
         self.assertIn("Missing dependency: mcp.", str(exc.exception))
 
@@ -286,7 +286,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             self.assertTrue(settings.completion.skip_final_approval)
             self.assertEqual(False, orchestrate_mock.call_args.args[1])
 
-    def test_orchestrate_mode_uses_default_workflow_settings_when_loaded_object_is_invalid(
+    def test_orchestrate_mode_uses_default_workflow_settings_when_loaded_is_invalid(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -356,7 +356,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
         self.assertIn("mcp__agentmux-research__*", role_args["architect"][-1])
         self.assertIn("mcp__agentmux-research__*", role_args["product-manager"][-1])
 
-    def test_architect_and_product_manager_prompts_reference_mcp_tools_without_legacy_fallback(
+    def test_architect_and_product_manager_prompts_reference_mcp_tools(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:

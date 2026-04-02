@@ -8,12 +8,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from agentmux.runtime.event_bus import EventBus, build_wake_listener
 import agentmux.runtime.file_events as session_events
+from agentmux.runtime.event_bus import EventBus, build_wake_listener
 
 
 class _FakeObserver:
-    last_instance: "_FakeObserver | None" = None
+    last_instance: _FakeObserver | None = None
 
     def __init__(self) -> None:
         self.schedule_calls: list[tuple[object, str, bool]] = []
@@ -70,13 +70,21 @@ class SessionFileLoggingRequirementsTests(unittest.TestCase):
             )
             bus.register(logger.handle_event)
 
-            session_events.publish_file_event(bus, session_events.FILE_EVENT_CREATED, "context.md")
-            session_events.publish_file_event(bus, session_events.FILE_EVENT_ACTIVITY, "context.md")
-            session_events.publish_file_event(bus, session_events.FILE_EVENT_CREATED, "context.md")
+            session_events.publish_file_event(
+                bus, session_events.FILE_EVENT_CREATED, "context.md"
+            )
+            session_events.publish_file_event(
+                bus, session_events.FILE_EVENT_ACTIVITY, "context.md"
+            )
+            session_events.publish_file_event(
+                bus, session_events.FILE_EVENT_CREATED, "context.md"
+            )
 
             self.assertEqual(
                 ["2026-03-25 18:50:07  context.md"],
-                (feature_dir / "created_files.log").read_text(encoding="utf-8").splitlines(),
+                (feature_dir / "created_files.log")
+                .read_text(encoding="utf-8")
+                .splitlines(),
             )
 
     def test_moved_file_is_logged_at_destination_path(self) -> None:
@@ -101,7 +109,9 @@ class SessionFileLoggingRequirementsTests(unittest.TestCase):
 
             self.assertEqual(
                 ["2026-03-25 18:50:07  04_design/design.md"],
-                (feature_dir / "created_files.log").read_text(encoding="utf-8").splitlines(),
+                (feature_dir / "created_files.log")
+                .read_text(encoding="utf-8")
+                .splitlines(),
             )
 
     def test_seed_existing_files_logs_in_deterministic_order_once(self) -> None:
@@ -126,7 +136,9 @@ class SessionFileLoggingRequirementsTests(unittest.TestCase):
                     "2026-03-25 18:50:07  a/a.txt",
                     "2026-03-25 18:50:07  b.txt",
                 ],
-                (feature_dir / "created_files.log").read_text(encoding="utf-8").splitlines(),
+                (feature_dir / "created_files.log")
+                .read_text(encoding="utf-8")
+                .splitlines(),
             )
 
     def test_file_event_source_schedules_feature_directory_recursively(self) -> None:

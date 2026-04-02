@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import re
 import tempfile
 import unittest
@@ -12,7 +11,6 @@ import yaml
 
 import agentmux.pipeline as pipeline
 from agentmux.configuration import load_builtin_catalog
-from agentmux.terminal_ui.screens import render_logo
 from agentmux.pipeline.init_command import (
     detect_clis,
     generate_config,
@@ -21,6 +19,7 @@ from agentmux.pipeline.init_command import (
     run_init,
     validate_config,
 )
+from agentmux.terminal_ui.screens import render_logo
 
 
 class _FakePrompt:
@@ -220,7 +219,10 @@ class InitRequirementsTests(unittest.TestCase):
             config_path = project_dir / ".agentmux" / "config.yaml"
             config_path.parent.mkdir(parents=True, exist_ok=True)
             config_path.write_text(
-                "version: 2\nroles:\n  coder:\n    provider: wrong\n    model: wrong-model\n",
+                (
+                    "version: 2\nroles:\n  coder:\n"
+                    "    provider: wrong\n    model: wrong-model\n"
+                ),
                 encoding="utf-8",
             )
             claude_path = project_dir / "CLAUDE.md"

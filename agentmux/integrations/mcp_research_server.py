@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Any
 
 from ..shared.models import SESSION_DIR_NAMES
 
@@ -19,6 +18,7 @@ mcp = FastMCP("agentmux-research") if FastMCP is not None else None
 
 def _tool():
     if mcp is None:
+
         def decorate(func):
             return func
 
@@ -31,10 +31,7 @@ def _feature_dir(feature_dir: str | None = None) -> Path:
     if not raw:
         raise RuntimeError("feature_dir is required.")
     path = Path(raw).expanduser()
-    if not path.is_absolute():
-        path = (Path.cwd() / path).resolve()
-    else:
-        path = path.resolve()
+    path = (Path.cwd() / path).resolve() if not path.is_absolute() else path.resolve()
     if not path.exists():
         raise RuntimeError(f"feature_dir does not exist: {path}")
     return path
@@ -43,12 +40,16 @@ def _feature_dir(feature_dir: str | None = None) -> Path:
 def _validate_topic(topic: str) -> str:
     normalized = topic.strip()
     if not normalized or not TOPIC_PATTERN.fullmatch(normalized):
-        raise ValueError("topic must be a non-empty slug (lowercase alphanumeric and hyphens).")
+        raise ValueError(
+            "topic must be a non-empty slug (lowercase alphanumeric and hyphens)."
+        )
     return normalized
 
 
 def _validate_questions(questions: list[str]) -> list[str]:
-    cleaned = [question.strip() for question in questions if question and question.strip()]
+    cleaned = [
+        question.strip() for question in questions if question and question.strip()
+    ]
     if not cleaned:
         raise ValueError("questions must contain at least one non-empty question.")
     return cleaned
@@ -64,11 +65,19 @@ def _normalize_scope_hints(scope_hints: str | list[str] | None) -> list[str] | N
     return cleaned or None
 
 
-def _research_dir(topic: str, research_type: str, feature_dir: str | None = None) -> Path:
-    return _feature_dir(feature_dir) / SESSION_DIR_NAMES["research"] / f"{research_type}-{topic}"
+def _research_dir(
+    topic: str, research_type: str, feature_dir: str | None = None
+) -> Path:
+    return (
+        _feature_dir(feature_dir)
+        / SESSION_DIR_NAMES["research"]
+        / f"{research_type}-{topic}"
+    )
 
 
-def _request_content(context: str, questions: list[str], scope_hints: list[str] | None) -> str:
+def _request_content(
+    context: str, questions: list[str], scope_hints: list[str] | None
+) -> str:
     lines = [
         "## Context",
         context.strip(),
@@ -143,5 +152,8 @@ def agentmux_research_dispatch_web(
 
 if __name__ == "__main__":
     if mcp is None:
-        raise SystemExit("Missing dependency: mcp. Install with `python3 -m pip install -r requirements.txt`.")
+        raise SystemExit(
+            "Missing dependency: mcp. "
+            "Install with `python3 -m pip install -r requirements.txt`."
+        )
     mcp.run()

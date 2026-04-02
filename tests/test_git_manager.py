@@ -2,9 +2,6 @@
 
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 from agentmux.integrations.git_manager import BranchState, GitBranchManager
 

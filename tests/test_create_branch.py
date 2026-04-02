@@ -115,7 +115,8 @@ class CreateBranchTests(unittest.TestCase):
                         stderr="",
                     ),
                     # Second call: git show-ref --verify (branch doesn't exist)
-                    # Note: check=False, so it returns CompletedProcess with returncode=1
+                    # Note: check=False, so it returns CompletedProcess
+                    # with returncode=1
                     subprocess.CompletedProcess(
                         args=[
                             "git",

@@ -16,7 +16,9 @@ class SessionIncludeTests(unittest.TestCase):
             feature_dir.mkdir(parents=True, exist_ok=True)
             (feature_dir / "context.md").write_text("ctx content\n", encoding="utf-8")
 
-            rendered = prompts_module._expand_session_includes("Header\n[[include:context.md]]\n", feature_dir)
+            rendered = prompts_module._expand_session_includes(
+                "Header\n[[include:context.md]]\n", feature_dir
+            )
 
             self.assertIn("ctx content", rendered)
             self.assertNotIn("[[include:context.md]]", rendered)
@@ -27,14 +29,20 @@ class SessionIncludeTests(unittest.TestCase):
             feature_dir.mkdir(parents=True, exist_ok=True)
 
             with self.assertRaises(FileNotFoundError):
-                prompts_module._expand_session_includes("[[include:missing.md]]", feature_dir)
+                prompts_module._expand_session_includes(
+                    "[[include:missing.md]]", feature_dir
+                )
 
     def test_optional_include_resolves_when_present(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
             feature_dir.mkdir(parents=True, exist_ok=True)
-            (feature_dir / "04_design" / "design.md").parent.mkdir(parents=True, exist_ok=True)
-            (feature_dir / "04_design" / "design.md").write_text("design details", encoding="utf-8")
+            (feature_dir / "04_design" / "design.md").parent.mkdir(
+                parents=True, exist_ok=True
+            )
+            (feature_dir / "04_design" / "design.md").write_text(
+                "design details", encoding="utf-8"
+            )
 
             rendered = prompts_module._expand_session_includes(
                 "A\n[[include-optional:04_design/design.md]]\nB",
@@ -61,10 +69,14 @@ class SessionIncludeTests(unittest.TestCase):
             feature_dir = Path(td) / "feature"
             feature_dir.mkdir(parents=True, exist_ok=True)
             (feature_dir / "02_planning").mkdir(parents=True, exist_ok=True)
-            (feature_dir / "02_planning" / "plan_1.md").write_text("# Plan 1\n", encoding="utf-8")
+            (feature_dir / "02_planning" / "plan_1.md").write_text(
+                "# Plan 1\n", encoding="utf-8"
+            )
 
             template = "[[include:[[placeholder:plan_file]]]]"
-            rendered = prompts_module._render_template(template, {"plan_file": "02_planning/plan_1.md"})
+            rendered = prompts_module._render_template(
+                template, {"plan_file": "02_planning/plan_1.md"}
+            )
             expanded = prompts_module._expand_session_includes(rendered, feature_dir)
 
             self.assertEqual("# Plan 1\n", expanded)
@@ -90,12 +102,19 @@ class SessionIncludeTests(unittest.TestCase):
             project_dir = tmp_path / "project"
             feature_dir = tmp_path / "feature"
             project_dir.mkdir()
-            files = create_feature_files(project_dir, feature_dir, "include e2e", "session-x")
+            files = create_feature_files(
+                project_dir, feature_dir, "include e2e", "session-x"
+            )
 
             architect_template = prompts_dir / "agents" / "architect.md"
             architect_template.parent.mkdir(parents=True, exist_ok=True)
             architect_template.write_text(
-                "Session [[placeholder:feature_dir]]\n[[include:context.md]]\n[[placeholder:project_instructions]]\nConstraints:\n",
+                (
+                    "Session [[placeholder:feature_dir]]\n"
+                    "[[include:context.md]]\n"
+                    "[[placeholder:project_instructions]]\n"
+                    "Constraints:\n"
+                ),
                 encoding="utf-8",
             )
 

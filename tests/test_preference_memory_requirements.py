@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agentmux.shared.models import PreferenceProposal
 from agentmux.sessions.state_store import create_feature_files
+from agentmux.shared.models import PreferenceProposal
 from agentmux.workflow.preference_memory import (
     apply_preference_proposal,
     load_preference_proposal,
@@ -21,7 +21,10 @@ class PreferenceMemoryRequirementsTests(unittest.TestCase):
             "source_role": "reviewer",
             "approved": [
                 {"target_role": "coder", "bullet": "- Prefer focused test cases"},
-                {"target_role": "architect", "bullet": "Prefer explicit tradeoff notes"},
+                {
+                    "target_role": "architect",
+                    "bullet": "Prefer explicit tradeoff notes",
+                },
             ],
         }
 
@@ -48,11 +51,15 @@ class PreferenceMemoryRequirementsTests(unittest.TestCase):
             PreferenceProposal.from_dict(
                 {
                     "source_role": "unknown",
-                    "approved": [{"target_role": "coder", "bullet": "- Keep tests small"}],
+                    "approved": [
+                        {"target_role": "coder", "bullet": "- Keep tests small"}
+                    ],
                 }
             )
 
-    def test_load_preference_proposal_parses_json_file_and_missing_is_none(self) -> None:
+    def test_load_preference_proposal_parses_json_file_and_missing_is_none(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             proposal_path = Path(td) / "proposal.json"
 
@@ -62,7 +69,12 @@ class PreferenceMemoryRequirementsTests(unittest.TestCase):
                 json.dumps(
                     {
                         "source_role": "architect",
-                        "approved": [{"target_role": "reviewer", "bullet": "- Call out regressions first"}],
+                        "approved": [
+                            {
+                                "target_role": "reviewer",
+                                "bullet": "- Call out regressions first",
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",
@@ -86,11 +98,22 @@ class PreferenceMemoryRequirementsTests(unittest.TestCase):
             project_dir = tmp / "project"
             feature_dir = tmp / "feature"
             project_dir.mkdir()
-            files = create_feature_files(project_dir, feature_dir, "preferences", "session-x")
+            files = create_feature_files(
+                project_dir, feature_dir, "preferences", "session-x"
+            )
 
-            self.assertEqual(files.pm_preference_proposal, proposal_artifact_for_source(files, "product-manager"))
-            self.assertEqual(files.architect_preference_proposal, proposal_artifact_for_source(files, "architect"))
-            self.assertEqual(files.reviewer_preference_proposal, proposal_artifact_for_source(files, "reviewer"))
+            self.assertEqual(
+                files.pm_preference_proposal,
+                proposal_artifact_for_source(files, "product-manager"),
+            )
+            self.assertEqual(
+                files.architect_preference_proposal,
+                proposal_artifact_for_source(files, "architect"),
+            )
+            self.assertEqual(
+                files.reviewer_preference_proposal,
+                proposal_artifact_for_source(files, "reviewer"),
+            )
 
     def test_apply_preference_proposal_appends_only_missing_bullets(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -112,9 +135,18 @@ class PreferenceMemoryRequirementsTests(unittest.TestCase):
                     "source_role": "reviewer",
                     "approved": [
                         {"target_role": "coder", "bullet": "Prefer focused test cases"},
-                        {"target_role": "coder", "bullet": " -  keep function scope tight "},
-                        {"target_role": "coder", "bullet": "* Keep   function scope tight"},
-                        {"target_role": "architect", "bullet": "- Keep plans executable"},
+                        {
+                            "target_role": "coder",
+                            "bullet": " -  keep function scope tight ",
+                        },
+                        {
+                            "target_role": "coder",
+                            "bullet": "* Keep   function scope tight",
+                        },
+                        {
+                            "target_role": "architect",
+                            "bullet": "- Keep plans executable",
+                        },
                     ],
                 }
             )
@@ -125,27 +157,45 @@ class PreferenceMemoryRequirementsTests(unittest.TestCase):
             self.assertEqual(["- Keep plans executable"], applied["architect"])
 
             coder_text = coder_prompt.read_text(encoding="utf-8")
-            self.assertIn("<!-- Project-specific instructions for the coder role. -->", coder_text)
+            self.assertIn(
+                "<!-- Project-specific instructions for the coder role. -->", coder_text
+            )
             self.assertIn("- Prefer focused test cases", coder_text)
             self.assertIn("- keep function scope tight", coder_text)
 
-            architect_prompt = project_dir / ".agentmux" / "prompts" / "agents" / "architect.md"
+            architect_prompt = (
+                project_dir / ".agentmux" / "prompts" / "agents" / "architect.md"
+            )
             self.assertTrue(architect_prompt.exists())
-            self.assertIn("- Keep plans executable", architect_prompt.read_text(encoding="utf-8"))
+            self.assertIn(
+                "- Keep plans executable", architect_prompt.read_text(encoding="utf-8")
+            )
 
-    def test_apply_preference_proposal_is_noop_when_everything_already_exists(self) -> None:
+    def test_apply_preference_proposal_is_noop_when_everything_already_exists(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            reviewer_prompt = project_dir / ".agentmux" / "prompts" / "agents" / "reviewer.md"
+            reviewer_prompt = (
+                project_dir / ".agentmux" / "prompts" / "agents" / "reviewer.md"
+            )
             reviewer_prompt.parent.mkdir(parents=True, exist_ok=True)
-            reviewer_prompt.write_text("-   call out  regressions first\n", encoding="utf-8")
+            reviewer_prompt.write_text(
+                "-   call out  regressions first\n", encoding="utf-8"
+            )
             before = reviewer_prompt.read_text(encoding="utf-8")
             proposal = PreferenceProposal.from_dict(
                 {
                     "source_role": "product-manager",
                     "approved": [
-                        {"target_role": "reviewer", "bullet": "- Call out regressions first"},
-                        {"target_role": "reviewer", "bullet": "* call out regressions first"},
+                        {
+                            "target_role": "reviewer",
+                            "bullet": "- Call out regressions first",
+                        },
+                        {
+                            "target_role": "reviewer",
+                            "bullet": "* call out regressions first",
+                        },
                     ],
                 }
             )

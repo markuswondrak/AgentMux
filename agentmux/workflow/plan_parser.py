@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from .execution_plan import load_execution_plan
+
 
 def coder_label_for_subplan(planning_dir: Path, subplan_index: int | str) -> str:
     try:

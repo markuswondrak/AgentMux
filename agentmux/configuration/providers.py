@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import load_builtin_catalog
 from ..shared.models import AgentConfig
+from . import load_builtin_catalog
 
 
 @dataclass(frozen=True)

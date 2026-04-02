@@ -2,14 +2,19 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from agentmux.shared.models import (
+    AgentConfig,
+    GitHubConfig,
+    RuntimeFiles,
+    WorkflowSettings,
+)
 from agentmux.workflow.event_router import (
-    WorkflowEvent,
     PhaseHandler,
+    WorkflowEvent,
     WorkflowEventRouter,
     extract_research_topic,
     extract_subplan_index,
@@ -17,12 +22,6 @@ from agentmux.workflow.event_router import (
     path_matches_any,
 )
 from agentmux.workflow.transitions import PipelineContext
-from agentmux.shared.models import (
-    AgentConfig,
-    GitHubConfig,
-    RuntimeFiles,
-    WorkflowSettings,
-)
 
 
 class TestWorkflowEvent:
@@ -231,7 +230,7 @@ class TestWorkflowEventRouter:
         state = {"phase": "planning"}
         event = WorkflowEvent(kind="file.created", path="planning/plan.md")
 
-        with patch("agentmux.sessions.state_store.write_state") as mock_write:
+        with patch("agentmux.sessions.state_store.write_state"):
             router.handle(event, state, mock_context)
 
         # Should have transitioned to implementing
@@ -460,13 +459,10 @@ class TestIntegration:
 
         # Verify workflow sequence
         # Note: When transitioning, the same event is passed to the new phase's handler
-        assert (
-            workflow_log
-            == [
-                "enter:planning",
-                "handle:planning:planning/plan.md",
-                "enter:implementing",
-                "handle:implementing:planning/plan.md",  # Same event passed during transition
-                "handle:implementing:implementation/done_1",
-            ]
-        )
+        assert workflow_log == [
+            "enter:planning",
+            "handle:planning:planning/plan.md",
+            "enter:implementing",
+            "handle:implementing:planning/plan.md",  # Same event passed
+            "handle:implementing:implementation/done_1",
+        ]

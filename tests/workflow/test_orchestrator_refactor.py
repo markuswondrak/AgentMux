@@ -7,13 +7,12 @@ import threading
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from agentmux.runtime.event_bus import SessionEvent
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import PHASE_HANDLERS
-from agentmux.workflow.interruptions import InterruptionService
 from agentmux.workflow.orchestrator import PipelineOrchestrator
 from agentmux.workflow.transitions import PipelineContext
 

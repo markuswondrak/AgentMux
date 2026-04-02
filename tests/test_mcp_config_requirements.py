@@ -7,14 +7,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from agentmux.integrations.mcp import (
     McpServerSpec,
+    _create_runtime_mcp_config,
     cleanup_mcp,
     ensure_mcp_config,
     setup_mcp,
-    _create_runtime_mcp_config,
 )
 from agentmux.shared.models import AgentConfig
 
@@ -49,7 +49,9 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 ),
             }
 
-            env_without_pythonpath = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+            env_without_pythonpath = {
+                k: v for k, v in os.environ.items() if k != "PYTHONPATH"
+            }
             with patch.dict(os.environ, env_without_pythonpath, clear=True):
                 updated = setup_mcp(
                     agents,

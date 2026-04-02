@@ -4,12 +4,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
+from agentmux.sessions.state_store import create_feature_files, load_state, write_state
+from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig
+from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import PHASE_HANDLERS, ReviewingHandler
 from agentmux.workflow.prompts import build_reviewer_prompt
-from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.workflow.transitions import PipelineContext
-from agentmux.workflow.event_router import WorkflowEvent
 
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 
@@ -160,7 +160,10 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             ctx, state_path = self._make_ctx(tmp_path / "feature")
             ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
             (ctx.files.planning_dir / "plan_meta.json").write_text(
-                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md"]}',
+                (
+                    '{"needs_design": false, "needs_docs": true, '
+                    '"doc_files": ["docs/file-protocol.md"]}'
+                ),
                 encoding="utf-8",
             )
             # Create the review.md file with verdict: pass

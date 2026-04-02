@@ -6,9 +6,11 @@ import textwrap
 import time
 from pathlib import Path
 
-from ..shared.models import RuntimeFiles, SESSION_DIR_NAMES
+from agentmux.terminal_ui.colors import PRIMARY, SECONDARY
+from agentmux.terminal_ui.hyperlinks import OSC8_RE, file_hyperlink
+
+from ..shared.models import SESSION_DIR_NAMES, RuntimeFiles
 from .state_reader import (
-    MonitorLogEntry,
     OPTIONAL_PHASES,
     PIPELINE_STATES,
     format_event,
@@ -19,8 +21,6 @@ from .state_reader import (
     read_monitor_log_entries,
     trim_model,
 )
-from agentmux.terminal_ui.colors import PRIMARY, SECONDARY
-from agentmux.terminal_ui.hyperlinks import OSC8_RE, file_hyperlink
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -143,7 +143,9 @@ def _render_feature_header(width: int, state_path: Path) -> list[str]:
             feature_request, text_width, max_lines=len(MONITOR_HEADER_LOGO)
         )
         rows: list[str] = []
-        for (color, logo_row), feature_line in zip(MONITOR_HEADER_LOGO, feature_lines):
+        for (color, logo_row), feature_line in zip(
+            MONITOR_HEADER_LOGO, feature_lines, strict=False
+        ):
             padded_logo = logo_row + (" " * max(0, logo_width - _vlen(logo_row)))
             logo_text = f"{BOLD}{color}{padded_logo}{RESET}"
             rows.append(
@@ -712,9 +714,9 @@ def _render_agents_section(
         if role == "coder":
             parallel_keys = sorted(
                 [key for key in role_states if key.startswith("coder_")],
-                key=lambda key: int(key.split("_")[1])
-                if key.split("_")[1].isdigit()
-                else 0,
+                key=lambda key: (
+                    int(key.split("_")[1]) if key.split("_")[1].isdigit() else 0
+                ),
             )
             if parallel_keys:
                 for coder_key in parallel_keys:
@@ -763,7 +765,8 @@ def _render_research_section(width: int, state: dict, feature_dir: Path) -> list
             rows.append(f" {GREEN}✓{RESET} {DIM}{type_prefix}·{RESET} {slug}")
         elif pulse_on:
             rows.append(
-                f" {YELLOW}{_spinner_frame()}{RESET} {DIM}{type_prefix}·{RESET} {BOLD}{slug}{RESET}"
+                f" {YELLOW}{_spinner_frame()}{RESET} {DIM}{type_prefix}·{RESET} "
+                f"{BOLD}{slug}{RESET}"
             )
         else:
             rows.append(

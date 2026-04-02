@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 try:
     from watchdog.events import FileSystemEvent, FileSystemEventHandler
@@ -35,7 +36,8 @@ RUNTIME_FILE_NAMES = {
 def ensure_watchdog_available() -> None:
     if Observer is None:
         raise SystemExit(
-            "Missing dependency: watchdog. Install it with `python3 -m pip install -r requirements.txt`."
+            "Missing dependency: watchdog. "
+            "Install it with `python3 -m pip install -r requirements.txt`."
         )
 
 

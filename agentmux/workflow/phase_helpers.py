@@ -55,7 +55,7 @@ def load_plan_meta(planning_dir: Path) -> dict[str, object]:
 # =============================================================================
 
 
-def filter_file_created_event(event: "WorkflowEvent") -> str | None:
+def filter_file_created_event(event: WorkflowEvent) -> str | None:
     """Filter events to only return path for file.created events.
 
     Args:
@@ -79,7 +79,7 @@ def dispatch_research_task(
     role: str,
     topic: str,
     state: dict,
-    ctx: "PipelineContext",
+    ctx: PipelineContext,
 ) -> tuple[dict, str | None]:
     """Dispatch a research task (code-researcher or web-researcher).
 
@@ -142,7 +142,7 @@ def notify_research_complete(
     role: str,
     topic: str,
     state: dict,
-    ctx: "PipelineContext",
+    ctx: PipelineContext,
     notify_target: str,
 ) -> tuple[dict, str | None]:
     """Notify that a research task is complete.
@@ -175,7 +175,8 @@ def notify_research_complete(
     )
     ctx.runtime.notify(
         notify_target,
-        f"{role_name} on '{topic}' is complete. Read {summary_path} and continue from there.",
+        f"{role_name} on '{topic}' is complete. "
+        f"Read {summary_path} and continue from there.",
     )
 
     # Update state
@@ -185,7 +186,7 @@ def notify_research_complete(
     return {tasks_key: tasks}, None
 
 
-def apply_role_preferences(ctx: "PipelineContext", role: str) -> None:
+def apply_role_preferences(ctx: PipelineContext, role: str) -> None:
     """Apply approved preferences for a role if they exist.
 
     Args:

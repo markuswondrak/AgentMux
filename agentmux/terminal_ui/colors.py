@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 # ANSI escape codes — used by monitor/render.py
-PRIMARY = "\033[96m"    # bright cyan
+PRIMARY = "\033[96m"  # bright cyan
 SECONDARY = "\033[36m"  # cyan
 
 # Rich markup color names — for f-string Rich tags in screens.py

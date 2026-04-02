@@ -4,15 +4,15 @@ import json
 import subprocess
 import tempfile
 import unittest
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import agentmux.pipeline.application as application
 from agentmux.runtime.tmux_control import list_agentmux_sessions
-from agentmux.shared.models import GitHubConfig
 from agentmux.sessions import PreparedSession
 from agentmux.sessions.state_store import create_feature_files
+from agentmux.shared.models import GitHubConfig
 from agentmux.terminal_ui.console import ConsoleUI
 
 
@@ -33,7 +33,9 @@ class UniqueSessionNamesTests(unittest.TestCase):
     def test_create_feature_files_persists_session_name_in_state(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
-            feature_dir = project_dir / ".agentmux" / ".sessions" / "20260328-000000-demo"
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260328-000000-demo"
+            )
             files = create_feature_files(
                 project_dir=project_dir,
                 feature_dir=feature_dir,
@@ -50,7 +52,9 @@ class UniqueSessionNamesTests(unittest.TestCase):
             application._derive_session_name(feature_dir),
         )
 
-    def test_run_launcher_does_not_block_non_resume_when_default_session_exists(self) -> None:
+    def test_run_launcher_does_not_block_non_resume_when_default_session_exists(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             app = application.PipelineApplication(project_dir)
@@ -61,19 +65,24 @@ class UniqueSessionNamesTests(unittest.TestCase):
                 prompt="prompt",
                 session_name="legacy-name",
             )
-            prepared = PreparedSession(feature_dir=feature_dir, files=files, product_manager=False)
+            prepared = PreparedSession(
+                feature_dir=feature_dir, files=files, product_manager=False
+            )
             args = SimpleNamespace(resume=None, issue=None)
             loaded = SimpleNamespace(agents={}, session_name="multi-agent-mvp")
             mcp = Mock()
             mcp.prepare_feature_agents.return_value = {}
 
-            with patch.object(app, "_mcp_preparer", return_value=mcp), patch.object(
-                app, "_prepare_session", return_value=prepared
-            ), patch.object(
-                app, "_launch_attached_session", return_value=0
-            ) as launch_mock, patch(
-                "agentmux.pipeline.application.tmux_session_exists",
-                return_value=True,
+            with (
+                patch.object(app, "_mcp_preparer", return_value=mcp),
+                patch.object(app, "_prepare_session", return_value=prepared),
+                patch.object(
+                    app, "_launch_attached_session", return_value=0
+                ) as launch_mock,
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=True,
+                ),
             ):
                 result = app._run_launcher(args, loaded)
 
@@ -84,7 +93,9 @@ class UniqueSessionNamesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             messages: list[str] = []
-            app = application.PipelineApplication(project_dir, ui=ConsoleUI(output_fn=messages.append))
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=messages.append)
+            )
             feature_dir = project_dir / ".agentmux" / ".sessions" / "demo"
             files = create_feature_files(
                 project_dir=project_dir,
@@ -92,19 +103,22 @@ class UniqueSessionNamesTests(unittest.TestCase):
                 prompt="prompt",
                 session_name="legacy-name",
             )
-            prepared = PreparedSession(feature_dir=feature_dir, files=files, product_manager=False)
+            prepared = PreparedSession(
+                feature_dir=feature_dir, files=files, product_manager=False
+            )
             args = SimpleNamespace(resume=None, issue=None)
             loaded = SimpleNamespace(agents={}, session_name="multi-agent-mvp")
             mcp = Mock()
             mcp.prepare_feature_agents.return_value = {}
 
-            with patch.object(app, "_mcp_preparer", return_value=mcp), patch.object(
-                app, "_prepare_session", return_value=prepared
-            ), patch.object(
-                app, "_launch_attached_session", return_value=0
-            ), patch(
-                "agentmux.pipeline.application.list_agentmux_sessions",
-                return_value=["agentmux-existing"],
+            with (
+                patch.object(app, "_mcp_preparer", return_value=mcp),
+                patch.object(app, "_prepare_session", return_value=prepared),
+                patch.object(app, "_launch_attached_session", return_value=0),
+                patch(
+                    "agentmux.pipeline.application.list_agentmux_sessions",
+                    return_value=["agentmux-existing"],
+                ),
             ):
                 result = app._run_launcher(args, loaded)
 
@@ -127,24 +141,31 @@ class UniqueSessionNamesTests(unittest.TestCase):
                 prompt="prompt",
                 session_name="legacy-name",
             )
-            prepared = PreparedSession(feature_dir=feature_dir, files=files, product_manager=False)
+            prepared = PreparedSession(
+                feature_dir=feature_dir, files=files, product_manager=False
+            )
             args = SimpleNamespace(resume=None, issue=None)
             loaded = SimpleNamespace(agents={}, session_name="multi-agent-mvp")
             mcp = Mock()
             mcp.prepare_feature_agents.return_value = {}
 
-            with patch.object(app, "_mcp_preparer", return_value=mcp), patch.object(
-                app, "_prepare_session", return_value=prepared
-            ), patch.object(
-                app, "_launch_attached_session", return_value=0
-            ) as launch_mock, patch(
-                "agentmux.pipeline.application.list_agentmux_sessions",
-                return_value=[],
+            with (
+                patch.object(app, "_mcp_preparer", return_value=mcp),
+                patch.object(app, "_prepare_session", return_value=prepared),
+                patch.object(
+                    app, "_launch_attached_session", return_value=0
+                ) as launch_mock,
+                patch(
+                    "agentmux.pipeline.application.list_agentmux_sessions",
+                    return_value=[],
+                ),
             ):
                 result = app._run_launcher(args, loaded)
 
             self.assertEqual(0, result)
-            self.assertEqual("agentmux-demo", launch_mock.call_args.kwargs.get("session_name"))
+            self.assertEqual(
+                "agentmux-demo", launch_mock.call_args.kwargs.get("session_name")
+            )
 
     def test_background_orchestrator_uses_session_name_from_state(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -167,23 +188,30 @@ class UniqueSessionNamesTests(unittest.TestCase):
             mcp = Mock()
             mcp.prepare_feature_agents.return_value = {}
 
-            with patch.object(app, "_mcp_preparer", return_value=mcp), patch.object(
-                app.runtime_factory,
-                "attach",
-                return_value=object(),
-            ) as attach_mock, patch.object(
-                app.orchestrator,
-                "create_context",
-                return_value=object(),
-            ), patch.object(
-                app.orchestrator,
-                "run",
-                return_value=0,
+            with (
+                patch.object(app, "_mcp_preparer", return_value=mcp),
+                patch.object(
+                    app.runtime_factory,
+                    "attach",
+                    return_value=object(),
+                ) as attach_mock,
+                patch.object(
+                    app.orchestrator,
+                    "create_context",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app.orchestrator,
+                    "run",
+                    return_value=0,
+                ),
             ):
                 result = app._run_background_orchestrator(args, loaded)
 
             self.assertEqual(0, result)
-            self.assertEqual("agentmux-demo", attach_mock.call_args.kwargs.get("session_name"))
+            self.assertEqual(
+                "agentmux-demo", attach_mock.call_args.kwargs.get("session_name")
+            )
 
     def test_background_orchestrator_falls_back_to_loaded_session_name(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -206,23 +234,30 @@ class UniqueSessionNamesTests(unittest.TestCase):
             mcp = Mock()
             mcp.prepare_feature_agents.return_value = {}
 
-            with patch.object(app, "_mcp_preparer", return_value=mcp), patch.object(
-                app.runtime_factory,
-                "attach",
-                return_value=object(),
-            ) as attach_mock, patch.object(
-                app.orchestrator,
-                "create_context",
-                return_value=object(),
-            ), patch.object(
-                app.orchestrator,
-                "run",
-                return_value=0,
+            with (
+                patch.object(app, "_mcp_preparer", return_value=mcp),
+                patch.object(
+                    app.runtime_factory,
+                    "attach",
+                    return_value=object(),
+                ) as attach_mock,
+                patch.object(
+                    app.orchestrator,
+                    "create_context",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app.orchestrator,
+                    "run",
+                    return_value=0,
+                ),
             ):
                 result = app._run_background_orchestrator(args, loaded)
 
             self.assertEqual(0, result)
-            self.assertEqual("multi-agent-mvp", attach_mock.call_args.kwargs.get("session_name"))
+            self.assertEqual(
+                "multi-agent-mvp", attach_mock.call_args.kwargs.get("session_name")
+            )
 
     def test_run_launcher_resume_blocks_when_recovered_session_is_active(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -239,25 +274,33 @@ class UniqueSessionNamesTests(unittest.TestCase):
             state["session_name"] = "agentmux-demo"
             files.state.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
-            prepared = PreparedSession(feature_dir=feature_dir, files=files, product_manager=False)
+            prepared = PreparedSession(
+                feature_dir=feature_dir, files=files, product_manager=False
+            )
             args = SimpleNamespace(resume="demo", issue=None)
             loaded = SimpleNamespace(agents={}, session_name="multi-agent-mvp")
             mcp = Mock()
             mcp.prepare_feature_agents.return_value = {}
 
-            with patch.object(app, "_mcp_preparer", return_value=mcp), patch.object(
-                app, "_prepare_session", return_value=prepared
-            ), patch.object(
-                app, "_launch_attached_session", return_value=0
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists",
-                return_value=True,
-            ), self.assertRaises(SystemExit) as ctx:
+            with (
+                patch.object(app, "_mcp_preparer", return_value=mcp),
+                patch.object(app, "_prepare_session", return_value=prepared),
+                patch.object(app, "_launch_attached_session", return_value=0),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=True,
+                ),
+                self.assertRaises(SystemExit) as ctx,
+            ):
                 app._run_launcher(args, loaded)
 
-            self.assertIn("tmux session `agentmux-demo` is still active", str(ctx.exception))
+            self.assertIn(
+                "tmux session `agentmux-demo` is still active", str(ctx.exception)
+            )
 
-    def test_run_launcher_resume_uses_loaded_session_name_for_legacy_state(self) -> None:
+    def test_run_launcher_resume_uses_loaded_session_name_for_legacy_state(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             project_dir = Path(td)
             app = application.PipelineApplication(project_dir)
@@ -272,23 +315,29 @@ class UniqueSessionNamesTests(unittest.TestCase):
             state.pop("session_name", None)
             files.state.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
-            prepared = PreparedSession(feature_dir=feature_dir, files=files, product_manager=False)
+            prepared = PreparedSession(
+                feature_dir=feature_dir, files=files, product_manager=False
+            )
             args = SimpleNamespace(resume="demo", issue=None)
             loaded = SimpleNamespace(agents={}, session_name="multi-agent-mvp")
             mcp = Mock()
             mcp.prepare_feature_agents.return_value = {}
 
-            with patch.object(app, "_mcp_preparer", return_value=mcp), patch.object(
-                app, "_prepare_session", return_value=prepared
-            ), patch.object(
-                app, "_launch_attached_session", return_value=0
-            ), patch(
-                "agentmux.pipeline.application.tmux_session_exists",
-                return_value=True,
-            ), self.assertRaises(SystemExit) as ctx:
+            with (
+                patch.object(app, "_mcp_preparer", return_value=mcp),
+                patch.object(app, "_prepare_session", return_value=prepared),
+                patch.object(app, "_launch_attached_session", return_value=0),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=True,
+                ),
+                self.assertRaises(SystemExit) as ctx,
+            ):
                 app._run_launcher(args, loaded)
 
-            self.assertIn("tmux session `multi-agent-mvp` is still active", str(ctx.exception))
+            self.assertIn(
+                "tmux session `multi-agent-mvp` is still active", str(ctx.exception)
+            )
 
 
 if __name__ == "__main__":

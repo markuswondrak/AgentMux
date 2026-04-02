@@ -6,13 +6,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agentmux.runtime.event_bus import SessionEvent
-from agentmux.workflow.phase_helpers import load_plan_meta
+from agentmux.sessions.state_store import create_feature_files, load_state
 from agentmux.workflow.interruptions import InterruptionService
 from agentmux.workflow.orchestrator import PipelineOrchestrator
+from agentmux.workflow.phase_helpers import load_plan_meta
 from agentmux.workflow.plan_parser import coder_label_for_subplan
 from agentmux.workflow.prompts import write_prompt_file
-from agentmux.sessions.state_store import create_feature_files, load_state
-from agentmux.workflow.transitions import EXIT_SUCCESS, PipelineContext
+from agentmux.workflow.transitions import PipelineContext
 
 
 class _FakeEventBus:
@@ -38,7 +38,9 @@ class _InterruptionOnStartBus(_FakeEventBus):
             kind="interruption.pane_exited",
             source="interruption",
             payload={
-                "message": "Agent pane coder 2 was closed or exited (for example via Ctrl-C)."
+                "message": (
+                    "Agent pane coder 2 was closed or exited (for example via Ctrl-C)."
+                ),
             },
         )
         for listener in list(self.registered):
@@ -51,7 +53,7 @@ class _FakeRuntime:
 
 
 class PhaseDirectoryRequirementsTests(unittest.TestCase):
-    def test_create_feature_files_sets_numbered_runtime_paths_without_eager_subdirectories(
+    def test_create_feature_files_sets_numbered_runtime_paths(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -159,7 +161,10 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
                 "## Sub-plan 1: API wiring\n", encoding="utf-8"
             )
             (planning_dir / "execution_plan.json").write_text(
-                '{"version": 1, "groups": [{"group_id": "g1", "mode": "serial", "plans": [{"file": "plan_1.md", "name": "API wiring"}]}]}',
+                (
+                    '{"version": 1, "groups": [{"group_id": "g1", "mode": "serial", '
+                    '"plans": [{"file": "plan_1.md", "name": "API wiring"}]}]}'
+                ),
                 encoding="utf-8",
             )
 

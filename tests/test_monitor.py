@@ -7,8 +7,8 @@ from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from agentmux import monitor
-from agentmux.shared.models import SESSION_DIR_NAMES, RuntimeFiles
 from agentmux.monitor.state_reader import EVENT_LABELS, OPTIONAL_PHASES, PIPELINE_STATES
+from agentmux.shared.models import SESSION_DIR_NAMES, RuntimeFiles
 
 
 def _make_test_files(feature_dir: Path) -> RuntimeFiles:
@@ -77,7 +77,10 @@ class MonitorTests(unittest.TestCase):
             state_path.write_text('{"phase": "implementing"}', encoding="utf-8")
             runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
             requirements_path.write_text(
-                "# Requirements\n\n## Initial Request\nmonitor soll auch beschreibung des features zeigen\n",
+                (
+                    "# Requirements\n\n## Initial Request\n"
+                    "monitor soll auch beschreibung des features zeigen\n"
+                ),
                 encoding="utf-8",
             )
 
@@ -109,7 +112,10 @@ class MonitorTests(unittest.TestCase):
             state_path.write_text('{"phase": "implementing"}', encoding="utf-8")
             runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
             requirements_path.write_text(
-                "# Requirements\n\n## Initial Request\nmonitor soll auch beschreibung des features zeigen\n",
+                (
+                    "# Requirements\n\n## Initial Request\n"
+                    "monitor soll auch beschreibung des features zeigen\n"
+                ),
                 encoding="utf-8",
             )
 
@@ -347,7 +353,10 @@ class MonitorTests(unittest.TestCase):
             )
 
             state_path.write_text(
-                '{"phase": "planning", "research_tasks": {"auth-module": "dispatched"}}',
+                (
+                    '{"phase": "planning", "research_tasks": '
+                    '{"auth-module": "dispatched"}}'
+                ),
                 encoding="utf-8",
             )
             runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
@@ -404,27 +413,27 @@ class MonitorTests(unittest.TestCase):
                 "coder": {"cli": "codex", "model": "gpt-5.3-codex"},
             }
 
-            with patch(
-                "agentmux.monitor.render_module.get_role_states",
-                return_value={
-                    "architect": "inactive",
-                    "reviewer": "working",
-                    "coder": "idle",
-                },
+            with (
+                patch(
+                    "agentmux.monitor.render_module.get_role_states",
+                    return_value={
+                        "architect": "inactive",
+                        "reviewer": "working",
+                        "coder": "idle",
+                    },
+                ),
+                patch("agentmux.monitor.render_module.time.time", return_value=0.0),
             ):
-                with patch(
-                    "agentmux.monitor.render_module.time.time", return_value=0.0
-                ):
-                    output = self._strip_ansi(
-                        monitor.render(
-                            session_name="session-x",
-                            files=files,
-                            agents=agents,
-                            width=60,
-                            height=24,
-                            start_time=0.0,
-                        )
+                output = self._strip_ansi(
+                    monitor.render(
+                        session_name="session-x",
+                        files=files,
+                        agents=agents,
+                        width=60,
+                        height=24,
+                        start_time=0.0,
                     )
+                )
 
             self.assertNotIn("architect", output)
             self.assertIn("reviewer", output)
@@ -442,7 +451,10 @@ class MonitorTests(unittest.TestCase):
                 "## Sub-plan 2: API wiring\n", encoding="utf-8"
             )
             (planning_dir / "execution_plan.json").write_text(
-                '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", "plans": [{"file": "plan_2.md", "name": "API wiring"}]}]}',
+                (
+                    '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", '
+                    '"plans": [{"file": "plan_2.md", "name": "API wiring"}]}]}'
+                ),
                 encoding="utf-8",
             )
             files.state.write_text('{"phase": "implementing"}', encoding="utf-8")
@@ -455,23 +467,23 @@ class MonitorTests(unittest.TestCase):
                 "coder": {"cli": "codex", "model": "gpt-5.3-codex"},
             }
 
-            with patch(
-                "agentmux.monitor.render_module.get_role_states",
-                return_value={"coder_2": "working"},
+            with (
+                patch(
+                    "agentmux.monitor.render_module.get_role_states",
+                    return_value={"coder_2": "working"},
+                ),
+                patch("agentmux.monitor.render_module.time.time", return_value=0.0),
             ):
-                with patch(
-                    "agentmux.monitor.render_module.time.time", return_value=0.0
-                ):
-                    output = self._strip_ansi(
-                        monitor.render(
-                            session_name="session-x",
-                            files=files,
-                            agents=agents,
-                            width=60,
-                            height=24,
-                            start_time=0.0,
-                        )
+                output = self._strip_ansi(
+                    monitor.render(
+                        session_name="session-x",
+                        files=files,
+                        agents=agents,
+                        width=60,
+                        height=24,
+                        start_time=0.0,
                     )
+                )
 
             self.assertIn("[coder] API wiring", output)
             self.assertNotIn("coder 2", output)
@@ -493,23 +505,23 @@ class MonitorTests(unittest.TestCase):
                 "designer": {"cli": "claude", "model": "sonnet"},
             }
 
-            with patch(
-                "agentmux.monitor.render_module.get_role_states",
-                return_value={"reviewer": "working", "designer": "idle"},
+            with (
+                patch(
+                    "agentmux.monitor.render_module.get_role_states",
+                    return_value={"reviewer": "working", "designer": "idle"},
+                ),
+                patch("agentmux.monitor.render_module.time.time", return_value=0.0),
             ):
-                with patch(
-                    "agentmux.monitor.render_module.time.time", return_value=0.0
-                ):
-                    output = self._strip_ansi(
-                        monitor.render(
-                            session_name="session-x",
-                            files=files,
-                            agents=agents,
-                            width=70,
-                            height=24,
-                            start_time=0.0,
-                        )
+                output = self._strip_ansi(
+                    monitor.render(
+                        session_name="session-x",
+                        files=files,
+                        agents=agents,
+                        width=70,
+                        height=24,
+                        start_time=0.0,
                     )
+                )
 
             self.assertIn("[reviewer] iteration 2", output)
             self.assertIn("[designer] tmp", output)
@@ -658,7 +670,7 @@ class MonitorTests(unittest.TestCase):
             state_path.write_text(
                 (
                     '{"phase":"failed","last_event":"run_failed",'
-                    '"interruption_cause":"Background orchestrator exited unexpectedly."}'
+                    '"interruption_cause":"Background orchestrator exited."}'
                 ),
                 encoding="utf-8",
             )
@@ -667,9 +679,7 @@ class MonitorTests(unittest.TestCase):
             output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
 
             self.assertIn("› run failed unexpectedly", output)
-            self.assertIn(
-                "› cause: Background orchestrator exited unexpectedly.", output
-            )
+            self.assertIn("› cause: Background orchestrator exited.", output)
 
     def test_render_unknown_interruption_event_falls_back_to_raw_label(self) -> None:
         with tempfile.TemporaryDirectory() as td:

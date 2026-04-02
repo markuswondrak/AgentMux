@@ -9,14 +9,14 @@ from unittest.mock import patch
 from agentmux.integrations.completion import CompletionResult
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.shared.models import AgentConfig, GitHubConfig
+from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import (
+    PHASE_HANDLERS,
     PlanningHandler,
     ProductManagementHandler,
-    PHASE_HANDLERS,
 )
 from agentmux.workflow.prompts import build_architect_prompt
-from agentmux.workflow.transitions import EXIT_SUCCESS, PipelineContext
-from agentmux.workflow.event_router import WorkflowEvent
+from agentmux.workflow.transitions import PipelineContext
 
 
 class _FakeRuntime:

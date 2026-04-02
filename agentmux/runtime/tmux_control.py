@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from ..shared.models import AgentConfig
-from ..terminal_ui.layout import MONITOR_MAX_WIDTH, MONITOR_MIN_WIDTH, MONITOR_WIDTH
+from ..terminal_ui.layout import MONITOR_MAX_WIDTH, MONITOR_MIN_WIDTH
 
 MAIN_WINDOW = "pipeline"
 
@@ -34,9 +34,8 @@ def build_agent_command(agent: AgentConfig) -> str:
         env_prefix = f"env {' '.join(env_items)} "
     extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
     return (
-        env_prefix
-        + f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}"
-        + (f" {extra_args}" if extra_args else "")
+        env_prefix + f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} "
+        f"{shlex.quote(agent.model)}" + (f" {extra_args}" if extra_args else "")
     )
 
 
@@ -626,7 +625,8 @@ def tmux_new_session(
     _set_placeholder_id(session_name, placeholder_pane)
 
     _log(
-        f"tmux_new_session: enforcing monitor width {MONITOR_MIN_WIDTH}-{MONITOR_MAX_WIDTH}"
+        f"tmux_new_session: enforcing monitor width {MONITOR_MIN_WIDTH}-"
+        f"{MONITOR_MAX_WIDTH}"
     )
     _enforce_monitor_min_width(session_name)
     accept_trust_prompt(primary_pane, snippet=trust_snippet)
@@ -716,7 +716,8 @@ def create_batch_agent_pane(
     This prevents shell argument length issues and is more robust.
 
     Args:
-        output_log_path: Optional path to capture stderr output (contains both normal output and errors)
+        output_log_path: Optional path to capture stderr output
+            (contains both normal output and errors)
         project_dir: The project directory to use as working directory
 
     Returns:
@@ -736,7 +737,8 @@ def create_batch_agent_pane(
 
     extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
 
-    # Build CLI segment: include batch_subcommand if present (e.g., opencode: `opencode run`)
+    # Build CLI segment: include batch_subcommand if present
+    # (e.g., opencode: `opencode run`)
     # The pane CWD is already set to project_dir via tmux -c.
     cli_segment = (
         f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)}"
@@ -767,7 +769,8 @@ def create_batch_agent_pane(
         )
 
     _log(
-        f"create_batch_agent_pane: Creating {agent_name} (batch mode) hidden at {split_target} with cwd={project_dir}"
+        f"create_batch_agent_pane: Creating {agent_name} (batch mode) hidden "
+        f"at {split_target} with cwd={project_dir}"
     )
     result = run_command(
         [

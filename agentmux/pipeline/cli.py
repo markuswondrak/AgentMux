@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import shtab
 
@@ -167,7 +168,10 @@ COMMANDS: list[Command] = [
             Argument(
                 ("session",),
                 nargs="?",
-                help="Feature directory or session name to resume. If omitted, interactive selection is shown.",
+                help=(
+                    "Feature directory or session name to resume. "
+                    "If omitted, interactive selection is shown."
+                ),
             ),
             Argument(
                 ("--config",),
@@ -191,7 +195,10 @@ COMMANDS: list[Command] = [
             ),
             Argument(
                 ("--name",),
-                help="Optional feature slug. Defaults to timestamp plus a slug derived from the issue.",
+                help=(
+                    "Optional feature slug. Defaults to timestamp plus a slug "
+                    "derived from the issue."
+                ),
             ),
             Argument(
                 ("--config",),
@@ -216,7 +223,9 @@ def build_parser() -> argparse.ArgumentParser:
     """Build and return the argument parser with all subcommands."""
     parser = argparse.ArgumentParser(
         prog="agentmux",
-        description="Orchestrates a local tmux-based architect/coder/reviewer pipeline.",
+        description=(
+            "Orchestrates a local tmux-based architect/coder/reviewer pipeline."
+        ),
     )
 
     # Hidden --orchestrate flag for internal use
@@ -249,14 +258,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument(
         "--name",
-        help="Optional feature slug. Defaults to timestamp plus a slug derived from the prompt.",
+        help=(
+            "Optional feature slug. Defaults to timestamp plus a slug "
+            "derived from the prompt."
+        ),
     )
     run_parser.add_argument(
         "--config",
         help=(
             "Optional config override. Without this flag the loader resolves "
-            f"built-in defaults, ~/.config/agentmux/config.yaml, then {DEFAULT_CONFIG_HINT} "
-            "in the project."
+            f"built-in defaults, ~/.config/agentmux/config.yaml, then "
+            f"{DEFAULT_CONFIG_HINT} in the project."
         ),
     )
     run_parser.add_argument(

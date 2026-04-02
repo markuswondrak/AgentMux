@@ -246,6 +246,6 @@ class ProjectPaths:
         return self.prompts_dir / "commands"
 
     @staticmethod
-    def from_project(project_dir: Path) -> "ProjectPaths":
+    def from_project(project_dir: Path) -> ProjectPaths:
         """Create a ProjectPaths instance from a project directory."""
         return ProjectPaths(project_dir=project_dir)

@@ -38,7 +38,7 @@ class TestArgumentDataclass:
         )
         assert arg.flags == ("--config",)
         assert arg.kwargs["help"] == "Config path"
-        assert arg.kwargs["type"] == str
+        assert arg.kwargs["type"] is str
         assert arg.kwargs["default"] is None
 
 
@@ -236,7 +236,8 @@ class TestDefaultSubcommandInjection:
         known_commands = {cmd.name for cmd in cli.COMMANDS}
         known_commands.add("run")
 
-        # Check logic: if first arg is not known and doesn't start with '-', inject 'run'
+        # Check logic: if first arg is not known and doesn't start with '-',
+        # inject 'run'
         if (
             len(argv) > 1
             and argv[1] not in known_commands
@@ -277,7 +278,8 @@ class TestDefaultSubcommandInjection:
 
     def test_flag_not_modified(self):
         """Test that flags are not treated as subcommands."""
-        # Note: This tests the logic - in practice, --version would be handled by the parser
+        # Note: This tests the logic - in practice, --version would be
+        # handled by the parser
         argv = ["agentmux", "--version"]
         known_commands = {cmd.name for cmd in cli.COMMANDS}
         known_commands.add("run")
@@ -501,16 +503,19 @@ class TestNoPhantomCompletions:
     """Tests to ensure free-text arguments don't produce phantom completions."""
 
     def test_prompt_argument_has_no_completer(self):
-        """Test that the prompt positional argument in run subparser has no completer."""
+        """Test that the prompt positional argument has no completer."""
         parser = cli.build_parser()
 
         # Find the run subparser
         run_subparser = None
         for action in parser._subparsers._actions:
-            if hasattr(action, "choices") and action.choices is not None:
-                if "run" in action.choices:
-                    run_subparser = action.choices["run"]
-                    break
+            if (
+                hasattr(action, "choices")
+                and action.choices is not None
+                and "run" in action.choices
+            ):
+                run_subparser = action.choices["run"]
+                break
 
         assert run_subparser is not None, "Run subparser not found"
 
@@ -518,11 +523,13 @@ class TestNoPhantomCompletions:
         # In argparse, completers are stored in the 'completer' attribute of the action
         prompt_action = None
         for action in run_subparser._actions:
-            if hasattr(action, "option_strings") and not action.option_strings:
-                # This is a positional argument
-                if action.dest == "prompt":
-                    prompt_action = action
-                    break
+            if (
+                hasattr(action, "option_strings")
+                and not action.option_strings
+                and action.dest == "prompt"
+            ):
+                prompt_action = action
+                break
 
         assert prompt_action is not None, "Prompt argument not found in run subparser"
 
@@ -589,7 +596,5 @@ class TestBackwardCompatDetailed:
     """Detailed backward compatibility tests."""
 
     def test_prompt_with_name_flag(self):
-        """Test that 'agentmux "my feature" --name slug' works via default subcommand."""
-        parser = cli.build_parser()
-
+        """Test that 'agentmux "my feature" --name slug' works via default."""
         # Simulate: agentmux

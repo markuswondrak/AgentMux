@@ -66,12 +66,16 @@ def load_execution_plan(planning_dir: Path) -> ExecutionPlan:
             raise _error(path, f"groups[{index}].group_id must be a non-empty string.")
         group_id = group_id_raw.strip()
         if group_id in seen_group_ids:
-            raise _error(path, f"groups[{index}].group_id has duplicate value '{group_id}'.")
+            raise _error(
+                path, f"groups[{index}].group_id has duplicate value '{group_id}'."
+            )
         seen_group_ids.add(group_id)
 
         mode_raw = group_raw.get("mode")
         if not isinstance(mode_raw, str) or mode_raw not in _GROUP_MODES:
-            raise _error(path, f"groups[{index}].mode must be one of: serial, parallel.")
+            raise _error(
+                path, f"groups[{index}].mode must be one of: serial, parallel."
+            )
 
         plans_raw = group_raw.get("plans")
         if not isinstance(plans_raw, list) or not plans_raw:
@@ -80,25 +84,44 @@ def load_execution_plan(planning_dir: Path) -> ExecutionPlan:
         plans: list[ExecutionPlanRef] = []
         for plan_index, plan_raw in enumerate(plans_raw, start=1):
             if not isinstance(plan_raw, dict):
-                raise _error(path, f"groups[{index}].plans[{plan_index}] must be an object.")
+                raise _error(
+                    path, f"groups[{index}].plans[{plan_index}] must be an object."
+                )
             plan_file_raw = plan_raw.get("file")
             if not isinstance(plan_file_raw, str) or not plan_file_raw.strip():
-                raise _error(path, f"groups[{index}].plans[{plan_index}].file must be a non-empty string.")
+                raise _error(
+                    path,
+                    f"groups[{index}].plans[{plan_index}].file "
+                    "must be a non-empty string.",
+                )
             plan_name_raw = plan_raw.get("name")
             if not isinstance(plan_name_raw, str) or not plan_name_raw.strip():
-                raise _error(path, f"groups[{index}].plans[{plan_index}].name must be a non-empty string.")
+                raise _error(
+                    path,
+                    f"groups[{index}].plans[{plan_index}].name "
+                    "must be a non-empty string.",
+                )
             plan_ref = plan_file_raw.strip()
             plan_name = plan_name_raw.strip()
             if not _PLAN_FILE_RE.match(plan_ref):
                 raise _error(
                     path,
-                    f"groups[{index}].plans[{plan_index}] must match 'plan_<N>.md' and stay in 02_planning/.",
+                    f"groups[{index}].plans[{plan_index}] must match 'plan_<N>.md' "
+                    "and stay in 02_planning/.",
                 )
             if plan_ref in seen_plan_refs:
-                raise _error(path, f"groups[{index}].plans[{plan_index}] duplicates plan '{plan_ref}'.")
+                raise _error(
+                    path,
+                    f"groups[{index}].plans[{plan_index}] duplicates "
+                    f"plan '{plan_ref}'.",
+                )
             plan_path = planning_dir / plan_ref
             if not plan_path.is_file():
-                raise _error(path, f"groups[{index}].plans[{plan_index}] references missing file '{plan_ref}'.")
+                raise _error(
+                    path,
+                    f"groups[{index}].plans[{plan_index}] references "
+                    f"missing file '{plan_ref}'.",
+                )
             seen_plan_refs.add(plan_ref)
             plans.append(ExecutionPlanRef(file=plan_ref, name=plan_name))
 

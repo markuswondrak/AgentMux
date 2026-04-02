@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from agentmux.workflow.event_router import (
-    PhaseHandler,
     WorkflowEvent,
     extract_research_topic,
     path_matches,
@@ -32,7 +31,7 @@ if TYPE_CHECKING:
 class PlanningHandler:
     """Event-driven handler for planning phase."""
 
-    def enter(self, state: dict, ctx: "PipelineContext") -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering planning phase.
 
         Sends architect prompt (initial or changes).
@@ -58,7 +57,7 @@ class PlanningHandler:
         self,
         event: WorkflowEvent,
         state: dict,
-        ctx: "PipelineContext",
+        ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for planning phase."""
         path = filter_file_created_event(event)
@@ -104,7 +103,7 @@ class PlanningHandler:
     def _handle_plan_written(
         self,
         state: dict,
-        ctx: "PipelineContext",
+        ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle plan written event.
 

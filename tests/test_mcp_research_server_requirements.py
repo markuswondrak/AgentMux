@@ -15,12 +15,20 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
             result = mcp_research_server.agentmux_research_dispatch_code(
                 topic="auth-module",
                 context="Planning auth changes",
-                questions=["Where is auth middleware defined?", "What services call it?"],
+                questions=[
+                    "Where is auth middleware defined?",
+                    "What services call it?",
+                ],
                 feature_dir=str(feature_dir),
                 scope_hints=["agentmux/", "tests/"],
             )
 
-            request_path = feature_dir / SESSION_DIR_NAMES["research"] / "code-auth-module" / "request.md"
+            request_path = (
+                feature_dir
+                / SESSION_DIR_NAMES["research"]
+                / "code-auth-module"
+                / "request.md"
+            )
             request = request_path.read_text(encoding="utf-8")
             self.assertEqual("Code research on 'auth-module' dispatched.", result)
             self.assertIn("## Context", request)
@@ -43,7 +51,12 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
                 scope_hints=None,
             )
 
-            request_path = feature_dir / SESSION_DIR_NAMES["research"] / "web-sdk-compat" / "request.md"
+            request_path = (
+                feature_dir
+                / SESSION_DIR_NAMES["research"]
+                / "web-sdk-compat"
+                / "request.md"
+            )
             request = request_path.read_text(encoding="utf-8")
             self.assertEqual("Web research on 'sdk-compat' dispatched.", result)
             self.assertIn("## Scope hints", request)
@@ -61,7 +74,10 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
             )
 
             request = (
-                feature_dir / SESSION_DIR_NAMES["research"] / "code-planning-conventions" / "request.md"
+                feature_dir
+                / SESSION_DIR_NAMES["research"]
+                / "code-planning-conventions"
+                / "request.md"
             ).read_text(encoding="utf-8")
             self.assertIn("- Start with prompts and planning tests.", request)
 
@@ -77,7 +93,10 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
             )
 
             request = (
-                feature_dir / SESSION_DIR_NAMES["research"] / "code-feature-surface" / "request.md"
+                feature_dir
+                / SESSION_DIR_NAMES["research"]
+                / "code-feature-surface"
+                / "request.md"
             ).read_text(encoding="utf-8")
             self.assertIn("- (none provided)", request)
 

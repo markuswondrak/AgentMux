@@ -10,9 +10,8 @@ import yaml
 
 from agentmux.configuration import load_explicit_config, load_layered_config
 from agentmux.configuration.providers import PROVIDERS, get_provider, resolve_agent
+from agentmux.runtime.tmux_control import accept_trust_prompt, build_agent_command
 from agentmux.shared.models import AgentConfig
-from agentmux.runtime.tmux_control import build_agent_command
-from agentmux.runtime.tmux_control import accept_trust_prompt
 
 
 class ProviderAbstractionTests(unittest.TestCase):
@@ -213,12 +212,14 @@ defaults:
                 encoding="utf-8",
             )
 
-            with patch(
-                "agentmux.configuration.USER_CONFIG_PATH",
-                Path(td) / "missing-user-config.yaml",
+            with (
+                patch(
+                    "agentmux.configuration.USER_CONFIG_PATH",
+                    Path(td) / "missing-user-config.yaml",
+                ),
+                self.assertRaises(ValueError) as exc,
             ):
-                with self.assertRaises(ValueError) as exc:
-                    load_layered_config(project_dir)
+                load_layered_config(project_dir)
 
             self.assertIn("no longer supported", str(exc.exception))
 
@@ -242,12 +243,14 @@ defaults:
                 encoding="utf-8",
             )
 
-            with patch(
-                "agentmux.configuration.USER_CONFIG_PATH",
-                Path(td) / "missing-user-config.yaml",
+            with (
+                patch(
+                    "agentmux.configuration.USER_CONFIG_PATH",
+                    Path(td) / "missing-user-config.yaml",
+                ),
+                self.assertRaises(ValueError) as exc,
             ):
-                with self.assertRaises(ValueError) as exc:
-                    load_layered_config(project_dir)
+                load_layered_config(project_dir)
 
             self.assertIn("no longer supported", str(exc.exception))
 
@@ -267,12 +270,14 @@ defaults:
                 encoding="utf-8",
             )
 
-            with patch(
-                "agentmux.configuration.USER_CONFIG_PATH",
-                Path(td) / "missing-user-config.yaml",
+            with (
+                patch(
+                    "agentmux.configuration.USER_CONFIG_PATH",
+                    Path(td) / "missing-user-config.yaml",
+                ),
+                self.assertRaises(ValueError) as exc,
             ):
-                with self.assertRaises(ValueError) as exc:
-                    load_layered_config(project_dir)
+                load_layered_config(project_dir)
 
             self.assertIn(
                 "Legacy defaults keys are no longer supported", str(exc.exception)

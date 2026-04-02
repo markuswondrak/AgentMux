@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -149,23 +149,20 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
 
     # Version detection (do this before profile check for better error messages)
     version = int(raw.get("version", 1))
-    if version == 1:
-        # Check if it's actually a v1 config (uses launchers/profiles)
-        if (
-            raw.get("launchers")
-            or raw.get("profiles")
-            or "profile" in str(raw.get("defaults", {}))
-            or any(
-                "profile" in str(role_cfg) for role_cfg in raw.get("roles", {}).values()
-            )
-        ):
-            raise ValueError(
-                "Legacy config detected (version: 1). Please migrate to version: 2.\n"
-                "- Rename 'launchers:' to 'providers:'\n"
-                "- Replace 'profile: <name>' with 'model: <model-name>'\n"
-                "- Remove 'profiles:' section\n"
-                "See docs/configuration.md for the new schema."
-            )
+    # Check if it's actually a v1 config (uses launchers/profiles)
+    if version == 1 and (
+        raw.get("launchers")
+        or raw.get("profiles")
+        or "profile" in str(raw.get("defaults", {}))
+        or any("profile" in str(role_cfg) for role_cfg in raw.get("roles", {}).values())
+    ):
+        raise ValueError(
+            "Legacy config detected (version: 1). Please migrate to version: 2.\n"
+            "- Rename 'launchers:' to 'providers:'\n"
+            "- Replace 'profile: <name>' with 'model: <model-name>'\n"
+            "- Remove 'profiles:' section\n"
+            "See docs/configuration.md for the new schema."
+        )
 
     # Check for profile key usage (removed in v2)
     if "profile" in raw.get("defaults", {}):
@@ -175,7 +172,8 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     for role in ROLES:
         if role in raw.get("roles", {}) and "profile" in raw["roles"][role]:
             raise ValueError(
-                f"Profiles are removed in v2. Use 'model: <model-name>' directly in roles.{role}."
+                "Profiles are removed in v2. Use 'model: <model-name>' "
+                f"directly in roles.{role}."
             )
 
     # Also support legacy 'launchers' key for v2 migration detection
@@ -224,7 +222,8 @@ def _normalize_defaults(raw: dict[str, Any]) -> dict[str, Any]:
         keys_csv = ", ".join(sorted(unsupported_keys))
         raise ValueError(
             "Legacy defaults keys are no longer supported. "
-            f"Use `defaults.model` and `defaults.completion.skip_final_approval` instead: {keys_csv}."
+            "Use `defaults.model` and `defaults.completion.skip_final_approval` "
+            f"instead: {keys_csv}."
         )
     defaults: dict[str, Any] = {}
     if "session_name" in raw:
@@ -295,7 +294,8 @@ def _normalize_provider(name: str, raw: Any) -> dict[str, Any]:
         },
     }
 
-    # Only add optional fields if they have values (preserves builtin values during merge)
+    # Only add optional fields if they have values
+    # (preserves builtin values during merge)
     if raw.get("trust_snippet") is not None:
         result["trust_snippet"] = str(raw["trust_snippet"])
     if raw.get("batch_subcommand") is not None:
@@ -313,7 +313,8 @@ def _normalize_role_config(role: str, raw: Any) -> dict[str, Any]:
         )
     if "profile" in raw:
         raise ValueError(
-            f"roles.{role}.profile is no longer supported. Use roles.{role}.model: <model-name>."
+            f"roles.{role}.profile is no longer supported. "
+            f"Use roles.{role}.model: <model-name>."
         )
     data: dict[str, Any] = {}
     if "provider" in raw:
@@ -340,9 +341,8 @@ def _coerce_bool(value: Any, label: str) -> bool:
             return True
         if normalized in {"0", "false", "no", "off"}:
             return False
-    if isinstance(value, int):
-        if value in {0, 1}:
-            return bool(value)
+    if isinstance(value, int) and value in {0, 1}:
+        return bool(value)
     raise ValueError(f"{label} must be a boolean.")
 
 
@@ -417,7 +417,8 @@ def _resolve_loaded_config(
         except KeyError as exc:
             available = ", ".join(sorted(providers))
             raise ValueError(
-                f"Unknown provider '{provider_name}' for role '{role}'. Expected one of: {available}"
+                f"Unknown provider '{provider_name}' for role '{role}'. "
+                f"Expected one of: {available}"
             ) from exc
 
         # In v2, model is specified directly in role config or defaults

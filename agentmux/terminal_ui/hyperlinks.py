@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 OSC8_RE: str = r"\033\]8;[^;]*;[^\033\a]*(?:\033\\|\a)"
 
 

@@ -1,6 +1,12 @@
 repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.8
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
   - repo: https://github.com/jazzband/pip-tools
-    rev: 7.5.3
+    rev: v7.5.3
     hooks:
       - id: pip-compile
         name: pip-compile-production

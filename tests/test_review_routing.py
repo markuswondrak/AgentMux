@@ -1,7 +1,5 @@
 """Tests for reviewer routing logic based on plan_meta review_strategy."""
 
-import pytest
-
 from agentmux.workflow.phase_helpers import select_reviewer_type
 
 
@@ -152,7 +150,6 @@ class TestReviewRoutingIntegration:
 
     def test_backward_compatibility_no_review_strategy(self, tmp_path):
         """Session without review_strategy uses logic reviewer (backward compat)."""
-        from agentmux.shared.models import RuntimeFiles
 
         # Create a mock planning directory without review_strategy
         planning_dir = tmp_path / "02_planning"
@@ -176,6 +173,7 @@ class TestReviewRoutingIntegration:
     def test_planning_to_reviewing_transition_with_various_plan_meta(self, tmp_path):
         """Test transition with various plan_meta configurations."""
         import json
+
         from agentmux.workflow.phase_helpers import load_plan_meta, select_reviewer_type
 
         test_cases = [

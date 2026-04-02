@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import argparse
-import io
-import json
-import shutil
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -169,7 +164,7 @@ class ConfirmCleanTests(unittest.TestCase):
 
     def test_confirm_clean_includes_count_in_prompt(self) -> None:
         prompts: list[str] = []
-        ui = ConsoleUI(input_fn=lambda prompt: (prompts.append(prompt) or "n"))
+        ui = ConsoleUI(input_fn=lambda prompt: prompts.append(prompt) or "n")
         ui.confirm_clean(5)
 
         self.assertEqual(1, len(prompts))

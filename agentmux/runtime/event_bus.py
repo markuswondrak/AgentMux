@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Iterable, Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -12,7 +13,9 @@ class SessionEvent:
     source: str
     payload: dict[str, Any] = field(default_factory=dict)
     timestamp: str = field(
-        default_factory=lambda: datetime.now().astimezone().isoformat(timespec="seconds")
+        default_factory=lambda: (
+            datetime.now().astimezone().isoformat(timespec="seconds")
+        )
     )
 
 
@@ -20,11 +23,9 @@ EventListener = Callable[[SessionEvent], None]
 
 
 class EventSource(Protocol):
-    def start(self, bus: "EventBus") -> None:
-        ...
+    def start(self, bus: EventBus) -> None: ...
 
-    def stop(self) -> None:
-        ...
+    def stop(self) -> None: ...
 
 
 class EventBus:

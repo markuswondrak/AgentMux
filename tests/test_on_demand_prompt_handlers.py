@@ -5,16 +5,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agentmux.shared.models import AgentConfig
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
+from agentmux.shared.models import AgentConfig
+from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import (
+    CompletingHandler,
+    FixingHandler,
     ImplementingHandler,
     ReviewingHandler,
-    FixingHandler,
-    CompletingHandler,
 )
 from agentmux.workflow.transitions import PipelineContext
-from agentmux.workflow.event_router import WorkflowEvent
 
 
 def _prompt_names(prompt_specs: list[object]) -> list[str]:
@@ -40,8 +40,8 @@ class FakeRuntime:
         self.parallel_specs.append(
             [
                 (
-                    getattr(item, "task_id"),
-                    Path(getattr(item, "prompt_file")).name,
+                    item.task_id,
+                    Path(item.prompt_file).name,
                     getattr(item, "display_label", None),
                 )
                 for item in prompt_specs

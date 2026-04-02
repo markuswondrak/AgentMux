@@ -9,8 +9,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import agentmux.pipeline.application as application
-import agentmux.pipeline as pipeline
-from agentmux.terminal_ui.console import ConsoleUI
 from agentmux.configuration import load_layered_config
 from agentmux.integrations.github import (
     GitHubBootstrapper,
@@ -22,6 +20,7 @@ from agentmux.integrations.github import (
     fetch_issue,
 )
 from agentmux.shared.models import AgentConfig, GitHubConfig
+from agentmux.terminal_ui.console import ConsoleUI
 
 
 class GitHubConfigResolutionTests(unittest.TestCase):
@@ -111,16 +110,18 @@ class GitHubHelpersTests(unittest.TestCase):
         )
 
     def test_fetch_issue_raises_actionable_error_on_failure(self) -> None:
-        with patch(
-            "agentmux.integrations.github.subprocess.run",
-            side_effect=subprocess.CalledProcessError(
-                returncode=1,
-                cmd=["gh", "issue", "view", "42", "--json", "title,body"],
-                stderr="not found",
+        with (
+            patch(
+                "agentmux.integrations.github.subprocess.run",
+                side_effect=subprocess.CalledProcessError(
+                    returncode=1,
+                    cmd=["gh", "issue", "view", "42", "--json", "title,body"],
+                    stderr="not found",
+                ),
             ),
+            self.assertRaises(RuntimeError) as ctx,
         ):
-            with self.assertRaises(RuntimeError) as ctx:
-                fetch_issue("42")
+            fetch_issue("42")
 
         self.assertIn("Failed to fetch GitHub issue", str(ctx.exception))
 
@@ -344,7 +345,8 @@ class PipelineIssueTriggerTests(unittest.TestCase):
                 patch(
                     "agentmux.integrations.github.subprocess.run",
                     side_effect=[
-                        # create_branch calls: git rev-parse (on main), show-ref (branch doesn't exist), checkout -b, push
+                        # create_branch calls: git rev-parse (on main), show-ref
+                        # (branch doesn't exist), checkout -b, push
                         subprocess.CompletedProcess(
                             args=["git", "rev-parse"],
                             returncode=0,

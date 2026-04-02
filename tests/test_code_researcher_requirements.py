@@ -7,13 +7,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agentmux.configuration import load_explicit_config
-from agentmux.shared.models import AgentConfig, SESSION_DIR_NAMES
-from agentmux.workflow.handlers import PlanningHandler
-from agentmux.workflow.prompts import build_code_researcher_prompt
 from agentmux.runtime import TmuxAgentRuntime
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
-from agentmux.workflow.transitions import PipelineContext
+from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig
 from agentmux.workflow.event_router import WorkflowEvent
+from agentmux.workflow.handlers import PlanningHandler
+from agentmux.workflow.prompts import build_code_researcher_prompt
+from agentmux.workflow.transitions import PipelineContext
 
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 RESEARCH_DIR = SESSION_DIR_NAMES["research"]
@@ -250,7 +250,8 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
                 runtime.spawn_task("code-researcher", "db-schema", prompt_file)
                 runtime.finish_task("code-researcher", "db-schema")
 
-            # For batch mode (researcher), create_batch_agent_pane is used instead of send_prompt
+            # For batch mode (researcher), create_batch_agent_pane is used
+            # instead of send_prompt
             self.assertEqual(["batch_pane"], spawned)
             self.assertEqual([], sent)  # No send_prompt for researcher in batch mode
             self.assertEqual(["%77"], runtime._zone.removed)
@@ -339,7 +340,9 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
                 (
                     "notify",
                     "architect",
-                    "Code-research on 'auth-module' is complete. Read 03_research/code-auth-module/summary.md and continue from there.",
+                    "Code-research on 'auth-module' is complete. "
+                    "Read 03_research/code-auth-module/summary.md "
+                    "and continue from there.",
                 ),
                 ctx.runtime.calls[-1],
             )

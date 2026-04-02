@@ -34,7 +34,8 @@ def _append_confirmation_commit_message_contract(prompt: str) -> str:
             prompt.rstrip(),
             "",
             "Approval payload contract extension:",
-            "- `commit_message` is optional and may contain a reviewer-authored summary for the final commit.",
+            "- `commit_message` is optional and may contain a reviewer-authored "
+            "summary for the final commit.",
             "",
         ]
     )
@@ -302,8 +303,9 @@ def build_coder_subplan_prompt(
     completion_marker = files.relative_path(files.implementation_dir / marker_name)
     completion_instruction = (
         "FINAL STEP ONLY — once all code is written and nothing else remains, "
-        f"create the completion marker file `{completion_marker}` in the session directory "
-        "and leave it empty. This must be the very last action you take."
+        f"create the completion marker file `{completion_marker}` "
+        "in the session directory and leave it empty. "
+        "This must be the very last action you take."
     )
     completion_constraints = "\n".join(
         [
@@ -317,7 +319,8 @@ def build_coder_subplan_prompt(
     if not tasks_path.is_file():
         raise FileNotFoundError(
             f"Per-plan tasks file not found: {tasks_path}. "
-            f"The architect must create tasks_{subplan_index}.md alongside plan_{subplan_index}.md."
+            f"The architect must create tasks_{subplan_index}.md "
+            f"alongside plan_{subplan_index}.md."
         )
     tasks_file_relative = files.relative_path(tasks_path)
 

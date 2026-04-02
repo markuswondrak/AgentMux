@@ -5,13 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from agentmux.sessions.state_store import create_feature_files, load_runtime_files
 from agentmux.workflow.prompts import (
     build_architect_prompt,
     build_change_prompt,
     build_coder_subplan_prompt,
     build_reviewer_prompt,
 )
-from agentmux.sessions.state_store import create_feature_files, load_runtime_files
 
 
 class TasksRequirementsTests(unittest.TestCase):
@@ -111,7 +111,10 @@ class TasksRequirementsTests(unittest.TestCase):
             )
             self.assertIn("write `02_planning/plan_meta.json`", architect_prompt)
             self.assertIn(
-                "Documentation updates must be captured as explicit plan and task items in `02_planning/plan.md`, every `02_planning/plan_<N>.md`, and every `02_planning/tasks_<N>.md`.",
+                "Documentation updates must be captured as explicit plan "
+                "and task items in `02_planning/plan.md`, "
+                "every `02_planning/plan_<N>.md`, and "
+                "every `02_planning/tasks_<N>.md`.",
                 architect_prompt,
             )
             self.assertIn("needs_design", architect_prompt)
@@ -131,7 +134,8 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("conflict mapping", architect_prompt.lower())
             self.assertIn("owned files/modules must be disjoint", architect_prompt)
             self.assertIn(
-                "merge that work into one sub-plan or move the overlapping portion into a serial Phase 3 integration step",
+                "merge that work into one sub-plan or move "
+                "the overlapping portion into a serial Phase 3 integration step",
                 architect_prompt,
             )
             self.assertIn("shared mutable artifacts", architect_prompt)
@@ -155,7 +159,8 @@ class TasksRequirementsTests(unittest.TestCase):
                 "Follow the phase order from the active plan strictly", coder_prompt
             )
             self.assertIn(
-                "Work atomically from your assigned task checklist: Complete one task at a time",
+                "Work atomically from your assigned task checklist: "
+                "Complete one task at a time",
                 coder_prompt,
             )
             self.assertIn(
@@ -187,7 +192,8 @@ class TasksRequirementsTests(unittest.TestCase):
                 "Follow the phase order from the active plan strictly", prompt
             )
             self.assertIn(
-                "Work atomically from your assigned task checklist: Complete one task at a time",
+                "Work atomically from your assigned task checklist: "
+                "Complete one task at a time",
                 prompt,
             )
             self.assertIn("check off that task before moving to the next one", prompt)
@@ -211,20 +217,24 @@ class TasksRequirementsTests(unittest.TestCase):
             reviewer_review_prompt = build_reviewer_prompt(files, is_review=True)
 
             self.assertIn(
-                "When your assigned task checklist includes documentation tasks, complete them as part of implementation in this coder step.",
+                "When your assigned task checklist includes documentation tasks, "
+                "complete them as part of implementation in this coder step.",
                 coder_prompt,
             )
             self.assertIn(
-                "Do not defer documentation to a separate docs agent or post-review docs phase.",
+                "Do not defer documentation to a separate docs agent "
+                "or post-review docs phase.",
                 coder_prompt,
             )
 
             self.assertIn(
-                "Treat planned documentation updates as required implementation scope during review; do not defer them to a separate phase or agent.",
+                "Treat planned documentation updates as required implementation "
+                "scope during review; do not defer them to a separate phase or agent.",
                 reviewer_agent_prompt,
             )
             self.assertIn(
-                "Verify documentation tasks listed in `02_planning/tasks_<N>.md` are complete when they are part of the approved scope.",
+                "Verify documentation tasks listed in `02_planning/tasks_<N>.md` "
+                "are complete when they are part of the approved scope.",
                 reviewer_review_prompt,
             )
 
@@ -253,7 +263,10 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("02_planning/execution_plan.json", prompt)
             self.assertIn("02_planning/plan_meta.json", prompt)
             self.assertIn(
-                "Documentation updates must be captured as explicit plan and task items in `02_planning/plan.md`, every `02_planning/plan_<N>.md`, and every `02_planning/tasks_<N>.md`.",
+                "Documentation updates must be captured as explicit plan "
+                "and task items in `02_planning/plan.md`, "
+                "every `02_planning/plan_<N>.md`, and "
+                "every `02_planning/tasks_<N>.md`.",
                 prompt,
             )
             self.assertIn("needs_design", prompt)
@@ -271,7 +284,8 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("conflict mapping", prompt.lower())
             self.assertIn("owned files/modules must be disjoint", prompt)
             self.assertIn(
-                "merge that work into one sub-plan or move the overlapping portion into a serial Phase 3 integration step",
+                "merge that work into one sub-plan or move "
+                "the overlapping portion into a serial Phase 3 integration step",
                 prompt,
             )
             self.assertIn("shared mutable artifacts", prompt)
@@ -281,12 +295,13 @@ class TasksRequirementsTests(unittest.TestCase):
             )
             self.assertIn("technical debt", prompt.lower())
             self.assertNotIn(
-                "should be treated as parallelizable unless a precise technical conflict is documented",
+                "should be treated as parallelizable unless a precise "
+                "technical conflict is documented",
                 prompt,
             )
             self.assertIn("1. Example task", prompt)
 
-    def test_architect_prompt_no_longer_accepts_review_mode_and_reviewer_prompt_handles_review(
+    def test_architect_prompt_no_longer_accepts_review_mode(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
