@@ -109,7 +109,12 @@ class SessionIncludeTests(unittest.TestCase):
             architect_template = prompts_dir / "agents" / "architect.md"
             architect_template.parent.mkdir(parents=True, exist_ok=True)
             architect_template.write_text(
-                "Session [[placeholder:feature_dir]]\n[[include:context.md]]\n[[placeholder:project_instructions]]\nConstraints:\n",
+                (
+                    "Session [[placeholder:feature_dir]]\n"
+                    "[[include:context.md]]\n"
+                    "[[placeholder:project_instructions]]\n"
+                    "Constraints:\n"
+                ),
                 encoding="utf-8",
             )
 

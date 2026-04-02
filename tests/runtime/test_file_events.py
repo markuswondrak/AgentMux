@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 try:
-    from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileMovedEvent
+    from watchdog.events import FileModifiedEvent, FileMovedEvent
 
     WATCHDOG_AVAILABLE = True
 except ImportError:

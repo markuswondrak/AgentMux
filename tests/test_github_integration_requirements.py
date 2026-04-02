@@ -345,7 +345,8 @@ class PipelineIssueTriggerTests(unittest.TestCase):
                 patch(
                     "agentmux.integrations.github.subprocess.run",
                     side_effect=[
-                        # create_branch calls: git rev-parse (on main), show-ref (branch doesn't exist), checkout -b, push
+                        # create_branch calls: git rev-parse (on main), show-ref
+                        # (branch doesn't exist), checkout -b, push
                         subprocess.CompletedProcess(
                             args=["git", "rev-parse"],
                             returncode=0,

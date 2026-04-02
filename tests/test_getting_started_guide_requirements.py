@@ -87,8 +87,14 @@ class GettingStartedGuideRequirementsTests(unittest.TestCase):
 agentmux resume
 
 ```"""
-        guide_line = "For a detailed walkthrough, see the [Getting Started guide](docs/getting-started.md)."
-        gh_line = "If `gh` is authenticated, AgentMux can bootstrap from issue content and open a pull request when the pipeline completes."
+        guide_line = (
+            "For a detailed walkthrough, see the [Getting Started guide]"
+            "(docs/getting-started.md)."
+        )
+        gh_line = (
+            "If `gh` is authenticated, AgentMux can bootstrap from issue content "
+            "and open a pull request when the pipeline completes."
+        )
 
         self.assertIn(quickstart_block, readme)
         self.assertIn(guide_line, readme)
@@ -103,7 +109,10 @@ agentmux resume
         docs_section = docs_section_match.group("section")
         first_entry = docs_section.splitlines()[0]
         self.assertEqual(
-            "- [`docs/getting-started.md`](docs/getting-started.md) — installation, setup, and first pipeline run",
+            (
+                "- [`docs/getting-started.md`](docs/getting-started.md) — "
+                "installation, setup, and first pipeline run"
+            ),
             first_entry,
         )
 

@@ -103,9 +103,10 @@ class PipelineOrchestrator:
                 message = str(payload.get("message", "Task failed")).strip()
                 ctx.runtime.notify(
                     owner,
-                    f"RESEARCH TASK FAILED: {role} task '{task_id}' crashed unexpectedly.\n"
+                    f"RESEARCH TASK FAILED: {role} task '{task_id}' "
+                    "crashed unexpectedly.\n"
                     f"Error: {message}\n"
-                    f"You may need to retry this research task or proceed without it.",
+                    "You may need to retry this research task or proceed without it.",
                 )
 
         report = self.interruptions.build_canceled(

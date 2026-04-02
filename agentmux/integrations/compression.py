@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -72,7 +73,8 @@ def read_proxy_port(feature_dir: Path) -> int | None:
 def inject_compression_env(
     agents: dict[str, AgentConfig], port: int
 ) -> dict[str, AgentConfig]:
-    """Return a new agents dict with proxy base-URL env vars injected for supported providers."""
+    """Return a new agents dict with proxy base-URL env vars injected
+    for supported providers."""
     result: dict[str, AgentConfig] = {}
     for role, agent in agents.items():
         env_var = PROVIDER_BASE_URL_ENVS.get(agent.provider or "")
@@ -132,7 +134,5 @@ def _wait_for_pid_exit(pid: int, timeout: float) -> None:
             return
         time.sleep(0.1)
     # Force kill if it didn't exit in time
-    try:
+    with contextlib.suppress(ProcessLookupError):
         os.kill(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass

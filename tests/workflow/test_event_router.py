@@ -230,7 +230,7 @@ class TestWorkflowEventRouter:
         state = {"phase": "planning"}
         event = WorkflowEvent(kind="file.created", path="planning/plan.md")
 
-        with patch("agentmux.sessions.state_store.write_state") as mock_write:
+        with patch("agentmux.sessions.state_store.write_state"):
             router.handle(event, state, mock_context)
 
         # Should have transitioned to implementing
@@ -459,13 +459,10 @@ class TestIntegration:
 
         # Verify workflow sequence
         # Note: When transitioning, the same event is passed to the new phase's handler
-        assert (
-            workflow_log
-            == [
-                "enter:planning",
-                "handle:planning:planning/plan.md",
-                "enter:implementing",
-                "handle:implementing:planning/plan.md",  # Same event passed during transition
-                "handle:implementing:implementation/done_1",
-            ]
-        )
+        assert workflow_log == [
+            "enter:planning",
+            "handle:planning:planning/plan.md",
+            "enter:implementing",
+            "handle:implementing:planning/plan.md",  # Same event passed
+            "handle:implementing:implementation/done_1",
+        ]

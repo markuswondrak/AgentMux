@@ -210,7 +210,10 @@ class InferResumePhaseTests(unittest.TestCase):
             )
             self._write_json(
                 feature_dir / PLANNING_DIR / "plan_meta.json",
-                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md"]}',
+                (
+                    '{"needs_design": false, "needs_docs": true, '
+                    '"doc_files": ["docs/file-protocol.md"]}'
+                ),
             )
             (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
                 "", encoding="utf-8"
@@ -629,7 +632,7 @@ class ExitMessagingTests(unittest.TestCase):
                         "phase": "failed",
                         "last_event": "run_failed",
                         "interruption_category": "failed",
-                        "interruption_cause": "Background orchestrator exited unexpectedly.",
+                        "interruption_cause": "Background orchestrator exited.",
                         "interruption_resume_command": f"agentmux resume {feature_dir}",
                         "interruption_log_path": str(log_path),
                     }

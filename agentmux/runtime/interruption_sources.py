@@ -70,7 +70,10 @@ class InterruptionEventSource:
                         "task_id": pane.task_id,
                         "pane_id": pane.pane_id,
                         "label": pane.label,
-                        "message": f"Agent pane {pane.label} was closed or exited (for example via Ctrl-C).",
+                        "message": (
+                            f"Agent pane {pane.label} was closed or exited "
+                            "(for example via Ctrl-C)."
+                        ),
                     },
                 )
             )

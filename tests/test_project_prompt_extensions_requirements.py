@@ -329,7 +329,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertIn("Shared: ok", loaded)
             self.assertIn("Project braces stay literal: {do_not_expand}", loaded)
 
-    def test_builtin_templates_expose_project_instruction_placeholder_before_constraints(
+    def test_builtin_templates_expose_project_instruction_placeholder(
         self,
     ) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -481,7 +481,10 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
             self._write_coder_inputs(feature_dir, plan_name="plan_1.md")
 
-            injected = "Literal braces: {something} and orphan close brace } and open brace {\n"
+            injected = (
+                "Literal braces: {something} and orphan close brace } "
+                "and open brace {\n"
+            )
             self._write_project_prompt(project_dir, "agents", "coder", injected)
 
             prompt = build_coder_subplan_prompt(
@@ -512,17 +515,21 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
 
             planning_contract_line = (
-                "Documentation updates must be captured as explicit plan and task items in "
-                "`02_planning/plan.md`, every `02_planning/plan_<N>.md`, and every `02_planning/tasks_<N>.md`."
+                "Documentation updates must be captured as explicit plan "
+                "and task items in "
+                "`02_planning/plan.md`, every `02_planning/plan_<N>.md`, "
+                "and every `02_planning/tasks_<N>.md`."
             )
             self.assertIn(planning_contract_line, architect_prompt)
             self.assertIn(planning_contract_line, change_prompt)
             self.assertIn(
-                "When your assigned task checklist includes documentation tasks, complete them as part of implementation in this coder step.",
+                "When your assigned task checklist includes documentation tasks, "
+                "complete them as part of implementation in this coder step.",
                 coder_prompt,
             )
             self.assertIn(
-                "Do not defer documentation to a separate docs agent or post-review docs phase.",
+                "Do not defer documentation to a separate docs agent "
+                "or post-review docs phase.",
                 coder_prompt,
             )
             self.assertNotIn("07_docs/docs_done", coder_prompt)
@@ -565,7 +572,9 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 prompt.index("03_research/web-openai-models/summary.md"),
             )
 
-    def test_coder_subplan_prompt_includes_completed_research_references(self) -> None:
+    def test_coder_subplan_prompt_includes_completed_research_references_sorted(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"
@@ -681,7 +690,10 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             architect_prompt = build_architect_prompt(files)
             reviewer_prompt = build_reviewer_prompt(files)
 
-            shared_line = "Exclude one-time feedback specific to this feature (single bug fixes, typos, or scope-only corrections)."
+            shared_line = (
+                "Exclude one-time feedback specific to this feature "
+                "(single bug fixes, typos, or scope-only corrections)."
+            )
             self.assertIn(shared_line, product_prompt)
             self.assertIn(shared_line, architect_prompt)
             self.assertIn(shared_line, reviewer_prompt)
@@ -698,7 +710,8 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
 
             self.assertIn(
-                "Implementation review (`06_review/review.md`): focus strictly on correctness",
+                "Implementation review (`06_review/review.md`): "
+                "focus strictly on correctness",
                 reviewer_prompt,
             )
             self.assertIn("Persist approved candidates only via", reviewer_prompt)
@@ -732,7 +745,10 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 project_dir, feature_dir, "cross-prompt regression", "session"
             )
             self._write_confirmation_inputs(feature_dir)
-            status_output = " M agentmux/workflow/prompts.py\n?? tests/test_project_prompt_extensions_requirements.py\n"
+            status_output = (
+                " M agentmux/workflow/prompts.py\n"
+                "?? tests/test_project_prompt_extensions_requirements.py\n"
+            )
 
             product_prompt = build_product_manager_prompt(files)
             architect_prompt = build_architect_prompt(files)
@@ -825,7 +841,10 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 project_dir, feature_dir, "confirmation guidance", "session"
             )
             self._write_confirmation_inputs(feature_dir)
-            status_output = " M agentmux/workflow/prompts.py\n?? tests/test_project_prompt_extensions_requirements.py\n"
+            status_output = (
+                " M agentmux/workflow/prompts.py\n"
+                "?? tests/test_project_prompt_extensions_requirements.py\n"
+            )
 
             with patch(
                 "agentmux.workflow.prompts.subprocess.run",
@@ -844,7 +863,8 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
             self.assertIn("exclude_files` is optional and defaults to `[]`", prompt)
             self.assertIn(
-                "Ask for exclusions only. Do not ask the user to enumerate all commit files.",
+                "Ask for exclusions only. Do not ask the user "
+                "to enumerate all commit files.",
                 prompt,
             )
             self.assertIn(

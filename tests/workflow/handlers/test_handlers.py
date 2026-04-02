@@ -243,7 +243,7 @@ class TestPlanningHandler:
             mock_write.return_value = Path("/mock/prompt.md")
             mock_build.return_value = "architect prompt"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once_with(
@@ -273,7 +273,7 @@ class TestPlanningHandler:
             mock_write.return_value = Path("/mock/prompt.md")
             mock_build.return_value = "change prompt"
 
-            updates = handler.enter(state, mock_ctx)
+            handler.enter(state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once_with(
@@ -390,7 +390,7 @@ class TestDesigningHandler:
             mock_build.return_value = "designer prompt"
             mock_label.return_value = "[designer] design"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once_with(
@@ -567,7 +567,7 @@ class TestReviewingHandler:
             mock_build.return_value = "reviewer prompt"
             mock_label.return_value = "[reviewer] iteration 1"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files, is_review=True)
             mock_send.assert_called_once()
@@ -643,7 +643,7 @@ class TestFixingHandler:
             mock_build.return_value = "fix prompt"
             mock_label.return_value = "[coder] fix 1"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once_with(
@@ -692,7 +692,7 @@ class TestCompletingHandler:
             mock_build.return_value = "confirmation prompt"
             mock_label.return_value = "[reviewer] iteration 1"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files)
             mock_send.assert_called_once()
@@ -704,7 +704,7 @@ class TestCompletingHandler:
         handler = CompletingHandler()
         mock_ctx.workflow_settings.completion.skip_final_approval = True
 
-        updates = handler.enter(empty_state, mock_ctx)
+        handler.enter(empty_state, mock_ctx)
 
         # Should create approval.json with approve action
         approval_path = mock_ctx.files.completion_dir / "approval.json"

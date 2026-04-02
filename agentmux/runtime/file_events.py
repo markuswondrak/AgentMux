@@ -36,7 +36,8 @@ RUNTIME_FILE_NAMES = {
 def ensure_watchdog_available() -> None:
     if Observer is None:
         raise SystemExit(
-            "Missing dependency: watchdog. Install it with `python3 -m pip install -r requirements.txt`."
+            "Missing dependency: watchdog. "
+            "Install it with `python3 -m pip install -r requirements.txt`."
         )
 
 

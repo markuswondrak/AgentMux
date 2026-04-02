@@ -600,7 +600,10 @@ class RuntimeTests(unittest.TestCase):
                 "## Sub-plan 2: UI polish\n", encoding="utf-8"
             )
             (planning_dir / "execution_plan.json").write_text(
-                '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", "plans": [{"file": "plan_2.md", "name": "UI polish"}]}]}',
+                (
+                    '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", '
+                    '"plans": [{"file": "plan_2.md", "name": "UI polish"}]}]}'
+                ),
                 encoding="utf-8",
             )
             runtime = TmuxAgentRuntime(

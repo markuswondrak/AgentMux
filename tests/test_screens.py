@@ -100,15 +100,13 @@ class ScreenRenderingTests(unittest.TestCase):
         goodbye_canceled(
             feature_name="add-welcome-and-goodbye-screen",
             session_id="20260328-082756-add-welcome-and-goodbye-screen",
-            resume_command="agentmux resume 20260328-082756-add-welcome-and-goodbye-screen",
+            resume_command="agentmux resume 20260328-082756-add-welcome-screen",
             console=console,
         )
 
         rendered = console.rendered_text()
         self.assertIn("Pipeline cancelled.", rendered)
-        self.assertIn(
-            "agentmux resume 20260328-082756-add-welcome-and-goodbye-screen", rendered
-        )
+        self.assertIn("agentmux resume 20260328-082756-add-welcome-screen", rendered)
         self.assertIn("Session:", rendered)
         self.assertIn("20260328-082756-add-welcome-and-goodbye-screen", rendered)
 

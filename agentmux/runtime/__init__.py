@@ -512,12 +512,14 @@ class TmuxAgentRuntime:
         prompt_file = research_dir / "prompt.md"
 
         print(
-            f"[ORCH] spawn_task: role={role}, task_id={task_id}, research_dir={research_dir}"
+            f"[ORCH] spawn_task: role={role}, task_id={task_id}, "
+            f"research_dir={research_dir}"
         )
 
         # Use batch mode for researcher agents to prevent interactive input waiting
         if role in BATCH_AGENT_ROLES:
-            # Output log is always in the same research directory (single source of truth)
+            # Output log is always in the same research directory
+            # (single source of truth)
             output_log_path = research_dir / "output.log"
             print(f"[ORCH] spawn_task: batch mode with output_log={output_log_path}")
             pane_id, pid = create_batch_agent_pane(
@@ -616,7 +618,7 @@ class TmuxAgentRuntime:
         orphaned_pids = self._load_process_pids()
         killed: list[int] = []
 
-        for pane_id, pid in orphaned_pids.items():
+        for _pane_id, pid in orphaned_pids.items():
             try:
                 os.kill(pid, 0)  # Check if process exists
                 # Process is still running, kill it

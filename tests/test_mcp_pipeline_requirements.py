@@ -286,7 +286,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             self.assertTrue(settings.completion.skip_final_approval)
             self.assertEqual(False, orchestrate_mock.call_args.args[1])
 
-    def test_orchestrate_mode_uses_default_workflow_settings_when_loaded_object_is_invalid(
+    def test_orchestrate_mode_uses_default_workflow_settings_when_loaded_is_invalid(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -356,7 +356,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
         self.assertIn("mcp__agentmux-research__*", role_args["architect"][-1])
         self.assertIn("mcp__agentmux-research__*", role_args["product-manager"][-1])
 
-    def test_architect_and_product_manager_prompts_reference_mcp_tools_without_legacy_fallback(
+    def test_architect_and_product_manager_prompts_reference_mcp_tools(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:

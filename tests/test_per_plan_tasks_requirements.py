@@ -37,7 +37,9 @@ class PerPlanTasksFileTests(unittest.TestCase):
                 feature_dir,
                 "plan_1.md",
                 1,
-                "# Tasks for Plan 1\n\n- [ ] Task 1 for plan 1\n- [ ] Task 2 for plan 1\n",
+                "# Tasks for Plan 1\n\n"
+                "- [ ] Task 1 for plan 1\n"
+                "- [ ] Task 2 for plan 1\n",
             )
 
             coder_prompt = build_coder_subplan_prompt(
@@ -51,7 +53,7 @@ class PerPlanTasksFileTests(unittest.TestCase):
             self.assertIn("Task 2 for plan 1", coder_prompt)
 
     def test_coder_prompt_includes_only_relevant_per_plan_tasks(self) -> None:
-        """Verify coder prompt for plan_N includes only tasks_N content, not other plans' tasks."""
+        """Verify coder prompt includes only tasks_N content, not other plans."""
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             project_dir = tmp_path / "project"

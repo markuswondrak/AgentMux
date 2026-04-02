@@ -131,7 +131,8 @@ def _write_execution_plan(ctx: PipelineContext, groups: list[dict]) -> None:
             if match:
                 plan_index = int(match.group(1))
                 (planning_dir / f"tasks_{plan_index}.md").write_text(
-                    f"# Tasks for plan {plan_index}\n\n- [ ] execute sub-plan {plan_index}\n",
+                    f"# Tasks for plan {plan_index}\n\n"
+                    f"- [ ] execute sub-plan {plan_index}\n",
                     encoding="utf-8",
                 )
 

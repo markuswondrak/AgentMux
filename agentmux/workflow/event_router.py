@@ -22,7 +22,8 @@ class WorkflowEvent:
 
     Attributes:
         kind: Event type - "file.created", "file.activity", "interruption.pane_exited"
-        path: Relative path for file events (e.g., "planning/plan.md"), None for interruptions
+        path: Relative path for file events
+            (e.g., "planning/plan.md"), None for interruptions
         payload: Additional context (pane details for interruptions, empty for files)
     """
 

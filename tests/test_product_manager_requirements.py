@@ -274,7 +274,9 @@ class ProductManagerRequirementsTests(unittest.TestCase):
                 (
                     "notify",
                     "product-manager",
-                    "Code-research on 'market-fit' is complete. Read 03_research/code-market-fit/summary.md and continue from there.",
+                    "Code-research on 'market-fit' is complete. "
+                    "Read 03_research/code-market-fit/summary.md "
+                    "and continue from there.",
                 ),
                 ctx.runtime.calls[-1],
             )

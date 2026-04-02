@@ -250,7 +250,8 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
                 runtime.spawn_task("code-researcher", "db-schema", prompt_file)
                 runtime.finish_task("code-researcher", "db-schema")
 
-            # For batch mode (researcher), create_batch_agent_pane is used instead of send_prompt
+            # For batch mode (researcher), create_batch_agent_pane is used
+            # instead of send_prompt
             self.assertEqual(["batch_pane"], spawned)
             self.assertEqual([], sent)  # No send_prompt for researcher in batch mode
             self.assertEqual(["%77"], runtime._zone.removed)
@@ -339,7 +340,9 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
                 (
                     "notify",
                     "architect",
-                    "Code-research on 'auth-module' is complete. Read 03_research/code-auth-module/summary.md and continue from there.",
+                    "Code-research on 'auth-module' is complete. "
+                    "Read 03_research/code-auth-module/summary.md "
+                    "and continue from there.",
                 ),
                 ctx.runtime.calls[-1],
             )

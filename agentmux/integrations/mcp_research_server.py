@@ -31,10 +31,7 @@ def _feature_dir(feature_dir: str | None = None) -> Path:
     if not raw:
         raise RuntimeError("feature_dir is required.")
     path = Path(raw).expanduser()
-    if not path.is_absolute():
-        path = (Path.cwd() / path).resolve()
-    else:
-        path = path.resolve()
+    path = (Path.cwd() / path).resolve() if not path.is_absolute() else path.resolve()
     if not path.exists():
         raise RuntimeError(f"feature_dir does not exist: {path}")
     return path
@@ -156,6 +153,7 @@ def agentmux_research_dispatch_web(
 if __name__ == "__main__":
     if mcp is None:
         raise SystemExit(
-            "Missing dependency: mcp. Install with `python3 -m pip install -r requirements.txt`."
+            "Missing dependency: mcp. "
+            "Install with `python3 -m pip install -r requirements.txt`."
         )
     mcp.run()

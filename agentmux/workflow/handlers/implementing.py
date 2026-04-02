@@ -53,7 +53,7 @@ def _build_implementation_schedule(*, planning_dir: Path) -> list[dict[str, obje
                 "plan_ids": [Path(plan.file).stem for plan in group.plans],
                 "plan_names": [
                     plan.name or coder_label_for_subplan(planning_dir, index)
-                    for plan, index in zip(group.plans, group_indexes)
+                    for plan, index in zip(group.plans, group_indexes, strict=False)
                 ],
                 "marker_indexes": group_indexes,
             }
@@ -69,7 +69,8 @@ def _build_implementation_schedule(*, planning_dir: Path) -> list[dict[str, obje
         if missing_indexes:
             missing_csv = ", ".join(str(index) for index in missing_indexes)
             raise RuntimeError(
-                f"execution_plan.json plan indexes must be contiguous from 1..{max_index}; missing: {missing_csv}."
+                f"execution_plan.json plan indexes must be contiguous "
+                f"from 1..{max_index}; missing: {missing_csv}."
             )
     return schedule
 
@@ -292,7 +293,9 @@ class ImplementingHandler:
 
         pending: list[tuple[int, Path, str | None]] = [
             (index, path, plan_name)
-            for index, path, plan_name in zip(marker_indexes, plan_paths, plan_names)
+            for index, path, plan_name in zip(
+                marker_indexes, plan_paths, plan_names, strict=False
+            )
             if not (ctx.files.implementation_dir / f"done_{index}").exists()
         ]
 

@@ -33,41 +33,41 @@ def render_logo(console: Any | None = None) -> None:
     output = _console(console)
     output.print("[blue]╭──────────────────────────────────────────────╮[/blue]")
     output.print(
-        f"[blue]│[/blue]   [bold {RICH_PRIMARY}]█████╗  ██████╗ ███████╗███╗   ██╗████████╗[/bold {RICH_PRIMARY}][blue]│[/blue]"
+        f"[blue]│[/blue]   [bold {RICH_PRIMARY}]█████╗  ██████╗ ███████╗███╗   ██╗████████╗[/bold {RICH_PRIMARY}][blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/bold {RICH_PRIMARY}][blue]│[/blue]"
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/bold {RICH_PRIMARY}][blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]"
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]"
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]"
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold {RICH_PRIMARY}][blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold {RICH_PRIMARY}][blue]│[/blue]"
+        f"[blue]│[/blue]  [bold {RICH_PRIMARY}]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold {RICH_PRIMARY}][blue]│[/blue]"  # noqa: E501
     )
     output.print("[blue]├──────────────────────────────┬───────────────┤[/blue]")
     output.print(
-        f"[blue]│[/blue] [bold {RICH_SECONDARY}]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold {RICH_SECONDARY}][blue]│[/blue]   [dim][ ]──┐[/dim]      [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold {RICH_SECONDARY}][blue]│[/blue]   [dim][ ]──┐[/dim]      [blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue] [bold {RICH_SECONDARY}]████╗ ████║██║   ██║╚██╗██╔╝ [/bold {RICH_SECONDARY}][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]████╗ ████║██║   ██║╚██╗██╔╝ [/bold {RICH_SECONDARY}][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue] [bold {RICH_SECONDARY}]██╔████╔██║██║   ██║ ╚███╔╝  [/bold {RICH_SECONDARY}][blue]│[/blue] [dim]──[ ]──◆──[ ] [/dim][blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]██╔████╔██║██║   ██║ ╚███╔╝  [/bold {RICH_SECONDARY}][blue]│[/blue] [dim]──[ ]──◆──[ ] [/dim][blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue] [bold {RICH_SECONDARY}]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold {RICH_SECONDARY}][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold {RICH_SECONDARY}][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue] [bold {RICH_SECONDARY}]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold {RICH_SECONDARY}][blue]│[/blue]   [dim][ ]──┘[/dim]      [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold {RICH_SECONDARY}][blue]│[/blue]   [dim][ ]──┘[/dim]      [blue]│[/blue]"  # noqa: E501
     )
     output.print(
-        f"[blue]│[/blue] [bold {RICH_SECONDARY}]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold {RICH_SECONDARY}][blue]│[/blue]               [blue]│[/blue]"
+        f"[blue]│[/blue] [bold {RICH_SECONDARY}]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold {RICH_SECONDARY}][blue]│[/blue]               [blue]│[/blue]"  # noqa: E501
     )
     output.print("[blue]╰──────────────────────────────┴───────────────╯[/blue]")
 

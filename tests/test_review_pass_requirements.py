@@ -155,7 +155,10 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             ctx, state_path = self._make_ctx(tmp_path / "feature")
             ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
             (ctx.files.planning_dir / "plan_meta.json").write_text(
-                '{"needs_design": false, "needs_docs": true, "doc_files": ["docs/file-protocol.md"]}',
+                (
+                    '{"needs_design": false, "needs_docs": true, '
+                    '"doc_files": ["docs/file-protocol.md"]}'
+                ),
                 encoding="utf-8",
             )
             # Create the review.md file with verdict: pass

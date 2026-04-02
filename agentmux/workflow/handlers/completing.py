@@ -197,7 +197,8 @@ class CompletingHandler:
                     print("PR creation failed (commit preserved).")
         else:
             print(
-                "Completion approved, but commit step failed or was skipped. Feature directory retained."
+                "Completion approved, but commit step failed or was skipped. "
+                "Feature directory retained."
             )
 
         return {"__exit__": 0}, None

@@ -30,7 +30,8 @@ class ConsoleUI:
             session = sessions[0]
             self.print(
                 "Auto-selected resumable session: "
-                f"{session.feature_dir.name} (phase: {session.state.get('phase', 'unknown')})"
+                f"{session.feature_dir.name} "
+                f"(phase: {session.state.get('phase', 'unknown')})"
             )
             return session.feature_dir
 
@@ -44,7 +45,8 @@ class ConsoleUI:
             )
             self.print(
                 f"  {index}) {session.feature_dir.name:<36} "
-                f"phase: {phase:<12} last_event: {last_event} (updated: {updated_label})"
+                f"phase: {phase:<12} last_event: {last_event} "
+                f"(updated: {updated_label})"
             )
 
         while True:
@@ -60,7 +62,8 @@ class ConsoleUI:
     def print_session_list(
         self, sessions: list[SessionRecord], active_tmux_sessions: list[str]
     ) -> None:
-        """Print a tabular list of sessions with ID, phase, status, and updated timestamp."""
+        """Print a tabular list of sessions with ID, phase, status,
+        and updated timestamp."""
         if not sessions:
             self.print("No sessions found.")
             return

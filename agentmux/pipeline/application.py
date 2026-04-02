@@ -113,7 +113,8 @@ class PipelineApplication:
             from mcp.server.fastmcp import FastMCP  # noqa: F401
         except ImportError as exc:
             raise SystemExit(
-                "Missing dependency: mcp. Install it with `python3 -m pip install -r requirements.txt`."
+                "Missing dependency: mcp. "
+                "Install it with `python3 -m pip install -r requirements.txt`."
             ) from exc
 
     def _run_background_orchestrator(self, args, loaded) -> int:
@@ -177,10 +178,8 @@ class PipelineApplication:
         This is a best-effort cleanup that silently ignores any errors.
         Used when the runtime object is already available.
         """
-        try:
-            runtime.kill_tracked_processes(timeout=5.0)
-        except Exception:
-            pass  # Best effort cleanup
+        with contextlib.suppress(Exception):
+            runtime.kill_tracked_processes(timeout=5.0)  # Best effort cleanup
 
     def _resolve_workflow_settings(self, loaded) -> WorkflowSettings:
         candidate = getattr(loaded, "workflow_settings", None)
@@ -201,7 +200,8 @@ class PipelineApplication:
             session_name = str(state.get("session_name") or loaded.session_name)
             if tmux_session_exists(session_name):
                 raise SystemExit(
-                    f"tmux session `{session_name}` is still active. Detach or kill it before resuming."
+                    f"tmux session `{session_name}` is still active. "
+                    "Detach or kill it before resuming."
                 )
         else:
             session_name = _derive_session_name(prepared.feature_dir)
@@ -214,7 +214,8 @@ class PipelineApplication:
             if existing_sessions:
                 with prepared.files.orchestrator_log.open("a", encoding="utf-8") as _f:
                     _f.write(
-                        f"Warning: Other agentmux session(s) running: {', '.join(existing_sessions)}\n"
+                        "Warning: Other agentmux session(s) running: "
+                        f"{', '.join(existing_sessions)}\n"
                     )
 
         agents = mcp.prepare_feature_agents(loaded.agents, prepared.feature_dir)
@@ -271,13 +272,17 @@ class PipelineApplication:
             )
 
         # Create feature branch at startup for ALL sessions (not just --issue)
-        branch_name = f"{loaded.github.branch_prefix}{feature_slug_from_dir(prepared.feature_dir)}"
+        branch_name = (
+            f"{loaded.github.branch_prefix}"
+            f"{feature_slug_from_dir(prepared.feature_dir)}"
+        )
         git_manager = GitBranchManager(self.project_dir)
         branch_state = git_manager.ensure_branch(branch_name)
 
         if not branch_state.created:
             self.ui.print(
-                f"Warning: Could not create/switch to feature branch {branch_name}; will retry at completion."
+                f"Warning: Could not create/switch to feature branch {branch_name}; "
+                "will retry at completion."
             )
         else:
             # Track branch info in session state
@@ -307,7 +312,8 @@ class PipelineApplication:
                 return 0
             raise SystemExit(
                 f"Session state missing after tmux exited: expected {files.state}. "
-                "The feature directory still exists, so the session did not clean up successfully."
+                "The feature directory still exists, so the session did not "
+                "clean up successfully."
             )
 
         post_attach_state = load_state(files.state)
@@ -318,7 +324,8 @@ class PipelineApplication:
             if report is None:
                 report = self.interruptions.build_failed(
                     feature_dir,
-                    "The pipeline ended in a failed state while the tmux session was active.",
+                    "The pipeline ended in a failed state while the tmux session "
+                    "was active.",
                     files=files,
                 )
                 self.interruptions.persist(files, report)
@@ -356,16 +363,18 @@ class PipelineApplication:
         start_time = time.time()
 
         try:
-            with files.orchestrator_log.open("a", encoding="utf-8") as _setup_log:
-                with contextlib.redirect_stdout(_setup_log):
-                    self.runtime_factory.create(
-                        feature_dir=feature_dir,
-                        project_dir=self.project_dir,
-                        session_name=session_name,
-                        agents=agents,
-                        config_path=self.config_path,
-                        initial_role=initial_role,
-                    )
+            with (
+                files.orchestrator_log.open("a", encoding="utf-8") as _setup_log,
+                contextlib.redirect_stdout(_setup_log),
+            ):
+                self.runtime_factory.create(
+                    feature_dir=feature_dir,
+                    project_dir=self.project_dir,
+                    session_name=session_name,
+                    agents=agents,
+                    config_path=self.config_path,
+                    initial_role=initial_role,
+                )
             self._start_background_orchestrator(feature_dir, args.keep_session)
             self.ui.print("agentmux: pipeline starting up…")
             subprocess.run(["tmux", "attach-session", "-t", session_name], check=True)
@@ -485,9 +494,8 @@ class PipelineApplication:
             self.ui.print("No sessions to remove.")
             return 0
 
-        if not force:
-            if not self.ui.confirm_clean(count):
-                return 0
+        if not force and not self.ui.confirm_clean(count):
+            return 0
 
         removed = self.sessions.remove_all_sessions(kill_tmux=True)
         self.ui.print(f"Removed {removed} session(s).")

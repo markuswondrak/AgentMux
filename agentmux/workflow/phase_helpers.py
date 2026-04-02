@@ -175,7 +175,8 @@ def notify_research_complete(
     )
     ctx.runtime.notify(
         notify_target,
-        f"{role_name} on '{topic}' is complete. Read {summary_path} and continue from there.",
+        f"{role_name} on '{topic}' is complete. "
+        f"Read {summary_path} and continue from there.",
     )
 
     # Update state

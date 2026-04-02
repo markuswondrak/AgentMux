@@ -143,7 +143,9 @@ def _render_feature_header(width: int, state_path: Path) -> list[str]:
             feature_request, text_width, max_lines=len(MONITOR_HEADER_LOGO)
         )
         rows: list[str] = []
-        for (color, logo_row), feature_line in zip(MONITOR_HEADER_LOGO, feature_lines):
+        for (color, logo_row), feature_line in zip(
+            MONITOR_HEADER_LOGO, feature_lines, strict=False
+        ):
             padded_logo = logo_row + (" " * max(0, logo_width - _vlen(logo_row)))
             logo_text = f"{BOLD}{color}{padded_logo}{RESET}"
             rows.append(
@@ -763,7 +765,8 @@ def _render_research_section(width: int, state: dict, feature_dir: Path) -> list
             rows.append(f" {GREEN}✓{RESET} {DIM}{type_prefix}·{RESET} {slug}")
         elif pulse_on:
             rows.append(
-                f" {YELLOW}{_spinner_frame()}{RESET} {DIM}{type_prefix}·{RESET} {BOLD}{slug}{RESET}"
+                f" {YELLOW}{_spinner_frame()}{RESET} {DIM}{type_prefix}·{RESET} "
+                f"{BOLD}{slug}{RESET}"
             )
         else:
             rows.append(

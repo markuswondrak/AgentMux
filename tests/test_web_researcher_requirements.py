@@ -221,7 +221,7 @@ class WebResearcherRequirementsTests(unittest.TestCase):
                 "dispatched", updates.get("web_research_tasks", {}).get("openai-models")
             )
 
-    def test_planning_handle_web_task_completed_finishes_researcher_and_notifies_architect(
+    def test_planning_handle_web_task_completed_finishes_researcher(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -252,7 +252,9 @@ class WebResearcherRequirementsTests(unittest.TestCase):
                 (
                     "notify",
                     "architect",
-                    "Web research on 'openai-models' is complete. Read 03_research/web-openai-models/summary.md and continue from there.",
+                    "Web research on 'openai-models' is complete. "
+                    "Read 03_research/web-openai-models/summary.md "
+                    "and continue from there.",
                 ),
                 ctx.runtime.calls[-1],
             )

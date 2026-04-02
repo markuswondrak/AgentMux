@@ -62,7 +62,8 @@ class PersistentMcpConfigurator(ABC):
     ) -> str:
         path = self.config_path(project_dir)
         return (
-            f"Warning: Missing MCP config for {self.provider} ({roles_label}) at {path}. "
+            f"Warning: Missing MCP config for {self.provider} ({roles_label}) "
+            f"at {path}. "
             "Research MCP tools will be unavailable until configured."
         )
 
@@ -290,7 +291,10 @@ class ClaudeConfigurator(JsonMcpConfigurator):
         self, server: McpServerSpec, project_dir: Path, roles_label: str
     ) -> str:
         path = self.config_path(project_dir)
-        return f"Configure project MCP research tools for claude ({roles_label}) at {path}?"
+        return (
+            f"Configure project MCP research tools for claude ({roles_label}) "
+            f"at {path}?"
+        )
 
 
 class GeminiConfigurator(JsonMcpConfigurator):
@@ -321,7 +325,10 @@ class GeminiConfigurator(JsonMcpConfigurator):
         self, server: McpServerSpec, project_dir: Path, roles_label: str
     ) -> str:
         path = self.config_path(project_dir)
-        return f"Configure project MCP research tools for gemini ({roles_label}) at {path}?"
+        return (
+            f"Configure project MCP research tools for gemini ({roles_label}) "
+            f"at {path}?"
+        )
 
 
 class OpenCodeConfigurator(JsonMcpConfigurator):
@@ -348,7 +355,10 @@ class OpenCodeConfigurator(JsonMcpConfigurator):
         self, server: McpServerSpec, project_dir: Path, roles_label: str
     ) -> str:
         path = self.config_path(project_dir)
-        return f"Configure project MCP research tools for opencode ({roles_label}) at {path}?"
+        return (
+            f"Configure project MCP research tools for opencode ({roles_label}) "
+            f"at {path}?"
+        )
 
 
 class CodexConfigurator(PersistentMcpConfigurator):
@@ -456,13 +466,12 @@ def _server_entry_matches(
             content = path.read_text(encoding="utf-8")
             expected_command = _python_command()
             expected_args = f'["-m", "{server.module}"]'
-            if f"[mcp_servers.{server.name}]" in content:
-                # Check if command and args match
-                if (
-                    f'command = "{expected_command}"' in content
-                    and expected_args in content
-                ):
-                    return True
+            if (
+                f"[mcp_servers.{server.name}]" in content
+                and f'command = "{expected_command}"' in content
+                and expected_args in content
+            ):
+                return True
         return False
 
     if existing_entry is None:
@@ -476,10 +485,7 @@ def _server_entry_matches(
         return False
     if existing_entry.get("command") != expected_entry.get("command"):
         return False
-    if existing_entry.get("args") != expected_entry.get("args"):
-        return False
-
-    return True
+    return existing_entry.get("args") == expected_entry.get("args")
 
 
 def ensure_mcp_config(
@@ -504,7 +510,7 @@ def ensure_mcp_config(
 
     configurators = _required_configurators(agents, roles)
     for server in servers:
-        for provider, (configurator, provider_roles) in configurators.items():
+        for _provider, (configurator, provider_roles) in configurators.items():
             # Check if server exists and matches expected config
             if _server_entry_matches(configurator, server, project_dir):
                 # Entry exists and is correct, skip install
@@ -538,7 +544,8 @@ def setup_mcp(
     feature_dir: Path,
     project_dir: Path,
 ) -> dict[str, AgentConfig]:
-    """Inject runtime env for MCP-aware roles without mutating user auth/config state."""
+    """Inject runtime env for MCP-aware roles without mutating
+    user auth/config state."""
 
     _ = feature_dir
 

@@ -99,7 +99,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
             self.assertIn("complete approval flow", commit_message)
             self.assertIn("#54", commit_message)
 
-    def test_completion_service_resolve_commit_message_prefers_payload_and_falls_back_to_draft(
+    def test_completion_service_resolve_commit_message_prefers_payload(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -220,7 +220,11 @@ class CompletionCommitFlowTests(unittest.TestCase):
                     return_value=subprocess.CompletedProcess(
                         args=["git", "status", "--porcelain"],
                         returncode=0,
-                        stdout=" M agentmux/phases.py\n?? tests/skip.py\nR  old.py -> renamed.py\n",
+                        stdout=(
+                            " M agentmux/phases.py\n"
+                            "?? tests/skip.py\n"
+                            "R  old.py -> renamed.py\n"
+                        ),
                         stderr="",
                     ),
                 ),
@@ -228,7 +232,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                     CompletionService,
                     "draft_commit_message",
                     return_value="feat: drafted commit",
-                ) as draft_mock,
+                ),
                 patch.object(
                     GitBranchManager,
                     "commit_on_branch",

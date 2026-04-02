@@ -148,7 +148,7 @@ class SessionService:
         except (json.JSONDecodeError, OSError):
             return killed
 
-        for pane_id, pid in pids.items():
+        for _pane_id, pid in pids.items():
             try:
                 pid = int(pid)
                 os.kill(pid, 0)  # Check if process exists
