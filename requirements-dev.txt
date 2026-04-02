@@ -94,6 +94,8 @@ rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
+ruff==0.15.8
+    # via agentmux (pyproject.toml)
 shtab==1.8.0
     # via agentmux (pyproject.toml)
 sse-starlette==3.3.4
