@@ -129,21 +129,6 @@ class TestPlannerPromptTemplates(unittest.TestCase):
                 "Planner prompt should reference architecture document",
             )
 
-    def test_planner_command_prompt_exists(self) -> None:
-        """Planner command prompt template should exist."""
-        plan_command = self.commands_dir / "plan.md"
-        self.assertTrue(
-            plan_command.exists(),
-            f"Planner command prompt not found at {plan_command}",
-        )
-
-    def test_planner_command_prompt_not_empty(self) -> None:
-        """Planner command prompt should not be empty."""
-        plan_command = self.commands_dir / "plan.md"
-        if plan_command.exists():
-            content = plan_command.read_text(encoding="utf-8")
-            self.assertTrue(len(content.strip()) > 0, "Planner command prompt is empty")
-
     def test_planner_respects_architecture_constraint(self) -> None:
         """Planner should have constraint to NOT modify architecture."""
         planner_prompt = self.agents_dir / "planner.md"
@@ -184,25 +169,25 @@ class TestPlannerPromptTemplates(unittest.TestCase):
             content = planner_prompt.read_text(encoding="utf-8")
             self.assertIn("[[include:02_planning/architecture.md]]", content)
 
-    def test_planner_creates_execution_plan_json(self) -> None:
-        """Planner command should mention execution_plan.json creation."""
-        plan_command = self.commands_dir / "plan.md"
-        if plan_command.exists():
-            content = plan_command.read_text(encoding="utf-8")
+    def test_planner_agent_includes_execution_plan_json(self) -> None:
+        """Planner agent prompt should mention execution_plan.json creation."""
+        planner_prompt = self.agents_dir / "planner.md"
+        if planner_prompt.exists():
+            content = planner_prompt.read_text(encoding="utf-8")
             self.assertIn("execution_plan.json", content)
 
-    def test_planner_creates_plan_markdown(self) -> None:
-        """Planner command should mention plan.md creation."""
-        plan_command = self.commands_dir / "plan.md"
-        if plan_command.exists():
-            content = plan_command.read_text(encoding="utf-8")
+    def test_planner_agent_includes_plan_markdown(self) -> None:
+        """Planner agent prompt should mention plan.md creation."""
+        planner_prompt = self.agents_dir / "planner.md"
+        if planner_prompt.exists():
+            content = planner_prompt.read_text(encoding="utf-8")
             self.assertIn("plan.md", content)
 
-    def test_planner_creates_tasks_files(self) -> None:
-        """Planner command should mention tasks file creation."""
-        plan_command = self.commands_dir / "plan.md"
-        if plan_command.exists():
-            content = plan_command.read_text(encoding="utf-8")
+    def test_planner_agent_includes_tasks_files(self) -> None:
+        """Planner agent prompt should mention tasks file creation."""
+        planner_prompt = self.agents_dir / "planner.md"
+        if planner_prompt.exists():
+            content = planner_prompt.read_text(encoding="utf-8")
             has_tasks_ref = "tasks_1.md" in content or "tasks_<N>.md" in content
             self.assertTrue(has_tasks_ref, "Planner should create tasks files")
 

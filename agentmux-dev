@@ -1,4 +1,4 @@
-#!/home/markus/.local/share/pipx/venvs/agentmux/bin/python
+#!/usr/bin/env python3
 """
 AgentMux Development Wrapper
 
@@ -31,7 +31,6 @@ import sys
 # Remove current directory and empty strings from sys.path
 # This prevents Python from finding the local agentmux package
 sys.path = [p for p in sys.path if p not in ("", ".")]
-sys.path = [p for p in sys.path if p and p != "."]
 
 from agentmux.pipeline import main  # noqa: E402
 

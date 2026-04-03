@@ -23,7 +23,6 @@ from agentmux.workflow.phase_helpers import (
 )
 from agentmux.workflow.prompts import (
     build_architect_prompt,
-    build_change_prompt,
     write_prompt_file,
 )
 
@@ -40,23 +39,11 @@ class ArchitectingHandler:
     """
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
-        """Called when entering architecting phase.
-
-        Sends architect prompt (initial or changes).
-        """
-        is_replan = (
-            state.get("last_event") == "changes_requested"
-            and ctx.files.changes.exists()
-        )
+        """Called when entering architecting phase."""
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
-            ctx.files.relative_path(
-                ctx.files.planning_dir
-                / ("changes_prompt.txt" if is_replan else "architect_prompt.md")
-            ),
-            build_change_prompt(ctx.files)
-            if is_replan
-            else build_architect_prompt(ctx.files),
+            ctx.files.relative_path(ctx.files.planning_dir / "architect_prompt.md"),
+            build_architect_prompt(ctx.files),
         )
         send_to_role(ctx, "architect", prompt_file)
         return {}

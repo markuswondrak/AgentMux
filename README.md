@@ -167,11 +167,9 @@ agentmux-dev "Your feature description"
 
 ### How it works
 
-The wrapper uses two mechanisms to ensure the installed version is used:
+The wrapper uses one mechanism to ensure the installed version is used:
 
-1. **Pipx Python interpreter**: The shebang points to the pipx venv's Python (`#!/home/markus/.local/share/pipx/venvs/agentmux/bin/python`), ensuring the correct site-packages are in the import path.
-
-2. **Current directory exclusion**: Before importing agentmux, the wrapper removes the current directory from `sys.path`:
+**Current directory exclusion**: Before importing agentmux, the wrapper removes the current directory from `sys.path`:
 
 ```python
 sys.path = [p for p in sys.path if p not in ('', '.')]
