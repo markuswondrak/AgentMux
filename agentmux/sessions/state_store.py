@@ -206,6 +206,10 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
     implementation_dir = feature_dir / SESSION_DIR_NAMES["implementation"]
     review_dir = feature_dir / SESSION_DIR_NAMES["review"]
 
+    architecture_path = planning_dir / "architecture.md"
+    if not architecture_path.exists():
+        return "architecting"
+
     plan_path = planning_dir / "plan.md"
     if not plan_path.exists():
         return "planning"
