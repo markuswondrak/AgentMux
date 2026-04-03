@@ -305,6 +305,12 @@ def _normalize_provider(name: str, raw: Any) -> dict[str, Any]:
         result["batch_subcommand"] = str(raw["batch_subcommand"])
     if raw.get("single_coder") is not None:
         result["single_coder"] = bool(raw["single_coder"])
+    if raw.get("default_model") is not None:
+        result["default_model"] = str(raw["default_model"])
+    if raw.get("default_role_args") is not None:
+        result["default_role_args"] = _normalize_args(
+            f"providers.{name}.default_role_args", raw["default_role_args"]
+        )
 
     return result
 
@@ -427,11 +433,19 @@ def _resolve_loaded_config(
             ) from exc
 
         # In v2, model is specified directly in role config or defaults
-        model = str(role_config.get("model", default_model))
+        # Use provider default_model as fallback if available
+        provider_default_model = provider.get("default_model")
+        if provider_default_model:
+            model = str(role_config.get("model", provider_default_model))
+        else:
+            model = str(role_config.get("model", default_model))
 
         args = role_config.get("args")
         if args is None:
-            args = list(provider.get("role_args", {}).get(role, []))
+            # Merge default_role_args with role-specific args
+            default_role_args = provider.get("default_role_args", [])
+            role_specific_args = provider.get("role_args", {}).get(role, [])
+            args = list(default_role_args) + list(role_specific_args)
 
         agents[role] = AgentConfig(
             role=role,

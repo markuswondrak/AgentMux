@@ -508,6 +508,98 @@ roles:
             )
             self.assertEqual("opencode", loaded.agents["coder"].provider)
 
+    def test_copilot_provider_has_default_model_and_role_args(self) -> None:
+        """Copilot provider should have default_model and default_role_args."""
+        copilot = get_provider("copilot")
+        self.assertEqual("claude-sonnet-4.6", copilot.default_model)
+        self.assertEqual(
+            ["--allow-all", "--reasoning-effort", "high"], copilot.default_role_args
+        )
+
+    def test_copilot_roles_inherit_default_role_args(self) -> None:
+        """All copilot roles should inherit default_role_args."""
+        copilot = get_provider("copilot")
+
+        # Test various roles
+        for role in ["architect", "coder", "reviewer", "product-manager", "designer"]:
+            agent = resolve_agent(
+                global_provider=copilot,
+                role=role,
+                role_config={},  # No overrides
+            )
+            self.assertEqual(
+                ["--allow-all", "--reasoning-effort", "high"],
+                agent.args,
+                f"Role {role} should inherit default_role_args",
+            )
+            self.assertEqual("claude-sonnet-4.6", agent.model)
+
+    def test_role_args_can_extend_default_role_args(self) -> None:
+        """Specific role_args can extend default_role_args."""
+        with tempfile.TemporaryDirectory() as td:
+            user_cfg_dir = Path(td) / "user"
+            user_cfg_dir.mkdir()
+            user_cfg_path = user_cfg_dir / "config.yaml"
+            user_cfg_path.write_text(
+                """
+version: 2
+providers:
+  test_provider:
+    command: test
+    model_flag: --model
+    default_role_args:
+    - --default-flag
+    - default-value
+    role_args:
+      coder:
+      - --specific-flag
+      - specific-value
+roles:
+  coder:
+    provider: test_provider
+    model: test-model
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            project_dir = Path(td) / "project"
+            project_dir.mkdir()
+
+            with patch("agentmux.configuration.USER_CONFIG_PATH", user_cfg_path):
+                loaded = load_layered_config(project_dir)
+
+            coder = loaded.agents["coder"]
+            # Should have both default and specific args
+            self.assertEqual(
+                [
+                    "--default-flag",
+                    "default-value",
+                    "--specific-flag",
+                    "specific-value",
+                ],
+                coder.args,
+            )
+
+    def test_provider_default_model_used_when_no_role_model(self) -> None:
+        """Provider default_model should be used when role has no model override."""
+        copilot = get_provider("copilot")
+        agent = resolve_agent(
+            global_provider=copilot,
+            role="coder",
+            role_config={},  # No model specified
+        )
+        self.assertEqual("claude-sonnet-4.6", agent.model)
+
+    def test_role_model_overrides_provider_default_model(self) -> None:
+        """Role-specific model should override provider default_model."""
+        copilot = get_provider("copilot")
+        agent = resolve_agent(
+            global_provider=copilot,
+            role="coder",
+            role_config={"model": "custom-model"},
+        )
+        self.assertEqual("custom-model", agent.model)
+
 
 if __name__ == "__main__":
     unittest.main()

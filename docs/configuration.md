@@ -128,7 +128,7 @@ roles:
 version: 2
 defaults:
   provider: copilot
-  model: gpt-4o
+  model: claude-sonnet-4.6
 ```
 
 Per-role model selection:
@@ -137,17 +137,38 @@ Per-role model selection:
 version: 2
 defaults:
   provider: copilot
-  model: gpt-4o
+  model: claude-sonnet-4.6
 roles:
   architect:
-    model: claude-sonnet-4
+    model: claude-opus-4.6
   reviewer_expert:
-    model: o3-mini
+    model: gpt-5.4
 ```
 
-Supported models: `gpt-4o`, `claude-sonnet-4`, `o3-mini`, `gemini-2.5-flash`. Models are selected via `--model=<model>`.
+Supported models: `claude-sonnet-4.6`, `claude-opus-4.6`, `gpt-5.4`, `gemini-2.5-pro`. Models are selected via `--model=<model>`.
 
-`copilot` uses `--allow-all` for all roles to enable non-interactive operation. On first run in a directory, Copilot CLI asks "Do you trust the files in this folder?" — Agentmux auto-accepts this via the `trust_snippet: "trust the files"` configuration.
+`copilot` uses `--allow-all` and `--reasoning-effort high` for all roles to enable non-interactive operation with maximum reasoning capability. On first run in a directory, Copilot CLI asks "Do you trust the files in this folder?" — Agentmux auto-accepts this via the `trust_snippet: "trust the files"` configuration.
+
+### Provider default settings
+
+Providers can define `default_model` and `default_role_args` that apply to all roles automatically:
+
+```yaml
+version: 2
+providers:
+  my-provider:
+    command: my-cli
+    model_flag: --model
+    default_model: my-default-model
+    default_role_args:
+    - --shared-flag
+    - shared-value
+    role_args:
+      coder:
+      - --coder-specific
+```
+
+In this example, the `coder` role receives both `[--shared-flag, shared-value, --coder-specific]`. The copilot provider uses this pattern to set `claude-sonnet-4.6` as the default model and `[--allow-all, --reasoning-effort, high]` as default args for all roles.
 
 ### Single-coder mode
 
