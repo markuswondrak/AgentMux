@@ -16,6 +16,7 @@ from agentmux.workflow.prompts import (
     build_confirmation_prompt,
     build_designer_prompt,
     build_fix_prompt,
+    build_planner_prompt,
     build_product_manager_prompt,
     build_reviewer_prompt,
     build_web_researcher_prompt,
@@ -520,7 +521,14 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self._write_change_inputs(feature_dir)
             self._write_coder_inputs(feature_dir, plan_name="plan_1.md")
 
+            # Write architecture.md so planner prompt can include it
+            planning_dir = feature_dir / "02_planning"
+            (planning_dir / "architecture.md").write_text(
+                "# Architecture\n", encoding="utf-8"
+            )
+
             architect_prompt = build_architect_prompt(files)
+            planner_prompt = build_planner_prompt(files)
             change_prompt = build_change_prompt(files)
             coder_prompt = build_coder_subplan_prompt(
                 files, feature_dir / "02_planning" / "plan_1.md", 1
@@ -532,7 +540,9 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 "`02_planning/plan.md`, every `02_planning/plan_<N>.md`, "
                 "and every `02_planning/tasks_<N>.md`."
             )
-            self.assertIn(planning_contract_line, architect_prompt)
+            # Planning contract belongs to the planner, not the architect
+            self.assertNotIn(planning_contract_line, architect_prompt)
+            self.assertIn(planning_contract_line, planner_prompt)
             self.assertIn(planning_contract_line, change_prompt)
             self.assertIn(
                 "When your assigned task checklist includes documentation tasks, "

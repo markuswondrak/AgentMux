@@ -35,7 +35,7 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
   - Group ordering defines implementation wave order
 - `tasks_<N>.md` — per-plan implementation checklists; each coder receives only their assigned plan's tasks
 - `tasks.md` — optional human-readable overview summarizing all tasks (not used by scheduler)
-- `plan_meta.json` — architect workflow-intent metadata:
+- `plan_meta.json` — planner workflow-intent metadata:
   - `needs_design` (`true`/`false`) — whether to run a dedicated design handoff
   - `needs_docs` (`true`/`false`) — informational signal that documentation updates are in scope
   - `doc_files` (`string[]`) — planned documentation targets when docs work is in scope

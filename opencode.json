@@ -4,7 +4,7 @@
     "agentmux-research": {
       "type": "local",
       "command": [
-        "/home/markus/workspace/agentmux/.venv/bin/python3",
+        "/home/markus/.local/share/pipx/venvs/agentmux/bin/python",
         "-m",
         "agentmux.integrations.mcp_research_server"
       ],

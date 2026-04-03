@@ -10,6 +10,7 @@ from agentmux.workflow.prompts import (
     build_architect_prompt,
     build_change_prompt,
     build_coder_subplan_prompt,
+    build_planner_prompt,
     build_reviewer_prompt,
 )
 
@@ -102,60 +103,93 @@ class TasksRequirementsTests(unittest.TestCase):
             )
             self._write_coder_inputs(feature_dir, "plan_1.md")
 
+            # Write architecture.md so planner prompt can include it
+            planning_dir = feature_dir / "02_planning"
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "architecture.md").write_text(
+                "# Architecture\n", encoding="utf-8"
+            )
+
             architect_prompt = build_architect_prompt(files)
+            planner_prompt = build_planner_prompt(files)
             coder_prompt = build_coder_subplan_prompt(
                 files, feature_dir / "02_planning" / "plan_1.md", 1
             )
 
-            self.assertIn(
+            # Architect focuses on technical design — must NOT contain plan file
+            # instructions (those belong to the planner)
+            self.assertNotIn(
                 "write the final plan to `02_planning/plan.md`", architect_prompt
             )
-            self.assertIn("also write per-plan task files", architect_prompt)
-            self.assertIn("tasks_<N>.md", architect_prompt)
-            self.assertIn(
+            self.assertNotIn("also write per-plan task files", architect_prompt)
+            self.assertNotIn(
                 "also write `02_planning/execution_plan.json`", architect_prompt
             )
-            self.assertIn("write `02_planning/plan_meta.json`", architect_prompt)
-            self.assertIn(
-                "Documentation updates must be captured as explicit plan "
-                "and task items in `02_planning/plan.md`, "
-                "every `02_planning/plan_<N>.md`, and "
-                "every `02_planning/tasks_<N>.md`.",
-                architect_prompt,
-            )
-            self.assertIn("needs_design", architect_prompt)
-            self.assertIn("needs_docs", architect_prompt)
-            self.assertIn("doc_files", architect_prompt)
-            self.assertIn("empty list when `needs_docs` is `false`", architect_prompt)
-            self.assertIn(
-                "Do not treat `needs_docs` as a workflow switch", architect_prompt
-            )
-            self.assertIn("Phase 1: Foundation & Interfaces", architect_prompt)
-            self.assertIn("Phase 2: Parallel Implementation", architect_prompt)
-            self.assertIn("Phase 3: Integration & Validation", architect_prompt)
-            self.assertIn("Scope", architect_prompt)
-            self.assertIn("Owned files/modules", architect_prompt)
-            self.assertIn("Dependencies", architect_prompt)
-            self.assertIn("Isolation", architect_prompt)
-            self.assertIn("conflict mapping", architect_prompt.lower())
-            self.assertIn("owned files/modules must be disjoint", architect_prompt)
-            self.assertIn(
-                "merge that work into one sub-plan or move "
-                "the overlapping portion into a serial Phase 3 integration step",
-                architect_prompt,
-            )
-            self.assertIn("shared mutable artifacts", architect_prompt)
-            self.assertIn("task ownership unambiguous", architect_prompt)
-            self.assertIn(
-                "must belong only to that sub-plan's owned files/modules",
-                architect_prompt,
-            )
-            self.assertIn("technical debt", architect_prompt.lower())
+            self.assertNotIn("write `02_planning/plan_meta.json`", architect_prompt)
+            self.assertNotIn("Phase 1: Foundation & Interfaces", architect_prompt)
+            self.assertNotIn("Phase 2: Parallel Implementation", architect_prompt)
             self.assertNotIn("legacy flat `plan.md` parsing fallback", architect_prompt)
             self.assertNotIn(
                 "Empty file-set intersection is a hint for parallelization",
                 architect_prompt,
             )
+
+            # Architect must describe technical design output (architecture.md)
+            self.assertIn("02_planning/architecture.md", architect_prompt)
+            self.assertIn("Components", architect_prompt)
+            self.assertIn("Interfaces", architect_prompt)
+
+            # Planner owns all execution planning — plan files, tasks, meta
+            self.assertIn(
+                "write the final plan to `02_planning/plan.md`", planner_prompt
+            )
+            self.assertIn("also write per-plan task files", planner_prompt)
+            self.assertIn("tasks_<N>.md", planner_prompt)
+            self.assertIn(
+                "also write `02_planning/execution_plan.json`", planner_prompt
+            )
+            self.assertIn("write `02_planning/plan_meta.json`", planner_prompt)
+            self.assertIn(
+                "Documentation updates must be captured as explicit plan "
+                "and task items in `02_planning/plan.md`, "
+                "every `02_planning/plan_<N>.md`, and "
+                "every `02_planning/tasks_<N>.md`.",
+                planner_prompt,
+            )
+            self.assertIn("needs_design", planner_prompt)
+            self.assertIn("needs_docs", planner_prompt)
+            self.assertIn("doc_files", planner_prompt)
+            self.assertIn("empty list when `needs_docs` is `false`", planner_prompt)
+            self.assertIn(
+                "Do not treat `needs_docs` as a workflow switch", planner_prompt
+            )
+            self.assertIn("Phase 1: Foundation & Interfaces", planner_prompt)
+            self.assertIn("Phase 2: Parallel Implementation", planner_prompt)
+            self.assertIn("Phase 3: Integration & Validation", planner_prompt)
+            self.assertIn("Scope", planner_prompt)
+            self.assertIn("Owned files/modules", planner_prompt)
+            self.assertIn("Dependencies", planner_prompt)
+            self.assertIn("Isolation", planner_prompt)
+            self.assertIn("conflict mapping", planner_prompt.lower())
+            self.assertIn("owned files/modules must be disjoint", planner_prompt)
+            self.assertIn(
+                "merge that work into one sub-plan or move "
+                "the overlapping portion into a serial Phase 3 integration step",
+                planner_prompt,
+            )
+            self.assertIn("shared mutable artifacts", planner_prompt)
+            self.assertIn("task ownership unambiguous", planner_prompt)
+            self.assertIn(
+                "must belong only to that sub-plan's owned files/modules",
+                planner_prompt,
+            )
+            self.assertIn("technical debt", planner_prompt.lower())
+            self.assertNotIn("legacy flat `plan.md` parsing fallback", planner_prompt)
+            self.assertNotIn(
+                "Empty file-set intersection is a hint for parallelization",
+                planner_prompt,
+            )
+
             self.assertIn("05_implementation/done_1", coder_prompt)
             self.assertIn("Do not update state.json", coder_prompt)
             self.assertIn("TDD protocol", coder_prompt)

@@ -115,17 +115,22 @@ The coder prompt contract now requires:
 
 ## Staged planning contract
 
-Planning and replanning prompts share one contract for implementation scheduling artifacts:
+The architect/planner split is:
+
+- **Architect** (`build_architect_prompt()`) — defines the technical design: solution approach, components, interfaces, data models, cross-cutting concerns, technology choices, risks. Sole output: `02_planning/architecture.md`.
+- **Planner** (`build_planner_prompt()`) — receives `architecture.md` and produces the full execution schedule. Sole owner of all plan files.
+
+Planner (and replanning via `build_change_prompt()`) output contract:
 
 - `02_planning/plan.md` is the human-readable overview
 - `02_planning/plan_<N>.md` files are executable implementation units
 - `02_planning/execution_plan.json` is the scheduling source of truth (ordered execution groups, each marked as `serial` or `parallel`, with explicit named plan references)
 - `02_planning/tasks_<N>.md` are per-plan implementation checklists mapped to the same work; each coder receives only their assigned plan's tasks
 - `02_planning/tasks.md` is an optional human-readable overview summarizing all tasks (not used by scheduler)
-- `02_planning/plan_meta.json` remains workflow intent metadata (`needs_design`, `needs_docs`, `doc_files`)
+- `02_planning/plan_meta.json` is planner workflow-intent metadata (`needs_design`, `needs_docs`, `doc_files`, `review_strategy`)
 - Documentation updates must be represented in planning artifacts (`plan.md`, `plan_<N>.md`, and corresponding `tasks_<N>.md`) rather than a dedicated post-review docs phase.
 
-Architect output requirements (for architecture.md) and Planner output requirements (for execution plans) include:
+Planner output requirements for execution plans include:
 
 - A Phase 1 / Phase 2 / Phase 3 breakdown where Phase 1 defines interfaces/contracts and Phase 2 uses those contracts for parallel implementation
 - Per parallel sub-plan sections for `Scope`, `Owned files/modules`, `Dependencies`, and `Isolation`
@@ -135,9 +140,9 @@ Architect output requirements (for architecture.md) and Planner output requireme
 - `Isolation` must be justified in terms of exclusive ownership, not only logical separation
 - A callout for any enabling refactor needed to preserve boundaries, plus explicit technical debt rationale when refactor work is deferred
 
-Current split:
-- `build_architect_prompt()` renders architecting prompts (creates architecture.md)
-- `build_planner_prompt()` renders planning prompts (creates plan.md, execution_plan.json from architecture.md)
+Current prompt builders:
+- `build_architect_prompt()` renders architecting prompts (creates `architecture.md`)
+- `build_planner_prompt()` renders planning prompts (creates plan files from `architecture.md`)
 - `build_change_prompt()` applies the same staged planning artifact contract in replanning mode
 - planning/replanning prompt contracts require:
   - `02_planning/plan.md` as the human-readable overview
