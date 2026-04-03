@@ -436,7 +436,8 @@ class MonitorTests(unittest.TestCase):
                     )
                 )
 
-            self.assertNotIn("architect", output)
+            self.assertNotIn("● architect", output)
+            self.assertNotIn("[architect]", output)
             self.assertIn("reviewer", output)
             self.assertIn("coder", output)
             self.assertIn("WORKING", output)

@@ -70,6 +70,25 @@ def _section_title(label: str) -> str:
     return f" {BOLD}{label}{RESET}"
 
 
+def _render_system_notice(width: int, notice: str) -> list[str]:
+    """Render a prominent system notice/warning box."""
+    if not notice:
+        return []
+
+    # Wrap notice text to fit width
+    max_width = max(10, width - 4)
+    wrapped = textwrap.wrap(notice, width=max_width)
+
+    lines = []
+    lines.append(f"{YELLOW}╭{'─' * (width - 2)}╮{RESET}")
+    for line in wrapped:
+        padded = line.ljust(width - 4)[: width - 4]
+        lines.append(f"{YELLOW}│{RESET} {BOLD}{RED}{padded}{RESET} {YELLOW}│{RESET}")
+    lines.append(f"{YELLOW}╰{'─' * (width - 2)}╯{RESET}")
+    lines.append("")
+    return lines
+
+
 def _compose_line(
     width: int,
     *,
@@ -801,8 +820,14 @@ class Monitor:
         interruption_cause = str(state.get("interruption_cause", "")).strip()
         review_iter = state.get("review_iteration", 0)
         subplan_count = state.get("subplan_count", 0)
+        system_notice = str(state.get("system_notice", "")).strip()
 
         body: list[str] = []
+
+        # Render system notice if present (external fix warning)
+        if system_notice:
+            body.extend(_render_system_notice(width, system_notice))
+
         header_rows = _render_feature_header(width, self.files.state)
         if header_rows:
             body.extend(header_rows)

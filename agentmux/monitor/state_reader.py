@@ -10,6 +10,7 @@ from ..agent_labels import role_display_label
 
 ALWAYS_VISIBLE_STATES = [
     "product_management",
+    "architecting",
     "planning",
     "implementing",
     "reviewing",
@@ -19,6 +20,7 @@ ALWAYS_VISIBLE_STATES = [
 OPTIONAL_PHASES = {"designing", "fixing"}
 PIPELINE_STATES = [
     "product_management",
+    "architecting",
     "planning",
     "designing",
     "implementing",
