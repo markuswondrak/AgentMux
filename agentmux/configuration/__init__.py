@@ -22,6 +22,9 @@ ROLES = (
     "designer",
     "code-researcher",
     "web-researcher",
+    "reviewer_expert",
+    "reviewer_logic",
+    "reviewer_quality",
 )
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
