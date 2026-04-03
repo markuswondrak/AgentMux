@@ -20,10 +20,14 @@ dependencies = [
 agentmux = "agentmux.pipeline:main"
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["agentmux*"]
 
 [tool.setuptools.package-data]
 agentmux = ["prompts/**/*.md", "configuration/defaults/*.yaml"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
 
 [tool.ruff]
 target-version = "py310"

@@ -87,8 +87,10 @@ class TestPlannerPromptTemplates(unittest.TestCase):
 
     def setUp(self) -> None:
         self.project_root = Path(__file__).parent.parent
-        self.agents_dir = self.project_root / "agentmux" / "prompts" / "agents"
-        self.commands_dir = self.project_root / "agentmux" / "prompts" / "commands"
+        self.agents_dir = self.project_root / "src" / "agentmux" / "prompts" / "agents"
+        self.commands_dir = (
+            self.project_root / "src" / "agentmux" / "prompts" / "commands"
+        )
 
     def test_planner_agent_prompt_exists(self) -> None:
         """Planner agent prompt template should exist."""

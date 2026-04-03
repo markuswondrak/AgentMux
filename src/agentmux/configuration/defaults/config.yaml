@@ -24,6 +24,12 @@ providers:
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
         Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
+      planner:
+      - --permission-mode
+      - acceptEdits
+      - --allowedTools
+      - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
       product-manager:
       - --permission-mode
       - acceptEdits
@@ -82,6 +88,11 @@ providers:
       - workspace-write
       - -a
       - never
+      planner:
+      - -s
+      - workspace-write
+      - -a
+      - never
       product-manager:
       - -s
       - workspace-write
@@ -135,6 +146,9 @@ providers:
       architect:
       - --approval-mode
       - yolo
+      planner:
+      - --approval-mode
+      - yolo
       product-manager:
       - --approval-mode
       - yolo
@@ -171,6 +185,9 @@ providers:
       architect:
       - --agent
       - agentmux-architect
+      planner:
+      - --agent
+      - agentmux-planner
       product-manager:
       - --agent
       - agentmux-product-manager

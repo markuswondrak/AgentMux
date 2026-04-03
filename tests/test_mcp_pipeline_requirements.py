@@ -348,7 +348,12 @@ class McpPipelineRequirementsTests(unittest.TestCase):
         repo_root = Path(__file__).resolve().parents[1]
         config = yaml.safe_load(
             (
-                repo_root / "agentmux" / "configuration" / "defaults" / "config.yaml"
+                repo_root
+                / "src"
+                / "agentmux"
+                / "configuration"
+                / "defaults"
+                / "config.yaml"
             ).read_text(encoding="utf-8")
         )
 

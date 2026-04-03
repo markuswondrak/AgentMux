@@ -44,7 +44,8 @@ class TasksRequirementsTests(unittest.TestCase):
     ) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         command_templates = sorted(
-            path.name for path in (repo_root / "agentmux/prompts/commands").glob("*.md")
+            path.name
+            for path in (repo_root / "src/agentmux/prompts/commands").glob("*.md")
         )
 
         self.assertNotIn("docs.md", command_templates)
@@ -53,8 +54,8 @@ class TasksRequirementsTests(unittest.TestCase):
         repo_root = Path(__file__).resolve().parents[1]
         template_paths = sorted(
             [
-                *(repo_root / "agentmux/prompts/agents").glob("*.md"),
-                *(repo_root / "agentmux/prompts/commands").glob("*.md"),
+                *(repo_root / "src/agentmux/prompts/agents").glob("*.md"),
+                *(repo_root / "src/agentmux/prompts/commands").glob("*.md"),
             ]
         )
         legacy_placeholder_pattern = re.compile(r"\{[a-z_][a-z0-9_]*\}")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -463,12 +464,14 @@ class PipelineApplication:
 
         files = load_runtime_files(self.project_dir, feature_dir)
         log_handle = files.orchestrator_log.open("a", encoding="utf-8")
+        child_env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
         subprocess.Popen(
             command,
             cwd=str(self.project_dir),
             stdout=log_handle,
             stderr=subprocess.STDOUT,
             start_new_session=True,
+            env=child_env,
         )
 
     def _mcp_preparer(self) -> McpAgentPreparer:

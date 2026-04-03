@@ -14,7 +14,8 @@ class PackagingRequirementsTests(unittest.TestCase):
 
     def test_pipeline_module_lives_inside_agentmux_package(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
-        self.assertTrue((repo_root / "agentmux" / "pipeline" / "__init__.py").exists())
+        pipeline_init = repo_root / "src" / "agentmux" / "pipeline" / "__init__.py"
+        self.assertTrue(pipeline_init.exists())
 
     def test_requirements_include_mcp_sdk_dependency(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

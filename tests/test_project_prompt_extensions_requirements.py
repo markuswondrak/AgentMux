@@ -347,17 +347,17 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
     ) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         template_paths = [
-            repo_root / "agentmux/prompts/agents/architect.md",
-            repo_root / "agentmux/prompts/agents/coder.md",
-            repo_root / "agentmux/prompts/agents/reviewer.md",
-            repo_root / "agentmux/prompts/agents/product-manager.md",
-            repo_root / "agentmux/prompts/agents/code-researcher.md",
-            repo_root / "agentmux/prompts/agents/web-researcher.md",
-            repo_root / "agentmux/prompts/agents/designer.md",
-            repo_root / "agentmux/prompts/commands/review.md",
-            repo_root / "agentmux/prompts/commands/fix.md",
-            repo_root / "agentmux/prompts/commands/confirmation.md",
-            repo_root / "agentmux/prompts/commands/change.md",
+            repo_root / "src/agentmux/prompts/agents/architect.md",
+            repo_root / "src/agentmux/prompts/agents/coder.md",
+            repo_root / "src/agentmux/prompts/agents/reviewer.md",
+            repo_root / "src/agentmux/prompts/agents/product-manager.md",
+            repo_root / "src/agentmux/prompts/agents/code-researcher.md",
+            repo_root / "src/agentmux/prompts/agents/web-researcher.md",
+            repo_root / "src/agentmux/prompts/agents/designer.md",
+            repo_root / "src/agentmux/prompts/commands/review.md",
+            repo_root / "src/agentmux/prompts/commands/fix.md",
+            repo_root / "src/agentmux/prompts/commands/confirmation.md",
+            repo_root / "src/agentmux/prompts/commands/change.md",
         ]
 
         for template_path in template_paths:
@@ -749,10 +749,10 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
     def test_affected_prompt_templates_use_shared_preference_fragment(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         template_paths = [
-            repo_root / "agentmux/prompts/agents/product-manager.md",
-            repo_root / "agentmux/prompts/agents/architect.md",
-            repo_root / "agentmux/prompts/agents/reviewer.md",
-            repo_root / "agentmux/prompts/commands/confirmation.md",
+            repo_root / "src/agentmux/prompts/agents/product-manager.md",
+            repo_root / "src/agentmux/prompts/agents/architect.md",
+            repo_root / "src/agentmux/prompts/agents/reviewer.md",
+            repo_root / "src/agentmux/prompts/commands/confirmation.md",
         ]
 
         for template_path in template_paths:
@@ -853,7 +853,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
 
     def test_confirmation_template_uses_shared_preference_memory_fragment(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
-        template_path = repo_root / "agentmux/prompts/commands/confirmation.md"
+        template_path = repo_root / "src/agentmux/prompts/commands/confirmation.md"
         template = template_path.read_text(encoding="utf-8")
 
         self.assertIn("[[shared:preference-memory]]", template)

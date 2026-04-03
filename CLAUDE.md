@@ -1,6 +1,6 @@
-# CLAUDE.md
+# Coding Agent Instructions
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to COding Agents when working with code in this repository.
 
 ## Running the Pipeline
 
@@ -81,7 +81,7 @@ pre-commit run --all-files
 Pre-commit hooks automatically run `ruff-check --fix` and `ruff-format` on every commit.
 
 Default config resolution is layered:
-- built-in defaults from `agentmux/configuration/defaults/config.yaml` (v2 schema)
+- built-in defaults from `src/agentmux/configuration/defaults/config.yaml` (v2 schema)
 - optional user config from `~/.config/agentmux/config.yaml` (v2 schema)
 - project config from `.agentmux/config.yaml` (v2 schema)
 - explicit `--config <path>` override
@@ -130,45 +130,45 @@ Role routing in these phases:
 ### Component structure
 
 ```
-agentmux/pipeline/__init__.py       — CLI parsing and `main()`
-agentmux/pipeline/application.py    — PipelineApplication, launcher flow, hidden `--orchestrate` mode
-agentmux/pipeline/init_command.py   — project initialization wizard
+src/agentmux/pipeline/__init__.py       — CLI parsing and `main()`
+src/agentmux/pipeline/application.py    — PipelineApplication, launcher flow, hidden `--orchestrate` mode
+src/agentmux/pipeline/init_command.py   — project initialization wizard
 
-agentmux/configuration/             — layered config loading, provider/model resolution, built-in defaults (v2 schema)
-agentmux/configuration/providers.py — built-in provider helpers for provider/model resolution
+src/agentmux/configuration/             — layered config loading, provider/model resolution, built-in defaults (v2 schema)
+src/agentmux/configuration/providers.py — built-in provider helpers for provider/model resolution
 
-agentmux/shared/models.py           — AgentConfig, GitHubConfig, RuntimeFiles
-agentmux/sessions/__init__.py       — SessionService, session creation/resume
-agentmux/sessions/state_store.py    — state.json CRUD, feature-directory lifecycle, commit/cleanup helpers
+src/agentmux/shared/models.py           — AgentConfig, GitHubConfig, RuntimeFiles
+src/agentmux/sessions/__init__.py       — SessionService, session creation/resume
+src/agentmux/sessions/state_store.py    — state.json CRUD, feature-directory lifecycle, commit/cleanup helpers
 
-agentmux/runtime/__init__.py        — TmuxAgentRuntime and TmuxRuntimeFactory
-agentmux/runtime/tmux_control.py    — tmux control, pane/session lifecycle, prompt dispatch
-agentmux/runtime/event_bus.py       — shared session event bus
-agentmux/runtime/file_events.py     — watchdog integration and created-files logging
-agentmux/runtime/interruption_sources.py — missing-pane interruption source
+src/agentmux/runtime/__init__.py        — TmuxAgentRuntime and TmuxRuntimeFactory
+src/agentmux/runtime/tmux_control.py    — tmux control, pane/session lifecycle, prompt dispatch
+src/agentmux/runtime/event_bus.py       — shared session event bus
+src/agentmux/runtime/file_events.py     — watchdog integration and created-files logging
+src/agentmux/runtime/interruption_sources.py — missing-pane interruption source
 
-agentmux/workflow/orchestrator.py   — orchestration loop on top of runtime event sources
-agentmux/workflow/phases.py         — workflow phase state machine
-agentmux/workflow/prompts.py        — prompt rendering and prompt-file creation
-agentmux/workflow/handlers.py       — phase helpers and state writes
-agentmux/workflow/transitions.py    — PipelineContext and transition helpers
-agentmux/workflow/interruptions.py  — interruption catalog and reporting
-agentmux/workflow/plan_parser.py    — execution-plan-backed subplan labels
+src/agentmux/workflow/orchestrator.py   — orchestration loop on top of runtime event sources
+src/agentmux/workflow/phases.py         — workflow phase state machine
+src/agentmux/workflow/prompts.py        — prompt rendering and prompt-file creation
+src/agentmux/workflow/handlers.py       — phase helpers and state writes
+src/agentmux/workflow/transitions.py    — PipelineContext and transition helpers
+src/agentmux/workflow/interruptions.py  — interruption catalog and reporting
+src/agentmux/workflow/plan_parser.py    — execution-plan-backed subplan labels
 
-agentmux/monitor/__init__.py        — monitor command entrypoint
-agentmux/monitor/state_reader.py    — monitor state/log aggregation
-agentmux/monitor/render.py          — ANSI rendering for the control pane
-agentmux/terminal_ui/console.py     — interactive terminal session selection
-agentmux/terminal_ui/screens.py     — welcome/goodbye terminal screens and shared logo
-agentmux/terminal_ui/layout.py      — shared terminal layout constants
+src/agentmux/monitor/__init__.py        — monitor command entrypoint
+src/agentmux/monitor/state_reader.py    — monitor state/log aggregation
+src/agentmux/monitor/render.py          — ANSI rendering for the control pane
+src/agentmux/terminal_ui/console.py     — interactive terminal session selection
+src/agentmux/terminal_ui/screens.py     — welcome/goodbye terminal screens and shared logo
+src/agentmux/terminal_ui/layout.py      — shared terminal layout constants
 
-agentmux/integrations/github.py     — GitHub issue bootstrap and PR creation
-agentmux/integrations/mcp.py        — provider-native MCP setup plus runtime env wiring
-agentmux/integrations/mcp_research_server.py — shared MCP research server
-agentmux/integrations/completion.py — completion-time commit / PR / cleanup side effects
-agentmux/integrations/compression.py — headroom proxy lifecycle and agent env injection
+src/agentmux/integrations/github.py     — GitHub issue bootstrap and PR creation
+src/agentmux/integrations/mcp.py        — provider-native MCP setup plus runtime env wiring
+src/agentmux/integrations/mcp_research_server.py — shared MCP research server
+src/agentmux/integrations/completion.py — completion-time commit / PR / cleanup side effects
+src/agentmux/integrations/compression.py — headroom proxy lifecycle and agent env injection
 
-agentmux/prompts/agents/            — role-level prompts (define what each agent is)
+src/agentmux/prompts/agents/            — role-level prompts (define what each agent is)
   product-manager.md           —   product management phase
   architect.md                 —   planning phase
   reviewer.md                  —   review + confirmation phases (legacy, backward compat)
@@ -178,7 +178,7 @@ agentmux/prompts/agents/            — role-level prompts (define what each age
   coder.md                     —   implementation phase
   code-researcher.md           —   codebase analysis on architect request
   web-researcher.md            —   internet search on architect request
-agentmux/prompts/commands/          — phase-specific command prompts (what to do at each step)
+src/agentmux/prompts/commands/          — phase-specific command prompts (what to do at each step)
   review.md                    —   code review (legacy)
   review_logic.md              —   logic alignment review
   review_quality.md            —   quality/style review

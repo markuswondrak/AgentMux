@@ -2,9 +2,10 @@
 """
 AgentMux Development Wrapper
 
-This wrapper script allows developers to use the installed version of agentmux
-while working on the agentmux source code itself. It removes the current directory
-from Python's import path to prevent the local source from being imported.
+Thin launcher for running the installed agentmux CLI from within the
+repository. With the src/ layout the package lives under src/agentmux/,
+so the repository root is no longer on the import path and shadowing
+cannot occur. This wrapper simply delegates to the installed entry point.
 
 Usage:
     ./agentmux-dev "Your feature description"
@@ -18,21 +19,11 @@ Installation:
 
     # Or use directly from repo
     ./agentmux-dev "Add new feature"
-
-Why this is needed:
-    When running `agentmux` from within the agentmux repository, Python's import
-    system finds the local `agentmux/` package before the installed version.
-    This wrapper removes the current directory from sys.path, ensuring the
-    installed version is used instead.
 """
 
 import sys
 
-# Remove current directory and empty strings from sys.path
-# This prevents Python from finding the local agentmux package
-sys.path = [p for p in sys.path if p not in ("", ".")]
-
-from agentmux.pipeline import main  # noqa: E402
+from agentmux.pipeline import main
 
 if __name__ == "__main__":
     sys.exit(main())
