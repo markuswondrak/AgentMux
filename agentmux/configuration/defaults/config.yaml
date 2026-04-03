@@ -198,3 +198,29 @@ providers:
       reviewer_quality:
       - --agent
       - agentmux-reviewer
+  copilot:
+    command: copilot
+    model_flag: --model
+    trust_snippet: trust the files
+    single_coder: true
+    role_args:
+      architect:
+      - --allow-all
+      product-manager:
+      - --allow-all
+      reviewer:
+      - --allow-all
+      coder:
+      - --allow-all
+      designer:
+      - --allow-all
+      code-researcher:
+      - --allow-all
+      web-researcher:
+      - --allow-all
+      reviewer_expert:
+      - --allow-all
+      reviewer_logic:
+      - --allow-all
+      reviewer_quality:
+      - --allow-all

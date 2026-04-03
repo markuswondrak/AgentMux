@@ -19,7 +19,7 @@ Use `agentmux init` to scaffold a new project with configuration:
 
 - **Interactive mode** — Guides you through a quick setup or custom role assignments, GitHub settings, optional MCP setup, and optional prompt stubs
 - **Non-interactive mode** (`--defaults`) — Creates config with built-in defaults and CLAUDE.md template
-- **CLI detection** — Automatically detects installed providers (claude, codex, gemini, opencode)
+- **CLI detection** — Automatically detects installed providers (claude, codex, gemini, opencode, copilot)
 - **Config generation** — Creates `.agentmux/config.yaml` with only necessary overrides (minimal config files)
 - **CLAUDE.md setup** — Creates a template, symlinks an existing file, or skips
 - **Prompt stubs** — Optionally generates role-specific instruction files in `.agentmux/prompts/agents/`
@@ -82,6 +82,7 @@ Built-in and user-level configs may additionally define:
 - `providers.<name>.model_flag` — model switch, default `--model`
 - `providers.<name>.trust_snippet` — auto-accept text for trust prompts
 - `providers.<name>.role_args.<role>` — default CLI args for a role
+- `providers.<name>.single_coder` — when `true`, the implementing phase sends one combined prompt covering all sub-plans to a single coder pane instead of spawning parallel/serial panes. The coder is expected to use its own internal sub-agents. Default: `false`.
 
 ## Completion settings boundary
 
@@ -117,6 +118,54 @@ roles:
   coder:
     provider: kimi
     model: kimi-2.5
+```
+
+## GitHub Copilot CLI provider
+
+`copilot` (from `npm install -g @github/copilot`) is a built-in provider. Install the CLI, then select it as the default provider or per role:
+
+```yaml
+version: 2
+defaults:
+  provider: copilot
+  model: gpt-4o
+```
+
+Per-role model selection:
+
+```yaml
+version: 2
+defaults:
+  provider: copilot
+  model: gpt-4o
+roles:
+  architect:
+    model: claude-sonnet-4
+  reviewer_expert:
+    model: o3-mini
+```
+
+Supported models: `gpt-4o`, `claude-sonnet-4`, `o3-mini`, `gemini-2.5-flash`. Models are selected via `--model=<model>`.
+
+`copilot` uses `--allow-all` for all roles to enable non-interactive operation. On first run in a directory, Copilot CLI asks "Do you trust the files in this folder?" — Agentmux auto-accepts this via the `trust_snippet: "trust the files"` configuration.
+
+### Single-coder mode
+
+`copilot` has `single_coder: true` set in its built-in provider config. This means the implementing phase sends **one combined prompt** to a single copilot pane instead of spawning separate panes for each sub-plan. The prompt embeds all plan and tasks content, and instructs copilot to use its own internal sub-agents to implement each plan. Copilot writes the `done_N` completion marker files as each plan finishes (or all at once at the end).
+
+This design avoids multiple premium-request invocations (one per sub-plan pane) in favour of a single invocation where copilot manages parallelism internally.
+
+The `single_coder` flag can also be set on any custom provider definition in user or project config:
+
+```yaml
+version: 2
+providers:
+  my-provider:
+    command: my-cli
+    model_flag: --model
+    single_coder: true
+    role_args:
+      coder: [--allow-all]
 ```
 
 ## Strict schema

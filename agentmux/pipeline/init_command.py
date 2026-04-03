@@ -34,7 +34,7 @@ except ImportError:  # pragma: no cover - optional at import time in this enviro
     Rule = None  # type: ignore[assignment]
 
 
-KNOWN_PROVIDERS = ("claude", "codex", "gemini", "opencode")
+KNOWN_PROVIDERS = ("claude", "codex", "gemini", "opencode", "copilot")
 PROMPTED_ROLES = ("architect", "product-manager", "reviewer", "coder", "designer")
 PROMPT_STUB_ROLES = ("coder", "reviewer", "architect", "product-manager", "designer")
 
@@ -321,7 +321,7 @@ def prompt_role_config(
     if not detected_providers:
         raise SystemExit(
             "No supported provider CLI detected. "
-            "Install one of: claude, codex, gemini, opencode."
+            "Install one of: claude, codex, gemini, opencode, copilot."
         )
 
     defaults = dict(defaults_config.get("defaults", {}))
@@ -658,7 +658,7 @@ def run_init(defaults_mode: bool = False) -> int:
         if not detected_providers:
             raise SystemExit(
                 "No supported provider CLI detected. "
-                "Install one of: claude, codex, gemini, opencode."
+                "Install one of: claude, codex, gemini, opencode, copilot."
             )
         output.print(_rule("Role Configuration"))
         role_overrides = prompt_role_config(detected_providers, defaults_config)

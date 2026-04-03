@@ -303,6 +303,8 @@ def _normalize_provider(name: str, raw: Any) -> dict[str, Any]:
         result["trust_snippet"] = str(raw["trust_snippet"])
     if raw.get("batch_subcommand") is not None:
         result["batch_subcommand"] = str(raw["batch_subcommand"])
+    if raw.get("single_coder") is not None:
+        result["single_coder"] = bool(raw["single_coder"])
 
     return result
 
@@ -440,6 +442,7 @@ def _resolve_loaded_config(
             trust_snippet=provider.get("trust_snippet"),
             provider=provider_name,
             batch_subcommand=provider.get("batch_subcommand"),
+            single_coder=bool(provider.get("single_coder", False)),
         )
 
     return LoadedConfig(

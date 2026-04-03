@@ -94,6 +94,7 @@ class InitRequirementsTests(unittest.TestCase):
             "codex": "/usr/bin/codex",
             "gemini": None,
             "opencode": None,
+            "copilot": None,
         }
         with patch(
             "agentmux.pipeline.init_command.shutil.which",
@@ -102,7 +103,13 @@ class InitRequirementsTests(unittest.TestCase):
             detected = detect_clis()
 
         self.assertEqual(
-            {"claude": True, "codex": True, "gemini": False, "opencode": False},
+            {
+                "claude": True,
+                "codex": True,
+                "gemini": False,
+                "opencode": False,
+                "copilot": False,
+            },
             detected,
         )
 

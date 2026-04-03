@@ -14,6 +14,7 @@ class Provider:
     trust_snippet: str | None
     default_args: dict[str, list[str]]
     batch_subcommand: str | None = None
+    single_coder: bool = False
 
 
 def _build_builtin_providers() -> dict[str, Provider]:
@@ -31,6 +32,7 @@ def _build_builtin_providers() -> dict[str, Provider]:
                 for role, args in dict(provider.get("role_args", {})).items()
             },
             batch_subcommand=provider.get("batch_subcommand"),
+            single_coder=bool(provider.get("single_coder", False)),
         )
     return result
 
@@ -69,4 +71,5 @@ def resolve_agent(
         args=list(args),
         trust_snippet=provider.trust_snippet,
         batch_subcommand=provider.batch_subcommand,
+        single_coder=provider.single_coder,
     )

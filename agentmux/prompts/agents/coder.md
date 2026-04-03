@@ -26,13 +26,7 @@ Your job:
 5. Work atomically from your assigned task checklist: Complete one task at a time, run validation for that task, and check off that task before moving to the next one.
 When your assigned task checklist includes documentation tasks, complete them as part of implementation in this coder step.
 Do not defer documentation to a separate docs agent or post-review docs phase.
-6. If `04_design/design.md` is present, follow it for UI-related work.
-7. Change only task-relevant files and avoid drive-by cleanup or formatting outside the requested work.
-8. Run at least the relevant validation steps for the change. This includes tests and any other appropriate checks such as lint, build, or typecheck when they are relevant to the changed code.
-9. Do not write the review.
-10. If you hit an ambiguity or blocker that prevents correct implementation, record it clearly in the shared feature directory instead of guessing.
-11. You are only finished when the required validation passes.
-12. Record any notable risks, follow-ups, or breaking changes in the shared feature directory if they remain after implementation.
+[[shared:coder-discipline]]
 13. If implementation reveals that requirements or the plan need adjustment (e.g. a requirement turns out to be infeasible as written, or a task needs to be split or reordered), update `requirements.md` and `[[placeholder:plan_file]]` / `[[placeholder:tasks_file]]` accordingly so they stay in sync with reality.
 14. [[placeholder:completion_instruction]]
 

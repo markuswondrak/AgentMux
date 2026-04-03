@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from ..shared.models import ProjectPaths, RuntimeFiles, tasks_file_for_plan
+from .execution_plan import load_execution_plan
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _SHARED_FRAGMENT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
@@ -335,6 +336,105 @@ def build_coder_subplan_prompt(
             "project_dir": files.project_dir,
             "plan_file": files.relative_path(subplan_path),
             "tasks_file": tasks_file_relative,
+            "research_handoff": _build_coder_research_handoff(files),
+            "completion_instruction": completion_instruction,
+            "completion_constraints": completion_constraints,
+        },
+    )
+    return _expand_session_includes(rendered, files.feature_dir)
+
+
+def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
+    """Build a single combined prompt for single-coder mode (e.g. copilot).
+
+    Reads all sub-plans from execution_plan.json and embeds their content
+    inline so one coder instance can implement the full plan using internal
+    sub-agents.  The coder is instructed to write each done_N marker as it
+    finishes the corresponding plan.
+    """
+    execution_plan = load_execution_plan(files.planning_dir)
+
+    plans_blocks: list[str] = []
+    all_marker_indexes: list[int] = []
+
+    for group in execution_plan.groups:
+        for plan_ref in group.plans:
+            match = re.match(r"^plan_(\d+)\.md$", plan_ref.file)
+            if match is None:
+                raise RuntimeError(
+                    f"Unexpected plan file name in execution_plan.json: {plan_ref.file}"
+                )
+            index = int(match.group(1))
+            all_marker_indexes.append(index)
+
+            plan_path = files.planning_dir / plan_ref.file
+            tasks_path = tasks_file_for_plan(files.planning_dir, index)
+
+            if not plan_path.is_file():
+                raise FileNotFoundError(f"Plan file not found: {plan_path}")
+            if not tasks_path.is_file():
+                raise FileNotFoundError(
+                    f"Per-plan tasks file not found: {tasks_path}. "
+                    f"The planner must create tasks_{index}.md "
+                    f"alongside plan_{index}.md."
+                )
+
+            plan_rel = files.relative_path(plan_path)
+            tasks_rel = files.relative_path(tasks_path)
+            done_rel = files.relative_path(files.implementation_dir / f"done_{index}")
+
+            block = "\n".join(
+                [
+                    f"### Plan {index}: `{plan_rel}`",
+                    "",
+                    plan_path.read_text(encoding="utf-8").strip(),
+                    "",
+                    f"#### Task checklist for plan {index}: `{tasks_rel}`",
+                    "",
+                    tasks_path.read_text(encoding="utf-8").strip(),
+                    "",
+                    f"**Completion marker for plan {index}**: "
+                    f"create empty file `{done_rel}` when this plan is "
+                    f"fully implemented and validated.",
+                    "",
+                ]
+            )
+            plans_blocks.append(block)
+
+    plans_content = "\n".join(plans_blocks)
+
+    all_marker_indexes_sorted = sorted(all_marker_indexes)
+    all_markers = [
+        f"`{files.relative_path(files.implementation_dir / f'done_{i}')}`"
+        for i in all_marker_indexes_sorted
+    ]
+    markers_str = ", ".join(all_markers)
+
+    completion_instruction = (
+        "FINAL STEP — once all code is written and all validations pass "
+        "for every plan above, ensure these completion marker files exist "
+        f"(each as an empty file): {markers_str}. "
+        "You may create each marker as you finish each individual plan, "
+        "or all at once at the end. "
+        "Do not write anything to the marker files — they must be empty."
+    )
+    completion_constraints = "\n".join(
+        [
+            "- Do not update state.json.",
+            "- Do not write anything to the marker files; create them as empty files.",
+        ]
+    )
+
+    rendered = _render_template(
+        _load_template(
+            "agents",
+            "coder_whole_plan",
+            project_dir=files.project_dir,
+        ),
+        {
+            "feature_dir": files.feature_dir,
+            "project_dir": files.project_dir,
+            "plans_content": plans_content,
             "research_handoff": _build_coder_research_handoff(files),
             "completion_instruction": completion_instruction,
             "completion_constraints": completion_constraints,

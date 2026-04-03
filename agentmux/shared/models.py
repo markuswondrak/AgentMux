@@ -51,6 +51,7 @@ class AgentConfig:
     trust_snippet: str | None = None
     provider: str | None = None
     batch_subcommand: str | None = None
+    single_coder: bool = False
 
 
 @dataclass(frozen=True)

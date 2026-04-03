@@ -19,7 +19,11 @@ from agentmux.workflow.phase_helpers import (
     send_to_role,
 )
 from agentmux.workflow.plan_parser import coder_label_for_subplan
-from agentmux.workflow.prompts import build_coder_subplan_prompt, write_prompt_file
+from agentmux.workflow.prompts import (
+    build_coder_subplan_prompt,
+    build_coder_whole_plan_prompt,
+    write_prompt_file,
+)
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
@@ -144,7 +148,7 @@ class ImplementingHandler:
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering implementing phase.
 
-        Resets markers and dispatches first group.
+        Resets markers and dispatches first group (or whole plan in single-coder mode).
         """
         if state.get("last_event") in {
             "plan_written",
@@ -165,7 +169,10 @@ class ImplementingHandler:
         _set_implementation_progress(updates, schedule, active_group_index)
 
         if active_group_index is not None:
-            self._dispatch_active_group(ctx, schedule, active_group_index)
+            if self._is_single_coder(ctx):
+                self._dispatch_whole_plan(ctx, schedule)
+            else:
+                self._dispatch_active_group(ctx, schedule, active_group_index)
 
         return updates
 
@@ -198,6 +205,26 @@ class ImplementingHandler:
         if not schedule:
             return {}, "reviewing"
 
+        # Update completed subplans
+        completed = self._completed_subplans(state)
+        completed.add(subplan_index)
+        updates: dict[str, object] = {"completed_subplans": sorted(completed)}
+
+        # Single-coder mode: one pane handles everything — just watch for all markers
+        if self._is_single_coder(ctx):
+            all_marker_indexes = [
+                int(idx) for group in schedule for idx in group["marker_indexes"]
+            ]
+            if all(
+                (ctx.files.implementation_dir / f"done_{i}").exists()
+                for i in all_marker_indexes
+            ):
+                ctx.runtime.finish_many("coder")
+                ctx.runtime.deactivate("coder")
+                updates["last_event"] = "implementation_completed"
+                return updates, "reviewing"
+            return updates, None
+
         group_index = int(state.get("implementation_group_index", 0))
         if group_index <= 0 or group_index > len(schedule):
             return {}, None
@@ -207,15 +234,10 @@ class ImplementingHandler:
 
         # Check if this subplan is part of the active group
         if subplan_index not in marker_indexes:
-            return {}, None
+            return updates, None
 
         # Hide the task
         ctx.runtime.hide_task("coder", subplan_index)
-
-        # Update completed subplans
-        completed = self._completed_subplans(state)
-        completed.add(subplan_index)
-        updates = {"completed_subplans": sorted(completed)}
 
         # Check if all markers in the group are complete
         if not _all_markers_complete(ctx.files.implementation_dir, active_group):
@@ -357,3 +379,34 @@ class ImplementingHandler:
             except (TypeError, ValueError):
                 continue
         return completed
+
+    @staticmethod
+    def _is_single_coder(ctx: PipelineContext) -> bool:
+        """Return True if the coder agent uses single-coder mode (e.g. copilot)."""
+        coder = ctx.agents.get("coder")
+        return coder is not None and coder.single_coder
+
+    def _dispatch_whole_plan(
+        self,
+        ctx: PipelineContext,
+        schedule: list[dict[str, object]],
+    ) -> None:
+        """Dispatch a single combined prompt (single-coder mode)."""
+        all_plan_names = [
+            str(name)
+            for group in schedule
+            for name in list(group.get("plan_names", []))
+            if name is not None
+        ]
+        display_label = format_agent_label(
+            "coder",
+            ", ".join(all_plan_names) if all_plan_names else "whole plan",
+        )
+        prompt_file = write_prompt_file(
+            ctx.files.feature_dir,
+            ctx.files.relative_path(
+                ctx.files.implementation_dir / "coder_prompt_whole.txt"
+            ),
+            build_coder_whole_plan_prompt(ctx.files),
+        )
+        send_to_role(ctx, "coder", prompt_file, display_label=display_label)
