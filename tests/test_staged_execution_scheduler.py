@@ -115,6 +115,7 @@ def _touch(path: Path) -> None:
 def _write_execution_plan(ctx: PipelineContext, groups: list[dict]) -> None:
     planning_dir = ctx.files.planning_dir
     planning_dir.mkdir(parents=True, exist_ok=True)
+    (planning_dir / "architecture.md").write_text("# Architecture\n", encoding="utf-8")
     (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
     payload = {"version": 1, "groups": groups}
     (planning_dir / "execution_plan.json").write_text(

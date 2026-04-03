@@ -525,14 +525,15 @@ def build_web_researcher_prompt(topic: str, files: RuntimeFiles) -> str:
 
 
 def build_initial_prompts(files: RuntimeFiles) -> dict[str, Path]:
-    """Build startup prompts and return their file paths."""
-    return {
-        "architect": write_prompt_file(
-            files.feature_dir,
-            files.relative_path(files.planning_dir / "architect_prompt.md"),
-            build_architect_prompt(files),
-        ),
-    }
+    """Build startup prompts and return their file paths.
+
+    Intentionally empty: ArchitectingHandler.enter() creates and dispatches
+    architect_prompt.md when the architecting phase is entered. Pre-creating
+    files here would cause seed_existing_files() to emit a file.created event
+    before any agent has run, triggering PlanningHandler.enter() while
+    architecture.md is still absent.
+    """
+    return {}
 
 
 def build_change_prompt(files: RuntimeFiles) -> str:

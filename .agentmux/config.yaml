@@ -2,16 +2,10 @@ version: 2
 
 defaults:
   session_name: multi-agent-mvp
-  provider: opencode
-  model: fireworks-ai/accounts/fireworks/routers/kimi-k2p5-turbo
+  provider: copilot
   max_review_iterations: 3
 
 roles:
-  architect:
-    model: fireworks-ai/accounts/fireworks/models/glm-5
-  product-manager:
-    model: fireworks-ai/accounts/fireworks/models/glm-5
-  reviewer:
-    model: fireworks-ai/accounts/fireworks/models/glm-5
-  designer:
+  coder:
+    provider: opencode
     model: fireworks-ai/accounts/fireworks/models/glm-5

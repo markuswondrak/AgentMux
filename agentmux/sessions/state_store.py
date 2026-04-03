@@ -147,7 +147,7 @@ def create_feature_files(
     state = {
         "feature_dir": str(feature_dir),
         "session_name": session_name,
-        "phase": "product_management" if product_manager else "planning",
+        "phase": "product_management" if product_manager else "architecting",
         "product_manager": bool(product_manager),
         "last_event": "feature_created",
         "subplan_count": 0,
@@ -205,6 +205,10 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
     planning_dir = feature_dir / SESSION_DIR_NAMES["planning"]
     implementation_dir = feature_dir / SESSION_DIR_NAMES["implementation"]
     review_dir = feature_dir / SESSION_DIR_NAMES["review"]
+
+    architecture_path = planning_dir / "architecture.md"
+    if not architecture_path.exists():
+        return "architecting"
 
     plan_path = planning_dir / "plan.md"
     if not plan_path.exists():

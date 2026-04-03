@@ -319,6 +319,97 @@ class TestPlanningPhaseUsesPlanner(unittest.TestCase):
             self.assertIn("02_planning/approved_preferences.json", prompt)
 
 
+class TestInitialPhase(unittest.TestCase):
+    """Test that new sessions start in the correct initial phase."""
+
+    def test_create_feature_files_starts_in_architecting_phase(self) -> None:
+        """New sessions must start in 'architecting', not 'planning'.
+
+        Regression test for the bug where create_feature_files() set the
+        initial phase to 'planning', causing PlanningHandler.enter() to crash
+        with FileNotFoundError because architecture.md didn't exist yet.
+        """
+        import tempfile
+
+        from agentmux.sessions.state_store import create_feature_files, load_state
+
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td) / "project"
+            feature_dir = Path(td) / "feature"
+            project_dir.mkdir()
+
+            # Simulate what the pipeline does: scaffold a new session
+            create_feature_files(
+                project_dir=project_dir,
+                feature_dir=feature_dir,
+                prompt="Fix import shadowing",
+                session_name="agentmux-test-session",
+                product_manager=False,
+            )
+
+            state = load_state(feature_dir / "state.json")
+            self.assertEqual(
+                state["phase"],
+                "architecting",
+                "New sessions must start in 'architecting' so the architect can "
+                "create architecture.md before the planner runs. Starting in "
+                "'planning' causes an immediate FileNotFoundError crash.",
+            )
+
+    def test_create_feature_files_with_product_manager_starts_in_product_management(
+        self,
+    ) -> None:
+        """Sessions with product manager still start in 'product_management'."""
+        import tempfile
+
+        from agentmux.sessions.state_store import create_feature_files, load_state
+
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td) / "project"
+            feature_dir = Path(td) / "feature"
+            project_dir.mkdir()
+
+            create_feature_files(
+                project_dir=project_dir,
+                feature_dir=feature_dir,
+                prompt="Fix import shadowing",
+                session_name="agentmux-test-session",
+                product_manager=True,
+            )
+
+            state = load_state(feature_dir / "state.json")
+            self.assertEqual(state["phase"], "product_management")
+
+    def test_infer_resume_phase_returns_architecting_when_architecture_missing(
+        self,
+    ) -> None:
+        """infer_resume_phase must return 'architecting' when architecture.md
+        is absent.
+
+        A failed session that crashed before the architect wrote architecture.md
+        must resume in 'architecting', not 'planning'. Resuming in 'planning'
+        would cause the same FileNotFoundError crash.
+        """
+        import tempfile
+
+        from agentmux.sessions.state_store import infer_resume_phase
+
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            feature_dir.mkdir()
+            # Create 02_planning dir but NO architecture.md
+            (feature_dir / "02_planning").mkdir()
+
+            state: dict = {"phase": "failed", "product_manager": False}
+            phase = infer_resume_phase(feature_dir, state)
+            self.assertEqual(
+                phase,
+                "architecting",
+                "A failed session without architecture.md must resume in "
+                "'architecting', not 'planning'.",
+            )
+
+
 class TestDocumentationUpdates(unittest.TestCase):
     """Test that documentation is updated for the new workflow."""
 

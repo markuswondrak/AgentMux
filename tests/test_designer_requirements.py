@@ -204,8 +204,7 @@ class DesignerRequirementsTests(unittest.TestCase):
             self.assertIn("04_design/design.md", designer_prompt)
             self.assertNotIn("[[placeholder:", coder_prompt)
             self.assertNotIn("[[placeholder:", designer_prompt)
-            self.assertEqual(["architect"], list(initial_prompts.keys()))
-            self.assertEqual("architect_prompt.md", initial_prompts["architect"].name)
+            self.assertEqual({}, initial_prompts)
             self.assertFalse(
                 (feature_dir / IMPLEMENTATION_DIR / "coder_prompt.md").exists()
             )
