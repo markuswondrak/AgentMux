@@ -7,7 +7,6 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from agentmux.agent_labels import role_display_label
 from agentmux.integrations.completion import CompletionService
 from agentmux.sessions.state_store import feature_slug_from_dir
 from agentmux.shared.models import ProjectPaths
@@ -15,9 +14,7 @@ from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.phase_helpers import (
     apply_role_preferences,
     filter_file_created_event,
-    send_to_role,
 )
-from agentmux.workflow.prompts import build_confirmation_prompt, write_prompt_file
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
@@ -62,7 +59,7 @@ class CompletingHandler:
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering completing phase.
 
-        Sends confirmation prompt or auto-approves if configured.
+        Launches native TUI or auto-approves if configured.
         """
         approval_path = ctx.files.completion_dir / "approval.json"
         if approval_path.exists():
@@ -76,21 +73,7 @@ class CompletingHandler:
             )
             return {}
 
-        prompt_file = write_prompt_file(
-            ctx.files.feature_dir,
-            ctx.files.relative_path(
-                ctx.files.completion_dir / "confirmation_prompt.md"
-            ),
-            build_confirmation_prompt(ctx.files, ctx.agents.get("reviewer")),
-        )
-        send_to_role(
-            ctx,
-            "reviewer",
-            prompt_file,
-            display_label=role_display_label(
-                ctx.files.feature_dir, "reviewer", state=state
-            ),
-        )
+        ctx.runtime.show_completion_ui(ctx.files.feature_dir)
         return {}
 
     def handle_event(
@@ -132,7 +115,7 @@ class CompletingHandler:
         if payload.get("action") != "approve":
             return {}, None
 
-        # Apply approved preferences
+        # Apply reviewer-approved preferences (written during summary step)
         apply_role_preferences(ctx, "reviewer")
 
         # Get changed paths

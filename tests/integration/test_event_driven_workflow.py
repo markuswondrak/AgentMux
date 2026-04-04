@@ -61,6 +61,9 @@ class FakeRuntime:
     def shutdown(self, keep_session: bool) -> None:
         self.calls.append(("shutdown", keep_session))
 
+    def show_completion_ui(self, feature_dir: Path) -> None:
+        self.calls.append(("show_completion_ui", str(feature_dir)))
+
 
 class TestEventDrivenWorkflowIntegration(unittest.TestCase):
     """Integration test simulating complete workflow with events."""
@@ -203,11 +206,25 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
             self.assertEqual("reviewing", state["phase"])
             self.assertEqual("implementation_completed", state["last_event"])
 
-            # 5. Create review.md with pass verdict to trigger transition to completing
+            # 5. Create review.md with pass verdict — reviewer asked for summary
             ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
             ctx.files.review.write_text("verdict: pass\n", encoding="utf-8")
 
             event = WorkflowEvent(kind="file.created", path="06_review/review.md")
+            updates, next_phase = router.handle(event, load_state(state_path), ctx)
+
+            # Still in reviewing, awaiting summary from reviewer
+            state = load_state(state_path)
+            self.assertEqual("reviewing", state["phase"])
+            self.assertTrue(state.get("awaiting_summary"))
+
+            # 5b. Reviewer writes summary — kill reviewer + transition to completing
+            ctx.files.summary.parent.mkdir(parents=True, exist_ok=True)
+            ctx.files.summary.write_text(
+                "## Summary\nImplemented the feature.\n", encoding="utf-8"
+            )
+
+            event = WorkflowEvent(kind="file.created", path="08_completion/summary.md")
             updates, next_phase = router.handle(event, load_state(state_path), ctx)
 
             # Verify transition to completing

@@ -96,6 +96,7 @@ class RuntimeFiles:
     review: Path
     fix_request: Path
     changes: Path
+    summary: Path
     pm_preference_proposal: Path
     architect_preference_proposal: Path
     reviewer_preference_proposal: Path

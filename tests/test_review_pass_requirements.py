@@ -47,6 +47,9 @@ class FakeRuntime:
     def kill_primary(self, role: str) -> None:
         self.calls.append(("kill_primary", role))
 
+    def show_completion_ui(self, feature_dir: Path) -> None:
+        self.calls.append(("show_completion_ui", str(feature_dir)))
+
     def shutdown(self, keep_session: bool) -> None:
         self.calls.append(("shutdown", keep_session))
 
@@ -63,6 +66,9 @@ class ReviewPassRequirementsTests(unittest.TestCase):
         files.context.write_text("# Context", encoding="utf-8")
         files.architecture.parent.mkdir(parents=True, exist_ok=True)
         files.architecture.write_text("# Architecture", encoding="utf-8")
+        files.requirements.write_text("# Requirements", encoding="utf-8")
+        files.plan.parent.mkdir(parents=True, exist_ok=True)
+        files.plan.write_text("# Plan", encoding="utf-8")
 
         prompts = {"architect": feature_dir / PLANNING_DIR / "architect_prompt.md"}
         for prompt in prompts.values():
@@ -136,7 +142,6 @@ class ReviewPassRequirementsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = self._make_ctx(tmp_path / "feature")
-            # Create the review.md file with verdict: pass
             ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
             ctx.files.review.write_text("verdict: pass\n", encoding="utf-8")
 
@@ -154,7 +159,9 @@ class ReviewPassRequirementsTests(unittest.TestCase):
                 event, load_state(state_path), ctx
             )
 
-            self.assertEqual("completing", next_phase)
+            # On VERDICT:PASS, stays in reviewing (awaiting summary)
+            self.assertIsNone(next_phase)
+            self.assertTrue(updates.get("awaiting_summary"))
             self.assertEqual("review_passed", updates.get("last_event"))
             self.assertIn(("finish_many", "coder"), ctx.runtime.calls)
             self.assertIn(("kill_primary", "coder"), ctx.runtime.calls)
@@ -171,7 +178,6 @@ class ReviewPassRequirementsTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            # Create the review.md file with verdict: pass
             ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
             ctx.files.review.write_text("verdict: pass\n", encoding="utf-8")
 
@@ -189,7 +195,9 @@ class ReviewPassRequirementsTests(unittest.TestCase):
                 event, load_state(state_path), ctx
             )
 
-            self.assertEqual("completing", next_phase)
+            # Stays in reviewing awaiting summary regardless of doc metadata
+            self.assertIsNone(next_phase)
+            self.assertTrue(updates.get("awaiting_summary"))
             self.assertEqual("review_passed", updates.get("last_event"))
 
     def test_handle_review_failed_moves_to_fixing_before_limit(self) -> None:

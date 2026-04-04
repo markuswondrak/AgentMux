@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,17 +28,6 @@ _SESSION_INCLUDE_OPTIONAL_PATTERN = re.compile(r"\[\[include-optional:([^\]]+)\]
 _MAX_SHARED_FRAGMENT_EXPANSION_DEPTH = 8
 _PROJECT_INSTRUCTIONS_PLACEHOLDER = "[[placeholder:project_instructions]]"
 
-_CHANGED_FILES_FALLBACK = "_Unable to read changed files from git status._"
-_CONFIRMATION_APPROVAL_FIELDS: tuple[str, ...] = (
-    "action",
-    "exclude_files",
-    "commit_message",
-)
-
-
-def confirmation_approval_payload_fields() -> tuple[str, ...]:
-    return _CONFIRMATION_APPROVAL_FIELDS
-
 
 def _user_ask_tool_for(agent: AgentConfig | None) -> str:
     """Return the provider-native user-input tool name for the given agent.
@@ -51,21 +39,6 @@ def _user_ask_tool_for(agent: AgentConfig | None) -> str:
         return _USER_ASK_FALLBACK
     key = agent.provider or agent.cli
     return USER_ASK_TOOLS.get(key, _USER_ASK_FALLBACK)
-
-
-def _append_confirmation_commit_message_contract(prompt: str) -> str:
-    if "commit_message" in prompt:
-        return prompt
-    return "\n".join(
-        [
-            prompt.rstrip(),
-            "",
-            "Approval payload contract extension:",
-            "- `commit_message` is optional and may contain a reviewer-authored "
-            "summary for the final commit.",
-            "",
-        ]
-    )
 
 
 def _load_shared_fragment(name: str) -> str:
@@ -312,6 +285,27 @@ def build_reviewer_expert_prompt(
     return _expand_session_includes(rendered, files.feature_dir)
 
 
+def build_reviewer_summary_prompt(
+    files: RuntimeFiles, agent: AgentConfig | None = None
+) -> str:
+    """Build prompt asking the reviewer to write the implementation summary."""
+    rendered = _render_template(
+        _load_template(
+            "commands",
+            "summary",
+            project_dir=files.project_dir,
+        ),
+        {
+            "feature_dir": files.feature_dir,
+            "project_dir": files.project_dir,
+            "reviewer_preference_proposal_file": files.relative_path(
+                files.reviewer_preference_proposal
+            ),
+        },
+    )
+    return _expand_session_includes(rendered, files.feature_dir)
+
+
 def build_designer_prompt(files: RuntimeFiles) -> str:
     completion_instruction = (
         "FINAL STEP ONLY — after writing design.md and any optional design artifacts, "
@@ -500,43 +494,6 @@ def build_fix_prompt(files: RuntimeFiles) -> str:
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)
-
-
-def build_confirmation_prompt(
-    files: RuntimeFiles, agent: AgentConfig | None = None
-) -> str:
-    changed_files = _CHANGED_FILES_FALLBACK
-    try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=files.project_dir,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        changed_files = result.stdout.strip() or "_No changed files detected._"
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.strip() if exc.stderr else "(no stderr)"
-        changed_files = f"{_CHANGED_FILES_FALLBACK}\nError: {stderr}"
-
-    rendered = _render_template(
-        _load_template(
-            "commands",
-            "confirmation",
-            project_dir=files.project_dir,
-        ),
-        {
-            "feature_dir": files.feature_dir,
-            "project_dir": files.project_dir,
-            "changed_files": changed_files,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
-            "user_ask_tool": _user_ask_tool_for(agent),
-        },
-    )
-    prompt = _expand_session_includes(rendered, files.feature_dir)
-    return _append_confirmation_commit_message_contract(prompt)
 
 
 def build_code_researcher_prompt(topic: str, files: RuntimeFiles) -> str:

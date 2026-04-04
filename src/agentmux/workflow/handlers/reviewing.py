@@ -17,6 +17,7 @@ from agentmux.workflow.prompts import (
     build_reviewer_logic_prompt,
     build_reviewer_prompt,
     build_reviewer_quality_prompt,
+    build_reviewer_summary_prompt,
     write_prompt_file,
 )
 
@@ -98,6 +99,10 @@ class ReviewingHandler:
         if path == "06_review/review.md":
             return self._handle_review_written(state, ctx)
 
+        # Check for implementation summary written by reviewer
+        if path == "08_completion/summary.md" and state.get("awaiting_summary"):
+            return self._handle_summary_written(state, ctx)
+
         return {}, None
 
     def _handle_review_written(
@@ -119,7 +124,7 @@ class ReviewingHandler:
         if first_line == "verdict: pass":
             ctx.runtime.finish_many("coder")
             ctx.runtime.kill_primary("coder")
-            return {"last_event": "review_passed"}, "completing"
+            return self._request_summary(state, ctx)
 
         if first_line == "verdict: fail":
             review_iteration = int(state.get("review_iteration", 0))
@@ -137,3 +142,56 @@ class ReviewingHandler:
             }, "fixing"
 
         return {}, None
+
+    def _request_summary(
+        self,
+        state: dict,
+        ctx: PipelineContext,
+    ) -> tuple[dict, str | None]:
+        """Send summary prompt to reviewer and wait for summary.md."""
+        plan_meta = load_plan_meta(ctx.files.planning_dir)
+        reviewer_type = select_reviewer_type(plan_meta)
+        reviewer_role_map = {
+            "logic": "reviewer_logic",
+            "quality": "reviewer_quality",
+            "expert": "reviewer_expert",
+        }
+        reviewer_role = reviewer_role_map[reviewer_type]
+
+        # Clear any stale summary from a previous run
+        if ctx.files.summary.exists():
+            ctx.files.summary.unlink()
+
+        summary_prompt_path = ctx.files.completion_dir / "summary_prompt.md"
+        ctx.files.completion_dir.mkdir(parents=True, exist_ok=True)
+        prompt_file = write_prompt_file(
+            ctx.files.feature_dir,
+            ctx.files.relative_path(summary_prompt_path),
+            build_reviewer_summary_prompt(ctx.files, ctx.agents.get(reviewer_role)),
+        )
+        send_to_role(
+            ctx,
+            reviewer_role,
+            prompt_file,
+            display_label=role_display_label(
+                ctx.files.feature_dir, reviewer_role, state=state
+            ),
+        )
+        return {"last_event": "review_passed", "awaiting_summary": True}, None
+
+    def _handle_summary_written(
+        self,
+        state: dict,
+        ctx: PipelineContext,
+    ) -> tuple[dict, str | None]:
+        """Summary is ready — kill reviewer and move to completing."""
+        plan_meta = load_plan_meta(ctx.files.planning_dir)
+        reviewer_type = select_reviewer_type(plan_meta)
+        reviewer_role_map = {
+            "logic": "reviewer_logic",
+            "quality": "reviewer_quality",
+            "expert": "reviewer_expert",
+        }
+        reviewer_role = reviewer_role_map[reviewer_type]
+        ctx.runtime.kill_primary(reviewer_role)
+        return {"awaiting_summary": False}, "completing"

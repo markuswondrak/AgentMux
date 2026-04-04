@@ -74,6 +74,9 @@ def mock_ctx(tmp_path: Path) -> MagicMock:
     ctx.files.context.write_text("# Context")
     ctx.files.architecture.parent.mkdir(parents=True, exist_ok=True)
     ctx.files.architecture.write_text("# Architecture")
+    (tmp_path / "requirements.md").write_text("# Requirements")
+    ctx.files.plan.parent.mkdir(parents=True, exist_ok=True)
+    ctx.files.plan.write_text("# Plan")
 
     return ctx
 
@@ -580,7 +583,7 @@ class TestReviewingHandler:
             mock_send.assert_called_once()
 
     def test_handle_review_passed(self, mock_ctx: MagicMock, empty_state: dict) -> None:
-        """Test transition on verdict: pass."""
+        """Test that VERDICT:PASS stays in reviewing and requests summary."""
         handler = ReviewingHandler()
         event = WorkflowEvent(kind="file.created", path="06_review/review.md")
 
@@ -592,7 +595,10 @@ class TestReviewingHandler:
 
         mock_ctx.runtime.finish_many.assert_called_once_with("coder")
         mock_ctx.runtime.kill_primary.assert_called_once_with("coder")
-        assert next_phase == "completing"
+        # Stays in reviewing, awaiting summary
+        assert next_phase is None
+        assert updates.get("awaiting_summary") is True
+        assert updates.get("last_event") == "review_passed"
 
     def test_handle_review_failed_under_max_iterations(
         self, mock_ctx: MagicMock, empty_state: dict
@@ -680,29 +686,15 @@ class TestCompletingHandler:
     def test_enter_sends_confirmation_prompt(
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
-        """Test that enter() sends confirmation prompt."""
+        """Test that enter() launches the native completion UI."""
         handler = CompletingHandler()
 
-        with (
-            patch(
-                "agentmux.workflow.handlers.completing.write_prompt_file"
-            ) as mock_write,
-            patch("agentmux.workflow.handlers.completing.send_to_role") as mock_send,
-            patch(
-                "agentmux.workflow.handlers.completing.build_confirmation_prompt"
-            ) as mock_build,
-            patch(
-                "agentmux.workflow.handlers.completing.role_display_label"
-            ) as mock_label,
-        ):
-            mock_write.return_value = Path("/mock/prompt.md")
-            mock_build.return_value = "confirmation prompt"
-            mock_label.return_value = "[reviewer] iteration 1"
+        handler.enter(empty_state, mock_ctx)
 
-            handler.enter(empty_state, mock_ctx)
-
-            mock_build.assert_called_once_with(mock_ctx.files, None)
-            mock_send.assert_called_once()
+        mock_ctx.runtime.show_completion_ui.assert_called_once_with(
+            mock_ctx.files.feature_dir
+        )
+        mock_ctx.runtime.send.assert_not_called()
 
     def test_enter_auto_approve_when_configured(
         self, mock_ctx: MagicMock, empty_state: dict

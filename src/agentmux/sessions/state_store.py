@@ -93,6 +93,7 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         review=review_dir / "review.md",
         fix_request=review_dir / "fix_request.md",
         changes=completion_dir / "changes.md",
+        summary=completion_dir / "summary.md",
         pm_preference_proposal=product_management_dir / "approved_preferences.json",
         architect_preference_proposal=planning_dir / "approved_preferences.json",
         reviewer_preference_proposal=completion_dir / "approved_preferences.json",

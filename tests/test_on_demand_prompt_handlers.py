@@ -63,6 +63,9 @@ class FakeRuntime:
     def kill_primary(self, role: str) -> None:
         self.calls.append(("kill_primary", role))
 
+    def show_completion_ui(self, feature_dir: Path) -> None:
+        self.calls.append(("show_completion_ui", str(feature_dir)))
+
     def shutdown(self, keep_session: bool) -> None:
         self.calls.append(("shutdown", keep_session))
 
@@ -312,7 +315,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
                 ctx.runtime.calls,
             )
 
-    def test_enter_completing_builds_confirmation_prompt_inline(self) -> None:
+    def test_enter_completing_launches_completion_ui(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = _make_ctx(tmp_path / "feature")
@@ -324,18 +327,12 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             handler.enter(load_state(state_path), ctx)
 
             self.assertTrue(
-                (ctx.files.completion_dir / "confirmation_prompt.md").exists()
+                any(c[0] == "show_completion_ui" for c in ctx.runtime.calls),
+                f"Expected show_completion_ui call, got: {ctx.runtime.calls}",
             )
-            self.assertEqual(
-                [
-                    (
-                        "send",
-                        "reviewer",
-                        "confirmation_prompt.md",
-                        "[reviewer] iteration 1",
-                    )
-                ],
-                ctx.runtime.calls,
+            self.assertFalse(
+                any(c[0] == "send" for c in ctx.runtime.calls),
+                f"Expected no send calls, got: {ctx.runtime.calls}",
             )
 
 

@@ -87,8 +87,10 @@ Execution scheduling is strict:
 
 ## Completion (`08_completion/`)
 
-- `confirmation_prompt.md` / `approval.json`
-- `changes.md`
+- `summary_prompt.md` — prompt asking reviewer to write an implementation summary
+- `summary.md` — reviewer-written implementation summary (what was done, key decisions)
+- `approval.json` — written by the native completion UI when user approves
+- `changes.md` — written by the native completion UI when user requests changes
 
 ## Key functions
 
