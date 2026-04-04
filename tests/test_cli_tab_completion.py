@@ -598,3 +598,71 @@ class TestBackwardCompatDetailed:
     def test_prompt_with_name_flag(self):
         """Test that 'agentmux "my feature" --name slug' works via default."""
         # Simulate: agentmux
+
+
+class TestInitProviderAndConfigure:
+    """Tests for init provider positional and configure command."""
+
+    def test_init_provider_positional_parsed(self):
+        """Test that 'agentmux init opencode' parses provider as 'opencode'."""
+        parser = cli.build_parser()
+        args = parser.parse_args(["init", "opencode"])
+        assert args.provider == "opencode"
+
+    def test_init_no_provider_parsed(self):
+        """Test that 'agentmux init' parses provider as None."""
+        parser = cli.build_parser()
+        args = parser.parse_args(["init"])
+        assert args.provider is None
+
+    def test_init_provider_with_defaults_flag(self):
+        """Test that 'agentmux init opencode --defaults' works together."""
+        parser = cli.build_parser()
+        args = parser.parse_args(["init", "opencode", "--defaults"])
+        assert args.provider == "opencode"
+        assert args.defaults is True
+
+    def test_configure_command_exists(self):
+        """Test that configure command is in COMMANDS registry."""
+        command_names = {cmd.name for cmd in cli.COMMANDS}
+        assert "configure" in command_names
+
+    def test_configure_provider_parsed(self):
+        """Test that 'agentmux configure opencode' parses provider as 'opencode'."""
+        parser = cli.build_parser()
+        args = parser.parse_args(["configure", "opencode"])
+        assert args.provider == "opencode"
+
+    def test_configure_no_provider_parsed(self):
+        """Test that 'agentmux configure' parses provider as None."""
+        parser = cli.build_parser()
+        args = parser.parse_args(["configure"])
+        assert args.provider is None
+
+    def test_configure_role_model_parsed(self):
+        """Test that configure opencode --role coder --model sonnet parses correctly."""
+        parser = cli.build_parser()
+        args = parser.parse_args(
+            ["configure", "opencode", "--role", "coder", "--model", "sonnet"]
+        )
+        assert args.provider == "opencode"
+        assert args.role == "coder"
+        assert args.model == "sonnet"
+
+    def test_configure_agent_all_parsed(self):
+        """Test that 'agentmux configure opencode --agent all' parses agent as 'all'."""
+        parser = cli.build_parser()
+        args = parser.parse_args(["configure", "opencode", "--agent", "all"])
+        assert args.agent == "all"
+
+    def test_configure_force_parsed(self):
+        """Test that '--force' flag is parsed as True."""
+        parser = cli.build_parser()
+        args = parser.parse_args(["configure", "opencode", "--force"])
+        assert args.force is True
+
+    def test_configure_global_scope_parsed(self):
+        """Test that '--global' flag is parsed as global_scope=True."""
+        parser = cli.build_parser()
+        args = parser.parse_args(["configure", "opencode", "--global"])
+        assert args.global_scope is True

@@ -8,4 +8,4 @@ defaults:
 roles:
   coder:
     provider: opencode
-    model: fireworks-ai/accounts/fireworks/models/glm-5
+    model: opencode/qwen3.6-plus-free

@@ -21,6 +21,20 @@ PROMPT_AGENT_ROLES: tuple[str, ...] = (
     "web-researcher",
 )
 
+# The 8 primary pipeline roles that get their own opencode agent entries.
+# Excludes reviewer sub-roles (reviewer_expert/logic/quality) since they
+# share the reviewer role's agent entry.
+OPENCODE_AGENT_ROLES: tuple[str, ...] = (
+    "architect",
+    "planner",
+    "product-manager",
+    "reviewer",
+    "coder",
+    "designer",
+    "code-researcher",
+    "web-researcher",
+)
+
 BATCH_AGENT_ROLES: frozenset[str] = frozenset({"code-researcher", "web-researcher"})
 
 PREFERENCE_PROPOSAL_SOURCES: tuple[str, ...] = (
