@@ -31,6 +31,13 @@ try:
 except ImportError:  # pragma: no cover
     _RICH_AVAILABLE = False
 
+try:
+    import readchar as _readchar_mod
+
+    _READCHAR_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _READCHAR_AVAILABLE = False
+
 
 # ──────────────────────────────────────────────────────────────
 # Colour palette (mirrors terminal_ui/colors.py — not imported
@@ -42,6 +49,15 @@ _SUCCESS = "bold green"
 _MUTED = "dim"
 _BORDER = "blue"
 
+# Right panel: large ASCII-art checkmark (bold green, 15 visible chars per row)
+#
+#              ██   ← long right leg (top)
+#             ██
+#   ██       ██     ← short left leg starts here
+#    ██     ██
+#     ██   ██
+#      █████        ← both legs merge at the tip
+#
 _LOGO_LINES = [
     "[blue]╭──────────────────────────────────────────────╮[/blue]",
     f"[blue]│[/blue]   [bold {_PRIMARY}]█████╗  ██████╗ ███████╗███╗   ██╗████████╗[/bold {_PRIMARY}][blue]│[/blue]",  # noqa: E501
@@ -51,12 +67,12 @@ _LOGO_LINES = [
     f"[blue]│[/blue]  [bold {_PRIMARY}]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold {_PRIMARY}][blue]│[/blue]",  # noqa: E501
     f"[blue]│[/blue]  [bold {_PRIMARY}]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold {_PRIMARY}][blue]│[/blue]",  # noqa: E501
     "[blue]├──────────────────────────────┬───────────────┤[/blue]",
-    f"[blue]│[/blue] [bold {_SECONDARY}]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold {_SECONDARY}][blue]│[/blue]   [dim][ ]──┐[/dim]      [blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]████╗ ████║██║   ██║╚██╗██╔╝ [/bold {_SECONDARY}][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]██╔████╔██║██║   ██║ ╚███╔╝  [/bold {_SECONDARY}][blue]│[/blue] [dim]──[ ]──◆──[ ] [/dim][blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold {_SECONDARY}][blue]│[/blue]        [dim]│[/dim]      [blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold {_SECONDARY}][blue]│[/blue]   [dim][ ]──┘[/dim]      [blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold {_SECONDARY}][blue]│[/blue]               [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold {_SECONDARY}][blue]│[/blue]             [bold green]██[/bold green][blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]████╗ ████║██║   ██║╚██╗██╔╝ [/bold {_SECONDARY}][blue]│[/blue]            [bold green]██[/bold green] [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]██╔████╔██║██║   ██║ ╚███╔╝  [/bold {_SECONDARY}][blue]│[/blue]  [bold green]██[/bold green]       [bold green]██[/bold green]  [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold {_SECONDARY}][blue]│[/blue]   [bold green]██[/bold green]     [bold green]██[/bold green]   [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold {_SECONDARY}][blue]│[/blue]    [bold green]██[/bold green]   [bold green]██[/bold green]    [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold {_SECONDARY}][blue]│[/blue]     [bold green]█████[/bold green]     [blue]│[/blue]",  # noqa: E501
     "[blue]╰──────────────────────────────┴───────────────╯[/blue]",
 ]
 
@@ -96,6 +112,8 @@ def _render_screen(
     summary: str,
     changed_count: int,
     feature_name: str,
+    *,
+    interactive: bool = False,
 ) -> None:
     _clear()
     for line in _LOGO_LINES:
@@ -118,16 +136,28 @@ def _render_screen(
     console.print()
     console.print(summary)
     console.print()
-    console.print(
-        Panel(
-            f"[bold {_PRIMARY}]  \\[Y][/bold {_PRIMARY}]"
-            "  Approve and complete the pipeline\n"
-            "[bold yellow]  \\[N][/bold yellow]  Request changes",
-            title="[bold]Confirmation[/bold]",
-            border_style=_BORDER,
-            padding=(0, 2),
+
+    if interactive:
+        console.print(
+            Panel(
+                f"[{_MUTED}]↑ / ↓  Navigate   •   Enter  Confirm"
+                f"   •   Y / N  Quick-select[/{_MUTED}]",
+                title="[bold]Confirmation[/bold]",
+                border_style=_BORDER,
+                padding=(0, 2),
+            )
         )
-    )
+    else:
+        console.print(
+            Panel(
+                f"[bold {_PRIMARY}]  \\[Y][/bold {_PRIMARY}]"
+                "  Approve and complete the pipeline\n"
+                "[bold yellow]  \\[N][/bold yellow]  Request changes",
+                title="[bold]Confirmation[/bold]",
+                border_style=_BORDER,
+                padding=(0, 2),
+            )
+        )
     console.print()
 
 
@@ -150,8 +180,55 @@ def _render_screen_plain(
     print()
 
 
+def _prompt_choice_interactive(console: Console) -> str:
+    """Arrow-key navigable Yes/No menu using readchar. Returns 'y' or 'n'."""
+    options = [
+        ("y", "Approve and complete the pipeline", _PRIMARY),
+        ("n", "Request changes and restart planning", "yellow"),
+    ]
+    selected = 0
+    first_render = True
+    # Number of lines printed per render (2 options + 1 trailing blank)
+    _MENU_LINES = 3
+
+    def _render_menu() -> None:
+        nonlocal first_render
+        if not first_render:
+            # Move cursor up and clear to end of screen to overwrite previous render
+            sys.stdout.write(f"\033[{_MENU_LINES}A\033[J")
+            sys.stdout.flush()
+        first_render = False
+        for i, (key, desc, color) in enumerate(options):
+            if i == selected:
+                console.print(
+                    f"  [bold {color}]❯  \\[{key.upper()}]  {desc}[/bold {color}]"
+                )
+            else:
+                console.print(f"  [{_MUTED}]   \\[{key.upper()}]  {desc}[/{_MUTED}]")
+        console.print()  # trailing blank line to match _MENU_LINES count
+
+    while True:
+        _render_menu()
+        key = _readchar_mod.readkey()
+        if key == _readchar_mod.key.UP:
+            selected = (selected - 1) % len(options)
+        elif key == _readchar_mod.key.DOWN:
+            selected = (selected + 1) % len(options)
+        elif key in (_readchar_mod.key.ENTER, "\r", "\n"):
+            return options[selected][0]
+        elif key.lower() == "y":
+            selected = 0
+            return "y"
+        elif key.lower() == "n":
+            selected = 1
+            return "n"
+
+
 def _prompt_choice(console: Console | None) -> str:
     """Prompt for Y/N until a valid answer is given. Returns 'y' or 'n'."""
+    if console is not None and _READCHAR_AVAILABLE and sys.stdin.isatty():
+        return _prompt_choice_interactive(console)
+    # Fallback: plain text input for non-TTY or when readchar is unavailable
     while True:
         try:
             raw = input("Your choice [Y/N]: ").strip().lower()
@@ -233,7 +310,10 @@ def run(feature_dir: Path, project_dir: Path) -> None:
     console: Console | None = None
     if _RICH_AVAILABLE and sys.stdout.isatty():
         console = Console()
-        _render_screen(console, summary, changed_count, feature_name)
+        interactive = _READCHAR_AVAILABLE and sys.stdin.isatty()
+        _render_screen(  # noqa: E501
+            console, summary, changed_count, feature_name, interactive=interactive
+        )
     else:
         _render_screen_plain(summary, changed_count, feature_name)
 

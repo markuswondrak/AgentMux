@@ -74,6 +74,8 @@ pyyaml==6.0.3
     # via agentmux (pyproject.toml)
 questionary==2.1.1
     # via agentmux (pyproject.toml)
+readchar==4.2.1
+    # via agentmux (pyproject.toml)
 referencing==0.37.0
     # via
     #   jsonschema
