@@ -218,7 +218,10 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 ),
             }
 
-            with patch("agentmux.integrations.mcp.Path.home", return_value=home_dir):
+            with patch(
+                "agentmux.integrations.mcp.configurators.Path.home",
+                return_value=home_dir,
+            ):
                 ensure_mcp_config(
                     agents,
                     [self._server()],
@@ -252,7 +255,10 @@ class McpConfigRequirementsTests(unittest.TestCase):
             }
             output = io.StringIO()
 
-            with patch("agentmux.integrations.mcp.Path.home", return_value=home_dir):
+            with patch(
+                "agentmux.integrations.mcp.configurators.Path.home",
+                return_value=home_dir,
+            ):
                 ensure_mcp_config(
                     agents,
                     [self._server()],
@@ -479,7 +485,9 @@ class OpenCodeAgentConfiguratorTests(unittest.TestCase):
             project_dir = home_dir / "project"
             project_dir.mkdir()
 
-            with patch("agentmux.integrations.mcp.Path.home", return_value=home_dir):
+            with patch(
+                "agentmux.integrations.opencode_agents.Path.home", return_value=home_dir
+            ):
                 result = self.configurator.config_path(project_dir, global_scope=True)
                 expected = home_dir / ".config" / "opencode" / "opencode.json"
                 self.assertEqual(result, expected)

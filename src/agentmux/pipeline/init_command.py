@@ -14,9 +14,9 @@ import yaml
 from ..configuration import load_builtin_catalog, load_layered_config
 from ..integrations.mcp import (
     McpServerSpec,
-    OpenCodeAgentConfigurator,
     ensure_mcp_config,
 )
+from ..integrations.opencode_agents import OpenCodeAgentConfigurator
 from ..shared.models import AgentConfig
 from ..terminal_ui.colors import QUESTIONARY_SECONDARY
 from ..terminal_ui.screens import render_logo

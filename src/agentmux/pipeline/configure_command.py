@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 from ..configuration import load_layered_config
-from ..integrations.mcp import OpenCodeAgentConfigurator
+from ..integrations.opencode_agents import OpenCodeAgentConfigurator
 from ..shared.models import OPENCODE_AGENT_ROLES as ROLES
 from .init_command import KNOWN_PROVIDERS, _select, _text, detect_clis
 
