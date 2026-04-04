@@ -1,6 +1,6 @@
 # Shared File Protocol
 
-> Related source files: `agentmux/shared/models.py`, `agentmux/sessions/state_store.py`, `agentmux/runtime/event_bus.py`, `agentmux/runtime/file_events.py`, `agentmux/runtime/interruption_sources.py`, `agentmux/workflow/orchestrator.py`, `agentmux/workflow/phases.py`, `agentmux/workflow/handlers.py`, `agentmux/workflow/prompts.py`
+> Related source files: `agentmux/shared/models.py`, `agentmux/sessions/state_store.py`, `agentmux/runtime/event_bus.py`, `agentmux/runtime/file_events.py`, `agentmux/runtime/interruption_sources.py`, `agentmux/workflow/orchestrator.py`, `agentmux/workflow/event_router.py`, `agentmux/workflow/phases.py`, `agentmux/workflow/handlers.py`, `agentmux/workflow/prompts.py`
 
 Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are grouped by phase subdirectories and created on-demand as needed, while a small set of root runtime artifacts is maintained directly by the orchestrator.
 
@@ -15,7 +15,7 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
 ## Product Management (`01_product_management/`)
 
 - `product_manager_prompt.md` — prompt for PM analysis phase
-- `analysis.md` — PM write-up (business case, integration assessment, alternatives)
+- `analysis.md` — PM usability rationale: friction points, integration fit, alternatives considered and rejected, notes for the architect. Advisory only — if it conflicts with `requirements.md`, `requirements.md` wins.
 - `done` — completion marker for PM handoff to planning
 
 ## Planning (`02_planning/`)
@@ -87,8 +87,10 @@ Execution scheduling is strict:
 
 ## Completion (`08_completion/`)
 
-- `confirmation_prompt.md` / `approval.json`
-- `changes.md`
+- `summary_prompt.md` — prompt asking reviewer to write an implementation summary
+- `summary.md` — reviewer-written implementation summary (what was done, key decisions)
+- `approval.json` — written by the native completion UI when user approves
+- `changes.md` — written by the native completion UI when user requests changes
 
 ## Key functions
 
@@ -97,6 +99,6 @@ Execution scheduling is strict:
 - `FileEventSource` / `FeatureEventHandler` in `agentmux/runtime/file_events.py` — normalize watchdog activity under the feature directory and publish `file.*` events
 - `CreatedFilesLogListener` / `seed_existing_files()` in `agentmux/runtime/file_events.py` — enforce created-file logging semantics (`created_files.log`, first-seen only, bootstrap coverage)
 - `InterruptionEventSource` in `agentmux/runtime/interruption_sources.py` — publish interruption events when registered tmux panes disappear
-- `build_initial_prompts()` in `agentmux/workflow/prompts.py` — builds only the architect prompt at startup
+- `WorkflowEventRouter.enter_current_phase()` in `agentmux/workflow/event_router.py` — explicitly bootstraps the active phase before steady-state event processing starts
 - `build_*_prompt()` in `agentmux/workflow/prompts.py` — loads and renders the markdown template for each phase; called lazily by handlers
 - Handler functions in `agentmux/workflow/handlers.py` — each builds and writes its prompt file just before sending to agent

@@ -34,6 +34,7 @@ from ..terminal_ui.console import ConsoleUI
 from ..terminal_ui.screens import goodbye_canceled, goodbye_error, goodbye_success
 from ..workflow.interruptions import InterruptionService
 from ..workflow.orchestrator import PipelineOrchestrator
+from ..workflow.phase_registry import resolve_phase_startup_role
 
 
 def _derive_session_name(feature_dir: Path) -> str:
@@ -356,11 +357,17 @@ class PipelineApplication:
     ) -> int:
         files = prepared.files
         feature_dir = prepared.feature_dir
-        initial_role = (
-            "product-manager"
-            if prepared.product_manager and "product-manager" in agents
-            else "architect"
-        )
+        state = load_state(files.state)
+        phase = str(state.get("phase", ""))
+        initial_role = resolve_phase_startup_role(phase, feature_dir, state, agents)
+        if initial_role is None:
+            initial_role = (
+                "product-manager"
+                if phase == "product_management"
+                and prepared.product_manager
+                and "product-manager" in agents
+                else "architect"
+            )
         start_time = time.time()
 
         try:

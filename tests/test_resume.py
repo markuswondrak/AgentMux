@@ -17,10 +17,15 @@ from agentmux.sessions.state_store import infer_resume_phase, write_state
 from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig, GitHubConfig
 from agentmux.terminal_ui.console import ConsoleUI
 from agentmux.workflow.interruptions import InterruptionService
+from agentmux.workflow.phase_registry import resolve_phase_startup_role
 
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 IMPLEMENTATION_DIR = SESSION_DIR_NAMES["implementation"]
 REVIEW_DIR = SESSION_DIR_NAMES["review"]
+
+
+def _agent(role: str) -> AgentConfig:
+    return AgentConfig(role=role, cli="copilot", model="test-model")
 
 
 class ResumeCliAndSessionTests(unittest.TestCase):
@@ -292,6 +297,59 @@ class InferResumePhaseTests(unittest.TestCase):
             self.assertEqual({"y": "done"}, state["web_research_tasks"])
 
 
+class ResumeStartupRoleTests(unittest.TestCase):
+    def test_resolve_phase_startup_role_uses_planner_for_planning(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            agents = {
+                "architect": _agent("architect"),
+                "planner": _agent("planner"),
+                "product-manager": _agent("product-manager"),
+            }
+
+            role = resolve_phase_startup_role(
+                "planning",
+                feature_dir,
+                {"phase": "planning", "product_manager": True},
+                agents,
+            )
+
+            self.assertEqual("planner", role)
+
+    def test_resolve_phase_startup_role_uses_review_strategy_for_reviewing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            planning_dir = feature_dir / PLANNING_DIR
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "plan_meta.json").write_text(
+                json.dumps(
+                    {
+                        "review_strategy": {
+                            "severity": "high",
+                            "focus": ["security"],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            agents = {
+                "reviewer_logic": _agent("reviewer_logic"),
+                "reviewer_quality": _agent("reviewer_quality"),
+                "reviewer_expert": _agent("reviewer_expert"),
+            }
+
+            role = resolve_phase_startup_role(
+                "reviewing",
+                feature_dir,
+                {"phase": "reviewing"},
+                agents,
+            )
+
+            self.assertEqual("reviewer_expert", role)
+
+
 class ResumeApplicationFlowTests(unittest.TestCase):
     def test_run_resume_with_no_sessions_exits(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -337,6 +395,10 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                 project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
             )
             feature_dir.mkdir(parents=True)
+            (feature_dir / "01_product_management").mkdir(parents=True, exist_ok=True)
+            (feature_dir / "01_product_management" / "done").write_text(
+                "", encoding="utf-8"
+            )
             planning_dir = feature_dir / "02_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "architecture.md").write_text(
@@ -346,6 +408,7 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                 "feature_dir": str(feature_dir),
                 "phase": "failed",
                 "last_event": "run_failed",
+                "product_manager": True,
                 "subplan_count": 0,
                 "review_iteration": 0,
                 "research_tasks": {"a": "dispatched", "b": "done"},
@@ -359,7 +422,11 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                 session_name="multi-agent-mvp",
                 max_review_iterations=3,
                 github=GitHubConfig(),
-                agents={},
+                agents={
+                    "architect": _agent("architect"),
+                    "planner": _agent("planner"),
+                    "product-manager": _agent("product-manager"),
+                },
             )
 
             with (
@@ -378,7 +445,7 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                 ),
                 patch(
                     "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
-                    return_value={},
+                    return_value=loaded.agents,
                 ),
                 patch(
                     "agentmux.pipeline.application.TmuxRuntimeFactory.create",
@@ -398,6 +465,7 @@ class ResumeApplicationFlowTests(unittest.TestCase):
 
             self.assertEqual(0, result)
             create_mock.assert_called_once()
+            self.assertEqual("planner", create_mock.call_args.kwargs["initial_role"])
             start_mock.assert_called_once()
             attach_mock.assert_called_once_with(
                 ["tmux", "attach-session", "-t", "multi-agent-mvp"], check=True
@@ -409,6 +477,85 @@ class ResumeApplicationFlowTests(unittest.TestCase):
             self.assertEqual("resumed", updated_state["last_event"])
             self.assertEqual({"b": "done"}, updated_state["research_tasks"])
             self.assertEqual({"y": "done"}, updated_state["web_research_tasks"])
+
+    def test_run_resume_non_failed_planning_state_uses_planner_initial_role(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            app = application.PipelineApplication(project_dir)
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            )
+            feature_dir.mkdir(parents=True)
+            (feature_dir / "01_product_management").mkdir(parents=True, exist_ok=True)
+            (feature_dir / "01_product_management" / "done").write_text(
+                "", encoding="utf-8"
+            )
+            planning_dir = feature_dir / PLANNING_DIR
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            write_state(
+                feature_dir / "state.json",
+                {
+                    "feature_dir": str(feature_dir),
+                    "phase": "planning",
+                    "last_event": "architecture_written",
+                    "product_manager": True,
+                    "updated_at": "2026-01-01T12:00:00+01:00",
+                    "updated_by": "pipeline",
+                },
+            )
+
+            loaded = SimpleNamespace(
+                session_name="multi-agent-mvp",
+                max_review_iterations=3,
+                github=GitHubConfig(),
+                agents={
+                    "architect": _agent("architect"),
+                    "planner": _agent("planner"),
+                    "product-manager": _agent("product-manager"),
+                },
+            )
+
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ) as create_mock,
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ),
+            ):
+                result = app.run_resume(session="20260101-120000-demo")
+
+            self.assertEqual(0, result)
+            self.assertEqual("planner", create_mock.call_args.kwargs["initial_role"])
 
 
 class InterruptionReportStateTests(unittest.TestCase):

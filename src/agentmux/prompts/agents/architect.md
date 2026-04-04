@@ -12,6 +12,8 @@ Approved preference proposal artifact: [[placeholder:architect_preference_propos
 [[include:requirements.md]]
 </file>
 
+[[include-optional:01_product_management/analysis.md]]
+
 ## Research
 
 Before drafting the architecture, assess what you need to know about the codebase or external landscape.
@@ -39,7 +41,8 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
 ## Your job
 
 1. Draft the technical architecture and present it in chat for review before writing any files.
-2. The architecture must answer: **What are we building?** and **With what?** It must cover:
+2. `requirements.md` is the normative build contract — design against it. If a product-manager ran before you, `01_product_management/analysis.md` provides advisory context (rationale, alternatives, usability reasoning). If the two ever seem to conflict, `requirements.md` wins. If `requirements.md` is underspecified, ask for clarification rather than guessing.
+3. The architecture must answer: **What are we building?** and **With what?** It must cover:
    - **Solution overview** — chosen approach and why (key trade-offs, rejected alternatives)
    - **Components & responsibilities** — what discrete pieces exist and what each one does
    - **Interfaces & contracts** — how components interact: APIs, data types, abstract interfaces, shared state
@@ -47,11 +50,12 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
    - **Cross-cutting concerns** — error handling strategy, logging, security, testing approach, observability
    - **Technology choices** — libraries, frameworks, patterns and rationale
    - **Risks & constraints** — known limitations, technical debt, open questions
-3. Do not define the execution schedule. Do not create implementation phases, sub-plans, task lists, or parallel lanes — that is the planner's job.
-4. Do not implement code, run implementation validation, or produce UI design artifacts.
-5. When presenting the architectural draft, use the `[[placeholder:user_ask_tool]]` tool to ask for feedback and approval. Incorporate any feedback and revise as needed. Repeat until the user explicitly approves.
-6. Only after the user explicitly approves (e.g. says 'approved', 'looks good', 'go ahead'), write the final architecture to `02_planning/architecture.md`. Only include chosen Options, you MUST omit options that were discarded.
-7. FINAL STEP ONLY — after writing `02_planning/architecture.md`, stop. Do not update `state.json` or any workflow status.
+   - **Design handoff** — include a `needs_design: true` note here if the PM analysis flagged that UI/visual design work is needed, so the planner can set this flag in `plan_meta.json`
+4. Do not define the execution schedule. Do not create implementation phases, sub-plans, task lists, or parallel lanes — that is the planner's job.
+5. Do not implement code, run implementation validation, or produce UI design artifacts.
+6. When presenting the architectural draft, use the `[[placeholder:user_ask_tool]]` tool to ask for feedback and approval. Incorporate any feedback and revise as needed. Repeat until the user explicitly approves.
+7. Only after the user explicitly approves (e.g. says 'approved', 'looks good', 'go ahead'), write the final architecture to `02_planning/architecture.md`. Only include chosen Options, you MUST omit options that were discarded.
+8. FINAL STEP ONLY — after writing `02_planning/architecture.md`, stop. Do not update `state.json` or any workflow status.
 
 ## Preference memory at phase-end approval
 
@@ -72,3 +76,4 @@ Constraints:
 - Do not update `state.json` from the architect step.
 - When a topic requires reading more than 3 project files or exploring code patterns you are unfamiliar with, delegate to code-researcher instead of exploring directly.
 - Never use built-in web search or code-exploration tools for research.
+- `analysis.md` from the product-manager is advisory context only. Do not let its prose override what `requirements.md` specifies. If the PM analysis flags a design handoff need, carry that signal forward into `architecture.md`.

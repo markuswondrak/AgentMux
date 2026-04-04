@@ -35,6 +35,7 @@ def _make_test_files(feature_dir: Path) -> RuntimeFiles:
         review=feature_dir / SESSION_DIR_NAMES["review"] / "review.md",
         fix_request=feature_dir / SESSION_DIR_NAMES["review"] / "fix_request.md",
         changes=feature_dir / SESSION_DIR_NAMES["completion"] / "changes.md",
+        summary=feature_dir / SESSION_DIR_NAMES["completion"] / "summary.md",
         pm_preference_proposal=feature_dir
         / SESSION_DIR_NAMES["product_management"]
         / "approved_preferences.json",

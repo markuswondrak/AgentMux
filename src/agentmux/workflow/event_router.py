@@ -124,6 +124,21 @@ class WorkflowEventRouter:
         self._phases = phases
         self._entered: set[str] = set()
 
+    def enter_current_phase(self, state: dict, ctx: PipelineContext) -> dict:
+        phase_name = state.get("phase", "")
+        handler = self._phases.get(phase_name)
+        if handler is None or phase_name in self._entered:
+            return {}
+
+        enter_updates = handler.enter(state, ctx)
+        state.update(enter_updates)
+        self._entered.add(phase_name)
+
+        from ..sessions.state_store import write_state
+
+        write_state(ctx.files.state, state)
+        return enter_updates
+
     def handle(
         self, event: WorkflowEvent, state: dict, ctx: PipelineContext
     ) -> tuple[dict, int | None]:
@@ -150,13 +165,7 @@ class WorkflowEventRouter:
 
         # Enter phase once
         if phase_name not in self._entered:
-            enter_updates = handler.enter(state, ctx)
-            state.update(enter_updates)
-            self._entered.add(phase_name)
-            # Write state after enter
-            from ..sessions.state_store import write_state
-
-            write_state(ctx.files.state, state)
+            self.enter_current_phase(state, ctx)
 
         # Handle the event
         updates, next_phase = handler.handle_event(event, state, ctx)

@@ -1,0 +1,62 @@
+name: Bug Report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Agentmux version
+      placeholder: "e.g. 0.4.2  (agentmux --version)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider(s)
+      multiple: true
+      options:
+        - claude
+        - codex
+        - gemini
+        - opencode
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS / shell
+      placeholder: "e.g. Ubuntu 24.04 / zsh"
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the command you ran and what went wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. agentmux "..."
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or files
+      description: Paste relevant content from `state.json`, `created_files.log`, or terminal output.
+      render: text

@@ -5,16 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-SESSION_DIR_NAMES: dict[str, str] = {
-    "product_management": "01_product_management",
-    "architecting": "02_planning",
-    "planning": "02_planning",
-    "research": "03_research",
-    "design": "04_design",
-    "implementation": "05_implementation",
-    "review": "06_review",
-    "completion": "08_completion",
-}
+from .phase_catalog import SESSION_DIR_NAMES as SESSION_DIR_NAMES  # noqa: F401
 
 PROMPT_AGENT_ROLES: tuple[str, ...] = (
     "architect",
@@ -96,6 +87,7 @@ class RuntimeFiles:
     review: Path
     fix_request: Path
     changes: Path
+    summary: Path
     pm_preference_proposal: Path
     architect_preference_proposal: Path
     reviewer_preference_proposal: Path

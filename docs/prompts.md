@@ -5,7 +5,7 @@
 ## Template directories
 
 - `agentmux/prompts/agents/` — role-level prompts (define what each agent is): `architect.md`, `planner.md`, `product-manager.md`, `reviewer.md`, `coder.md`, `code-researcher.md`, `web-researcher.md`, `designer.md`
-- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `fix.md`, `confirmation.md`, `change.md`
+- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `review_logic.md`, `review_quality.md`, `review_expert.md`, `fix.md`, `summary.md`, `change.md`
 
 ## Placeholder syntax
 
@@ -90,6 +90,8 @@ Agents still read the referenced prompt file themselves. Prompt files are now se
 
 Prompt files are built lazily by handlers just before injection, not pre-generated. Each `build_*_prompt()` function in `agentmux/workflow/prompts.py` loads and renders the markdown template for its phase.
 
+Startup and resume now use explicit phase bootstrap: the orchestrator re-enters the active phase before steady-state event sources start, and that phase entry is what causes the handler to build and send the current prompt. Prompt injection therefore does not depend on the first seeded `file.created` event.
+
 ## Coder research handoff
 
 Coder prompt rendering injects a `Research handoff` block into `agentmux/prompts/agents/coder.md` via `[[placeholder:research_handoff]]`.
@@ -154,4 +156,4 @@ Current prompt builders:
 - `build_product_manager_prompt()` renders the PM analysis prompt
 - `build_coder_subplan_prompt()` renders implementing prompts for numbered `coder_prompt_<N>.txt` dispatch, including completion marker instructions and optional research handoff references
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
-- `build_confirmation_prompt()` renders the confirmation command prompt used in completion, including optional `commit_message` approval payload support
+- `build_reviewer_summary_prompt()` renders the reviewer summary prompt (writes `08_completion/summary.md` after VERDICT:PASS)

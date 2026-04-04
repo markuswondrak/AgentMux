@@ -8,23 +8,11 @@ from typing import Any
 import yaml
 
 from ..shared.models import (
+    PROMPT_AGENT_ROLES,
     AgentConfig,
     CompletionSettings,
     GitHubConfig,
     WorkflowSettings,
-)
-
-ROLES = (
-    "architect",
-    "product-manager",
-    "reviewer",
-    "coder",
-    "designer",
-    "code-researcher",
-    "web-researcher",
-    "reviewer_expert",
-    "reviewer_logic",
-    "reviewer_quality",
 )
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -140,7 +128,7 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         "max_review_iterations",
         "skip_final_approval",
         "require_final_approval",
-        *ROLES,
+        *PROMPT_AGENT_ROLES,
     }
     found_legacy_keys = sorted(key for key in legacy_top_level_keys if key in raw)
     if found_legacy_keys:
@@ -172,7 +160,7 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(
             "Profiles are removed in v2. Use 'model: <model-name>' directly."
         )
-    for role in ROLES:
+    for role in PROMPT_AGENT_ROLES:
         if role in raw.get("roles", {}) and "profile" in raw["roles"][role]:
             raise ValueError(
                 "Profiles are removed in v2. Use 'model: <model-name>' "
@@ -419,7 +407,7 @@ def _resolve_loaded_config(
     compression_enabled = bool(compression_defaults.get("enabled", False))
 
     agents: dict[str, AgentConfig] = {}
-    for role in ROLES:
+    for role in PROMPT_AGENT_ROLES:
         role_config = roles.get(role) or {}
 
         provider_name = str(role_config.get("provider", default_provider))

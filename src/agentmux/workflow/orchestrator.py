@@ -16,6 +16,7 @@ from ..shared.models import BATCH_AGENT_ROLES, GitHubConfig, WorkflowSettings
 from .event_router import WorkflowEvent, WorkflowEventRouter
 from .handlers import PHASE_HANDLERS
 from .interruptions import InterruptionService
+from .phase_registry import PHASE_RESEARCH_OWNERS
 from .prompts import build_initial_prompts
 from .transitions import PipelineContext
 
@@ -122,18 +123,8 @@ class PipelineOrchestrator:
             self._exit_event.set()
 
     def _determine_research_owner(self, state: dict, role: str) -> str | None:
-        """Determine which agent owns a research task based on current phase.
-
-        During product_management phase, the product-manager owns the research.
-        During architecting/planning/implementing phases, the architect owns
-        the research.
-        """
-        phase = state.get("phase", "")
-        if phase == "product_management":
-            return "product-manager"
-        elif phase in ("architecting", "planning", "implementing"):
-            return "architect"
-        return None
+        """Determine which agent owns a research task based on current phase."""
+        return PHASE_RESEARCH_OWNERS.get(str(state.get("phase", "")))
 
     def _on_event(self, event: SessionEvent) -> None:
         """Event callback - routes events to handlers.
@@ -174,12 +165,9 @@ class PipelineOrchestrator:
         self._ctx = ctx
         self._exit_code = None
         self._exit_event = threading.Event()
-
-        # Build event bus with our callback
         wake_event = threading.Event()
         bus = self.build_event_bus(ctx.files, ctx.runtime, wake_event)
         bus.register(self._on_event)
-        bus.start()
 
         def handle_feature_dir_cleanup():
             """Clean up feature dir if flagged in state and not keeping session."""
@@ -197,6 +185,10 @@ class PipelineOrchestrator:
             stack.callback(cleanup_compression, ctx.files.feature_dir)
             stack.callback(cleanup_mcp, ctx.files.feature_dir, ctx.files.project_dir)
             stack.callback(bus.stop)
+
+            state = load_state(ctx.files.state)
+            self._router.enter_current_phase(state, ctx)
+            bus.start()
 
             # Block until exit signal (no loop!)
             self._exit_event.wait()

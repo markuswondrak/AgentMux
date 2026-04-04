@@ -18,7 +18,7 @@ from agentmux.shared.models import (
 )
 from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import CompletingHandler
-from agentmux.workflow.prompts import build_confirmation_prompt, build_reviewer_prompt
+from agentmux.workflow.prompts import build_reviewer_prompt
 from agentmux.workflow.transitions import PipelineContext
 
 
@@ -39,6 +39,9 @@ class _FakeRuntime:
 
     def finish_many(self, role: str) -> None:
         self.calls.append(("finish_many", role))
+
+    def show_completion_ui(self, feature_dir: Path) -> None:
+        self.calls.append(("show_completion_ui", feature_dir))
 
 
 def _make_ctx(
@@ -134,59 +137,25 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 issue_number="42",
             )
 
-    def test_completing_phase_on_enter_sends_confirmation_prompt_to_reviewer(
+    def test_completing_phase_on_enter_launches_completion_ui(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
             ctx, state = _make_ctx(feature_dir)
 
-            with patch.object(ctx.runtime, "send") as send_mock:
-                CompletingHandler().enter(state, ctx)
+            CompletingHandler().enter(state, ctx)
 
-            sent_role = send_mock.call_args.args[0]
-            sent_prompt = send_mock.call_args.args[1]
-            self.assertEqual("reviewer", sent_role)
-            self.assertEqual("confirmation_prompt.md", sent_prompt.name)
-
-    def test_build_confirmation_prompt_includes_git_status_output(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            feature_dir = Path(td) / "feature"
-            ctx, _ = _make_ctx(feature_dir)
-            status_output = (
-                " M agentmux/phases.py\n?? tests/test_completion_commit_flow.py\n"
+            calls = ctx.runtime.calls
+            self.assertTrue(
+                any(c[0] == "show_completion_ui" for c in calls),
+                f"Expected show_completion_ui call, got: {calls}",
             )
-
-            with patch(
-                "agentmux.workflow.prompts.subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    args=["git", "status", "--porcelain"],
-                    returncode=0,
-                    stdout=status_output,
-                    stderr="",
-                ),
-            ) as run_mock:
-                prompt = build_confirmation_prompt(ctx.files)
-
-            self.assertIn(status_output.strip(), prompt)
-            run_mock.assert_called_once_with(
-                ["git", "status", "--porcelain"],
-                cwd=ctx.files.project_dir,
-                capture_output=True,
-                text=True,
-                check=True,
+            # No prompt should be sent to any agent role
+            self.assertFalse(
+                any(c[0] == "send" for c in calls),
+                f"Expected no send calls, got: {calls}",
             )
-
-    def test_build_confirmation_prompt_requests_optional_commit_message(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            feature_dir = Path(td) / "feature"
-            ctx, _ = _make_ctx(feature_dir)
-
-            prompt = build_confirmation_prompt(ctx.files)
-
-            self.assertIn('"action": "approve"', prompt)
-            self.assertIn('"exclude_files": ["relative/path"]', prompt)
-            self.assertIn('"commit_message": "optional summary"', prompt)
 
     def test_build_reviewer_review_prompt_requests_commit_message_on_pass(self) -> None:
         with tempfile.TemporaryDirectory() as td:

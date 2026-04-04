@@ -18,6 +18,7 @@ from .tmux_control import (
     _find_pane_by_title,
     create_agent_pane,
     create_batch_agent_pane,
+    create_completion_pane,
     send_prompt,
     send_text,
     set_pane_identity,
@@ -53,6 +54,8 @@ class AgentRuntime(Protocol):
     def hide_task(self, role: str, task_id: int | str) -> None: ...
 
     def finish_task(self, role: str, task_id: str) -> None: ...
+
+    def show_completion_ui(self, feature_dir: Path) -> None: ...
 
     def shutdown(self, keep_session: bool) -> None: ...
 
@@ -569,6 +572,18 @@ class TmuxAgentRuntime:
             if not workers:
                 self.parallel_panes.pop(role, None)
             self._persist_snapshot()
+
+    def show_completion_ui(self, feature_dir: Path) -> None:
+        """Launch the native completion confirmation UI in the content zone."""
+        pane_id, pid = create_completion_pane(
+            self.session_name,
+            feature_dir,
+            self.project_dir,
+        )
+        self.primary_panes["completion"] = pane_id
+        self._track_process_pid(pane_id, pid)
+        self._zone.show(pane_id)
+        self._persist_snapshot()
 
     def kill_tracked_processes(self, timeout: float = 5.0) -> list[int]:
         """Kill all tracked agent processes.

@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -31,9 +32,34 @@ def now_iso() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def load_state(state_path: Path) -> dict[str, Any]:
-    import time
+def read_json_resilient(
+    path: Path,
+    default: dict[str, Any],
+    *,
+    retries: int = 5,
+    delay: float = 0.1,
+) -> dict[str, Any]:
+    """Read a JSON file, retrying on empty or malformed content.
 
+    Handles the watchdog race condition where a file exists but has not yet
+    been fully written. Returns *default* if the file does not exist, remains
+    empty after all retries, or contains invalid JSON on every attempt.
+    """
+    if not path.exists():
+        return default
+    for attempt in range(retries):
+        text = path.read_text(encoding="utf-8").strip()
+        if text:
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                pass
+        if attempt < retries - 1:
+            time.sleep(delay)
+    return default
+
+
+def load_state(state_path: Path) -> dict[str, Any]:
     for attempt in range(5):
         text = state_path.read_text(encoding="utf-8").strip()
         if text:
@@ -93,6 +119,7 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         review=review_dir / "review.md",
         fix_request=review_dir / "fix_request.md",
         changes=completion_dir / "changes.md",
+        summary=completion_dir / "summary.md",
         pm_preference_proposal=product_management_dir / "approved_preferences.json",
         architect_preference_proposal=planning_dir / "approved_preferences.json",
         reviewer_preference_proposal=completion_dir / "approved_preferences.json",
@@ -169,19 +196,6 @@ def load_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
     return _make_runtime_files(project_dir, feature_dir)
 
 
-def parse_review_verdict(review_text: str) -> str | None:
-    for line in review_text.splitlines():
-        normalized = line.strip().lower()
-        if not normalized:
-            continue
-        if normalized == "verdict: pass":
-            return "pass"
-        if normalized == "verdict: fail":
-            return "fail"
-        return None
-    return None
-
-
 def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
     for key in ("research_tasks", "web_research_tasks"):
         tasks = state.get(key)
@@ -192,74 +206,33 @@ def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
                 if str(status) != "dispatched"
             }
 
-    product_management_done = (
-        feature_dir / SESSION_DIR_NAMES["product_management"] / "done"
-    )
-    if bool(state.get("product_manager")) and not product_management_done.exists():
+    # product_management is a flag-gated optional entry point that may override
+    # any stored phase (including non-failed ones).
+    if (
+        bool(state.get("product_manager"))
+        and not (
+            feature_dir / SESSION_DIR_NAMES["product_management"] / "done"
+        ).exists()
+    ):
         return "product_management"
 
     phase = str(state.get("phase", "planning"))
     if phase != "failed":
         return phase
 
-    planning_dir = feature_dir / SESSION_DIR_NAMES["planning"]
-    implementation_dir = feature_dir / SESSION_DIR_NAMES["implementation"]
-    review_dir = feature_dir / SESSION_DIR_NAMES["review"]
+    # Failed state: walk the registry to find the first incomplete phase.
+    # Lazy import avoids a circular dependency at module level:
+    # sessions.state_store → workflow.phase_registry → workflow.handlers → sessions
+    from ..workflow.phase_registry import PHASE_REGISTRY  # noqa: PLC0415
 
-    architecture_path = planning_dir / "architecture.md"
-    if not architecture_path.exists():
-        return "architecting"
-
-    plan_path = planning_dir / "plan.md"
-    if not plan_path.exists():
-        return "planning"
-
-    plan_meta_path = planning_dir / "plan_meta.json"
-    plan_meta: dict[str, Any] = {}
-    if plan_meta_path.exists():
-        try:
-            plan_meta = json.loads(plan_meta_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            plan_meta = {}
-        if (
-            bool(plan_meta.get("needs_design"))
-            and not (feature_dir / SESSION_DIR_NAMES["design"] / "design.md").exists()
-        ):
-            return "designing"
-
-    subplan_count_raw = state.get("subplan_count")
-    try:
-        subplan_count = int(subplan_count_raw)
-    except (TypeError, ValueError):
-        subplan_count = 0
-    if subplan_count < 0:
-        subplan_count = 0
-
-    fixing_iteration = (review_dir / "fix_request.md").exists() and int(
-        state.get("review_iteration", 0)
-    ) > 0
-    if fixing_iteration:
-        done_complete = (implementation_dir / "done_1").exists()
-        if not done_complete:
-            return "fixing"
-    elif subplan_count > 0:
-        done_complete = all(
-            (implementation_dir / f"done_{index}").exists()
-            for index in range(1, subplan_count + 1)
-        )
-    else:
-        done_complete = any(implementation_dir.glob("done_*"))
-
-    if not done_complete:
-        return "implementing"
-
-    review_path = review_dir / "review.md"
-    if not review_path.exists():
-        return "reviewing"
-
-    verdict = parse_review_verdict(review_path.read_text(encoding="utf-8"))
-    if verdict is None:
-        return "reviewing"
+    for descriptor in PHASE_REGISTRY:
+        rc = descriptor.resume_check
+        incomplete = (
+            rc.completion_artifact is not None
+            and not (feature_dir / rc.completion_artifact).exists()
+        ) or (rc.custom is not None and not rc.custom(feature_dir, state))
+        if incomplete:
+            return descriptor.name
 
     return "completing"
 

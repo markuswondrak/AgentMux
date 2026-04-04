@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,7 +12,6 @@ from agentmux.workflow.prompts import (
     build_change_prompt,
     build_code_researcher_prompt,
     build_coder_subplan_prompt,
-    build_confirmation_prompt,
     build_designer_prompt,
     build_fix_prompt,
     build_product_manager_prompt,
@@ -355,7 +353,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             repo_root / "src/agentmux/prompts/agents/designer.md",
             repo_root / "src/agentmux/prompts/commands/review.md",
             repo_root / "src/agentmux/prompts/commands/fix.md",
-            repo_root / "src/agentmux/prompts/commands/confirmation.md",
             repo_root / "src/agentmux/prompts/commands/change.md",
         ]
 
@@ -383,7 +380,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self._write_research_request(feature_dir, "code", "topic-a")
             self._write_research_request(feature_dir, "web", "topic-b")
             self._write_fix_inputs(feature_dir)
-            self._write_confirmation_inputs(feature_dir)
             self._write_change_inputs(feature_dir)
 
             cases: list[tuple[str, str, str, object]] = [
@@ -445,12 +441,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 ),
                 (
                     "commands",
-                    "confirmation",
-                    "EXT-CONFIRMATION",
-                    lambda runtime: build_confirmation_prompt(runtime),
-                ),
-                (
-                    "commands",
                     "change",
                     "EXT-CHANGE",
                     lambda runtime: build_change_prompt(runtime),
@@ -462,23 +452,12 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                     project_dir, subdir, name, f"Project extension marker: {marker}\n"
                 )
 
-            with patch(
-                "agentmux.workflow.prompts.subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    args=["git", "status", "--porcelain"],
-                    returncode=0,
-                    stdout="",
-                    stderr="",
-                ),
-            ):
-                for _, _, marker, builder in cases:
-                    with self.subTest(marker=marker):
-                        prompt = builder(files)
-                        self.assertIn(marker, prompt)
-                        self.assertIn("Constraints:", prompt)
-                        self.assertLess(
-                            prompt.index(marker), prompt.index("Constraints:")
-                        )
+            for _, _, marker, builder in cases:
+                with self.subTest(marker=marker):
+                    prompt = builder(files)
+                    self.assertIn(marker, prompt)
+                    self.assertIn("Constraints:", prompt)
+                    self.assertLess(prompt.index(marker), prompt.index("Constraints:"))
 
     def test_project_prompts_with_curly_braces_do_not_break_template_rendering(
         self,
@@ -657,27 +636,16 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             files = create_feature_files(
                 project_dir, feature_dir, "preference capture", "session"
             )
-            self._write_confirmation_inputs(feature_dir)
-
+            files.context.write_text("# Context", encoding="utf-8")
+            files.architecture.parent.mkdir(parents=True, exist_ok=True)
+            files.architecture.write_text("# Architecture", encoding="utf-8")
             product_prompt = build_product_manager_prompt(files)
             architect_prompt = build_architect_prompt(files)
             reviewer_prompt = build_reviewer_prompt(files)
 
-            with patch(
-                "agentmux.workflow.prompts.subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    args=["git", "status", "--porcelain"],
-                    returncode=0,
-                    stdout="",
-                    stderr="",
-                ),
-            ):
-                confirmation_prompt = build_confirmation_prompt(files)
-
             self.assertIn(str(project_dir), product_prompt)
             self.assertIn(str(project_dir), architect_prompt)
             self.assertIn(str(project_dir), reviewer_prompt)
-            self.assertIn(str(project_dir), confirmation_prompt)
 
             self.assertIn(
                 files.relative_path(files.pm_preference_proposal), product_prompt
@@ -688,10 +656,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
             self.assertIn(
                 files.relative_path(files.reviewer_preference_proposal), reviewer_prompt
-            )
-            self.assertIn(
-                files.relative_path(files.reviewer_preference_proposal),
-                confirmation_prompt,
             )
 
     def test_agent_preference_prompts_include_shared_block_and_role_specific_guidance(
@@ -750,7 +714,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             repo_root / "src/agentmux/prompts/agents/product-manager.md",
             repo_root / "src/agentmux/prompts/agents/architect.md",
             repo_root / "src/agentmux/prompts/agents/reviewer.md",
-            repo_root / "src/agentmux/prompts/commands/confirmation.md",
         ]
 
         for template_path in template_paths:
@@ -770,30 +733,15 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 project_dir, feature_dir, "cross-prompt regression", "session"
             )
             self._write_confirmation_inputs(feature_dir)
-            status_output = (
-                " M agentmux/workflow/prompts.py\n"
-                "?? tests/test_project_prompt_extensions_requirements.py\n"
-            )
 
             product_prompt = build_product_manager_prompt(files)
             architect_prompt = build_architect_prompt(files)
             reviewer_prompt = build_reviewer_prompt(files)
-            with patch(
-                "agentmux.workflow.prompts.subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    args=["git", "status", "--porcelain"],
-                    returncode=0,
-                    stdout=status_output,
-                    stderr="",
-                ),
-            ):
-                confirmation_prompt = build_confirmation_prompt(files)
 
             rendered_prompts = {
                 "product-manager": product_prompt,
                 "architect": architect_prompt,
                 "reviewer": reviewer_prompt,
-                "confirmation": confirmation_prompt,
             }
             for prompt_name, prompt in rendered_prompts.items():
                 with self.subTest(prompt=prompt_name):
@@ -814,94 +762,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
             self.assertIn(
                 files.relative_path(files.reviewer_preference_proposal), reviewer_prompt
-            )
-            self.assertIn(
-                files.relative_path(files.reviewer_preference_proposal),
-                confirmation_prompt,
-            )
-            self.assertIn(status_output.strip(), confirmation_prompt)
-
-    def test_confirmation_prompt_includes_preference_persistence_guidance(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            project_dir = tmp_path / "project"
-            feature_dir = tmp_path / "feature"
-            project_dir.mkdir()
-            files = create_feature_files(
-                project_dir, feature_dir, "preference capture", "session"
-            )
-            self._write_confirmation_inputs(feature_dir)
-
-            with patch(
-                "agentmux.workflow.prompts.subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    args=["git", "status", "--porcelain"],
-                    returncode=0,
-                    stdout="",
-                    stderr="",
-                ),
-            ):
-                prompt = build_confirmation_prompt(files)
-
-            self.assertIn("approve, edit, or dismiss each candidate", prompt.lower())
-            self.assertIn(".agentmux/prompts/agents/<role>.md", prompt)
-            self.assertIn(
-                "do not persist anything without explicit user approval", prompt.lower()
-            )
-
-    def test_confirmation_template_uses_shared_preference_memory_fragment(self) -> None:
-        repo_root = Path(__file__).resolve().parents[1]
-        template_path = repo_root / "src/agentmux/prompts/commands/confirmation.md"
-        template = template_path.read_text(encoding="utf-8")
-
-        self.assertIn("[[shared:preference-memory]]", template)
-
-    def test_confirmation_prompt_preserves_confirmation_only_instructions(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            project_dir = tmp_path / "project"
-            feature_dir = tmp_path / "feature"
-            project_dir.mkdir()
-            files = create_feature_files(
-                project_dir, feature_dir, "confirmation guidance", "session"
-            )
-            self._write_confirmation_inputs(feature_dir)
-            status_output = (
-                " M agentmux/workflow/prompts.py\n"
-                "?? tests/test_project_prompt_extensions_requirements.py\n"
-            )
-
-            with patch(
-                "agentmux.workflow.prompts.subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    args=["git", "status", "--porcelain"],
-                    returncode=0,
-                    stdout=status_output,
-                    stderr="",
-                ),
-            ):
-                prompt = build_confirmation_prompt(files)
-
-            self.assertIn(status_output.strip(), prompt)
-            self.assertIn(
-                '{"action": "approve", "exclude_files": ["relative/path"]}', prompt
-            )
-            self.assertIn("exclude_files` is optional and defaults to `[]`", prompt)
-            self.assertIn(
-                "ask for exclusions only. Do not ask the user "
-                "to enumerate all commit files.",
-                prompt,
-            )
-            self.assertIn(
-                "Approved proposals are later applied by the orchestrator", prompt
-            )
-            self.assertIn(
-                "If no candidates are approved, do not write the proposal artifact.",
-                prompt,
-            )
-            self.assertIn("Do not revise `02_planning/plan.md` in this step.", prompt)
-            self.assertIn(
-                "Do not update `state.json` from the confirmation step.", prompt
             )
 
 

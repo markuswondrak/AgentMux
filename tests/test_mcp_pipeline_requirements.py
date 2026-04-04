@@ -41,6 +41,14 @@ class _FakeRuntime:
     def __init__(self) -> None:
         self.shutdown_calls: list[bool] = []
 
+    def send(
+        self,
+        role: str,
+        prompt_file: Path,
+        display_label: str | None = None,
+    ) -> None:
+        _ = (role, prompt_file, display_label)
+
     def shutdown(self, keep_session: bool) -> None:
         self.shutdown_calls.append(keep_session)
 

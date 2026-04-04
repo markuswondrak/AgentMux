@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..sessions.state_store import now_iso, write_state
+from ..sessions.state_store import now_iso, read_json_resilient, write_state
 from .transitions import PipelineContext
 
 if TYPE_CHECKING:
@@ -44,10 +43,7 @@ def reset_markers(feature_dir: Path, pattern: str) -> None:
 
 
 def load_plan_meta(planning_dir: Path) -> dict[str, object]:
-    path = planning_dir / "plan_meta.json"
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_resilient(planning_dir / "plan_meta.json", {})
 
 
 # =============================================================================

@@ -299,7 +299,12 @@ class TestEventDrivenOrchestrator(unittest.TestCase):
                 prompts={},
             )
 
-            with patch.object(orchestrator, "build_event_bus", return_value=bus):
+            with (
+                patch.object(orchestrator, "build_event_bus", return_value=bus),
+                patch.object(
+                    orchestrator._router, "enter_current_phase", return_value={}
+                ),
+            ):
                 # Start run in a thread so we can trigger events
                 result_container = {}
 
@@ -326,6 +331,56 @@ class TestEventDrivenOrchestrator(unittest.TestCase):
 
                 self.assertEqual(result_container.get("result"), 0)
                 self.assertTrue(bus.stopped)
+
+    def test_run_bootstraps_phase_before_event_sources_start(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+
+            files = create_feature_files(project_dir, feature_dir, "test", "session-x")
+            state = load_state(files.state)
+            state["phase"] = "planning"
+            write_state(files.state, state)
+
+            bus = _MockEventBus()
+            runtime = _FakeRuntime()
+            orchestrator = PipelineOrchestrator()
+            ctx = PipelineContext(
+                files=files,
+                runtime=runtime,
+                agents={},
+                max_review_iterations=3,
+                prompts={},
+            )
+            order: list[str] = []
+
+            def fake_enter(_state, _ctx) -> dict:
+                order.append("enter")
+                return {}
+
+            def fake_start() -> None:
+                order.append("start")
+                bus.started = True
+                orchestrator._exit_code = 0
+                assert orchestrator._exit_event is not None
+                orchestrator._exit_event.set()
+
+            bus.start = fake_start
+
+            with (
+                patch.object(orchestrator, "build_event_bus", return_value=bus),
+                patch.object(
+                    orchestrator._router,
+                    "enter_current_phase",
+                    side_effect=fake_enter,
+                ),
+            ):
+                result = orchestrator.run(ctx, keep_session=False)
+
+            self.assertEqual(0, result)
+            self.assertEqual(["enter", "start"], order)
 
     def test_no_polling_loop_in_run(self) -> None:
         """Verify the run method does not contain a while True polling loop."""

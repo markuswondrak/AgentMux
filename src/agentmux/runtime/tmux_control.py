@@ -801,6 +801,70 @@ def create_batch_agent_pane(
     return pane_id, pid
 
 
+def create_completion_pane(
+    session_name: str,
+    feature_dir: Path,
+    project_dir: Path,
+) -> tuple[str, int]:
+    """Create a native completion-UI pane in the hidden window.
+
+    The pane runs ``python -m agentmux.terminal_ui.completion_ui`` so the
+    user sees the Rich-formatted confirmation screen without an AI agent.
+
+    Returns:
+        Tuple of (pane_id, process_pid)
+    """
+    completion_cmd = (
+        f"{shlex.quote(sys.executable)} -m agentmux.terminal_ui.completion_ui"
+        f" --feature-dir {shlex.quote(str(feature_dir))}"
+        f" --project-dir {shlex.quote(str(project_dir))}"
+    )
+
+    split_target = _find_any_hidden_pane(session_name)
+    if not split_target:
+        raise RuntimeError(
+            f"No pane available to seed hidden pane creation for {session_name}"
+        )
+
+    _log(f"create_completion_pane: Creating completion UI pane at {split_target}")
+    result = run_command(
+        [
+            "tmux",
+            "split-window",
+            "-v",
+            "-t",
+            split_target,
+            "-c",
+            str(project_dir),
+            "-P",
+            "-F",
+            "#{pane_id} #{pane_pid}",
+            completion_cmd,
+        ]
+    )
+    parts = result.stdout.strip().split()
+    pane_id = parts[0]
+    pid = int(parts[1]) if len(parts) > 1 else 0
+
+    run_command(
+        ["tmux", "select-pane", "-t", pane_id, "-T", "Confirmation"], check=False
+    )
+    run_command(
+        ["tmux", "set-option", "-p", "-t", pane_id, "@role", "completion"], check=False
+    )
+    run_command(
+        ["tmux", "set-option", "-p", "-t", pane_id, "@pane_label", "Confirmation"],
+        check=False,
+    )
+
+    if _pane_in_window(pane_id, MAIN_WINDOW):
+        run_command(
+            ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
+        )
+
+    return pane_id, pid
+
+
 def kill_agent_pane(pane_id: str | None, session_name: str | None = None) -> None:
     """Kill a pane permanently (used for parallel coder cleanup)."""
     if not pane_id:

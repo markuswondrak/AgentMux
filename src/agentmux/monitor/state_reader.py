@@ -7,28 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..agent_labels import role_display_label
+from ..shared.phase_catalog import ALWAYS_VISIBLE_STATES as ALWAYS_VISIBLE_STATES
+from ..shared.phase_catalog import OPTIONAL_PHASES as OPTIONAL_PHASES
+from ..shared.phase_catalog import PIPELINE_STATES as PIPELINE_STATES
 
-ALWAYS_VISIBLE_STATES = [
-    "product_management",
-    "architecting",
-    "planning",
-    "implementing",
-    "reviewing",
-    "completing",
-    "done",
-]
-OPTIONAL_PHASES = {"designing", "fixing"}
-PIPELINE_STATES = [
-    "product_management",
-    "architecting",
-    "planning",
-    "designing",
-    "implementing",
-    "reviewing",
-    "fixing",
-    "completing",
-    "done",
-]
 EVENT_LABELS: dict[str, str] = {
     "feature_created": "starting up",
     "resumed": "resumed",
