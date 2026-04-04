@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from agentmux.integrations.completion import CompletionService
-from agentmux.sessions.state_store import feature_slug_from_dir
+from agentmux.sessions.state_store import feature_slug_from_dir, read_json_resilient
 from agentmux.shared.models import ProjectPaths
 from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.phase_helpers import (
@@ -107,9 +107,8 @@ class CompletingHandler:
         if not approval_path.exists():
             return {}, None
 
-        try:
-            payload = json.loads(approval_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
+        payload = read_json_resilient(approval_path, {})
+        if not payload:
             return {}, None
 
         if payload.get("action") != "approve":

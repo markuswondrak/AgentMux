@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -31,9 +32,34 @@ def now_iso() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def load_state(state_path: Path) -> dict[str, Any]:
-    import time
+def read_json_resilient(
+    path: Path,
+    default: dict[str, Any],
+    *,
+    retries: int = 5,
+    delay: float = 0.1,
+) -> dict[str, Any]:
+    """Read a JSON file, retrying on empty or malformed content.
 
+    Handles the watchdog race condition where a file exists but has not yet
+    been fully written. Returns *default* if the file does not exist, remains
+    empty after all retries, or contains invalid JSON on every attempt.
+    """
+    if not path.exists():
+        return default
+    for attempt in range(retries):
+        text = path.read_text(encoding="utf-8").strip()
+        if text:
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                pass
+        if attempt < retries - 1:
+            time.sleep(delay)
+    return default
+
+
+def load_state(state_path: Path) -> dict[str, Any]:
     for attempt in range(5):
         text = state_path.read_text(encoding="utf-8").strip()
         if text:
