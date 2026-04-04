@@ -10,5 +10,10 @@
       ],
       "enabled": true
     }
+  },
+  "agent": {
+    "agentmux-coder": {
+      "model": "opencode-go/minimax-m2.7"
+    }
   }
 }

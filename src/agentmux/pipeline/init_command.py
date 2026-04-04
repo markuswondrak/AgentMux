@@ -12,7 +12,12 @@ from typing import Any
 import yaml
 
 from ..configuration import load_builtin_catalog, load_layered_config
-from ..integrations.mcp import McpServerSpec, ensure_mcp_config
+from ..integrations.mcp import (
+    McpServerSpec,
+    OpenCodeAgentConfigurator,
+    ensure_mcp_config,
+)
+from ..shared.models import AgentConfig
 from ..terminal_ui.colors import QUESTIONARY_SECONDARY
 from ..terminal_ui.screens import render_logo
 
@@ -316,7 +321,9 @@ def display_detection(console: Any | None, detected: dict[str, bool]) -> None:
 
 
 def prompt_role_config(
-    detected_providers: list[str], defaults_config: dict[str, Any]
+    detected_providers: list[str],
+    defaults_config: dict[str, Any],
+    current_project_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not detected_providers:
         raise SystemExit(
@@ -328,11 +335,24 @@ def prompt_role_config(
     role_defaults = dict(defaults_config.get("roles", {}))
     builtin_default_provider = str(defaults.get("provider", "claude"))
     builtin_default_model = str(defaults.get("model", "sonnet"))
+
+    # Use current project config for defaults if available
+    current_defaults = {}
+    if current_project_config:
+        current_defaults = dict(current_project_config.get("defaults", {}))
+    current_roles = {}
+    if current_project_config:
+        current_roles = dict(current_project_config.get("roles", {}))
+
+    # Determine preselected default provider
+    effective_builtin_default = str(
+        current_defaults.get("provider", builtin_default_provider)
+    )
     selected_default = _select(
         "Default provider",
         detected_providers,
-        default=builtin_default_provider
-        if builtin_default_provider in detected_providers
+        default=effective_builtin_default
+        if effective_builtin_default in detected_providers
         else detected_providers[0],
     )
     setup_mode = _select(
@@ -367,7 +387,15 @@ def prompt_role_config(
             else {}
         )
         baseline_provider = str(role_cfg.get("provider", selected_default))
-        baseline_model = str(role_cfg.get("model", builtin_default_model))
+        # Use current project config model if available, otherwise fall back to built-in
+        current_role_cfg = (
+            dict(current_roles.get(role, {}))
+            if isinstance(current_roles.get(role), dict)
+            else {}
+        )
+        baseline_model = str(
+            current_role_cfg.get("model", role_cfg.get("model", builtin_default_model))
+        )
         provider_prompt_default = str(role_cfg.get("provider", "default"))
         if (
             provider_prompt_default != "default"
@@ -550,22 +578,23 @@ def generate_config(
     config_path = paths.config
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if config_path.exists() and not defaults_mode:
-        should_overwrite = _confirm(
-            "`.agentmux/config.yaml` already exists. Overwrite it?", default=False
-        )
-        if not should_overwrite:
-            raise SystemExit(
-                "Aborted. Existing .agentmux/config.yaml was not overwritten."
-            )
+    # Load existing config for additive merge
+    existing_raw: dict[str, Any] = {}
+    if config_path.exists():
+        existing_raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
 
-    data: dict[str, Any] = {"version": 2}
-    for section in ("defaults", "roles", "github"):
-        section_data = overrides.get(section)
-        if isinstance(section_data, dict) and section_data:
-            data[section] = section_data
+    # Deep-merge existing with overrides
+    proposed = _merge_overrides(existing_raw, overrides)
+    proposed["version"] = 2
 
-    rendered = yaml.safe_dump(data, sort_keys=False)
+    rendered = yaml.safe_dump(proposed, sort_keys=False)
+
+    # Skip write if content is identical
+    if config_path.exists():
+        current_text = config_path.read_text(encoding="utf-8")
+        if current_text == rendered:
+            return config_path
+
     config_path.write_text(rendered, encoding="utf-8")
     return config_path
 
@@ -722,6 +751,81 @@ def run_init(defaults_mode: bool = False) -> int:
     display_summary(
         output, created_files, skipped_files, project_dir, completion_status
     )
+    return 0
+
+
+def run_init_provider(
+    provider: str,
+    project_dir: Path,
+    defaults_mode: bool = False,
+) -> int:
+    """Run provider-specific setup (MCP + opencode agent entries).
+
+    Returns 0 on success, 1 on error.
+    """
+    if provider not in KNOWN_PROVIDERS:
+        print(f"Unknown provider: {provider}", file=sys.stderr)
+        raise SystemExit(1)
+
+    if provider == "copilot":
+        print("No additional setup needed for copilot")
+        return 0
+
+    server = McpServerSpec(
+        name="agentmux-research",
+        module="agentmux.integrations.mcp_research_server",
+        env={},
+    )
+
+    # Build minimal agents dict so _required_configurators selects the right MCP backend
+    _mcp_roles = ("architect", "product-manager")
+    _dummy = {
+        r: AgentConfig(role=r, cli=provider, model="", provider=provider)
+        for r in _mcp_roles
+    }
+
+    # MCP setup
+    if provider == "opencode":
+        ensure_mcp_config(
+            _dummy,
+            [server],
+            _mcp_roles,
+            project_dir,
+            interactive=False,
+            output=sys.stdout,
+        )
+    else:
+        # Non-opencode: MCP at home level
+        ensure_mcp_config(
+            _dummy,
+            [server],
+            _mcp_roles,
+            Path.home(),
+            interactive=False,
+            output=sys.stdout,
+        )
+
+    # OpenCode agent entries
+    if provider == "opencode":
+        if defaults_mode:
+            scope = "project"
+        else:
+            scope = _select(
+                "Agent config scope",
+                ["project", "global"],
+                default="project",
+            )
+
+        configurator = OpenCodeAgentConfigurator()
+        if scope == "global":
+            config_path = configurator.config_path(project_dir, global_scope=True)
+        else:
+            config_path = configurator.config_path(project_dir)
+
+        results = configurator.install_all_agents(config_path, force=False)
+        for role, status in results.items():
+            print(f"✓ agentmux-{role}: {status}")
+
     return 0
 
 

@@ -17,6 +17,7 @@ from agentmux.pipeline.init_command import (
     prompt_role_config,
     prompt_stubs,
     run_init,
+    run_init_provider,
     validate_config,
 )
 from agentmux.terminal_ui.screens import render_logo
@@ -228,7 +229,7 @@ class InitRequirementsTests(unittest.TestCase):
             config_path.write_text(
                 (
                     "version: 2\nroles:\n  coder:\n"
-                    "    provider: wrong\n    model: wrong-model\n"
+                    "    provider: claude\n    model: sonnet\n"
                 ),
                 encoding="utf-8",
             )
@@ -244,7 +245,9 @@ class InitRequirementsTests(unittest.TestCase):
             claude_text = claude_path.read_text(encoding="utf-8")
 
         self.assertEqual(0, exit_code)
-        self.assertEqual({"version": 2}, config)
+        # Additive: existing roles are preserved when overrides are empty
+        self.assertEqual(2, config["version"])
+        self.assertEqual("claude", config["roles"]["coder"]["provider"])
         self.assertEqual("keep me", claude_text)
 
     def test_validate_config_loads_generated_project_config(self) -> None:
@@ -279,6 +282,258 @@ class InitRequirementsTests(unittest.TestCase):
 ```
 """
         self.assertEqual(expected, logo)
+
+    # =========================================================================
+    # generate_config() — additive / no-overwrite-prompt tests
+    # =========================================================================
+
+    def test_generate_config_additive_no_write_when_identical(self) -> None:
+        """Calling generate_config twice with same overrides does not change mtime."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            config_path = project_dir / ".agentmux" / "config.yaml"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text("version: 2\n", encoding="utf-8")
+
+            result = generate_config({}, project_dir, defaults_mode=True)
+            first_mtime = result.stat().st_mtime
+
+            # Call again with same overrides — should not write
+            result2 = generate_config({}, project_dir, defaults_mode=True)
+            second_mtime = result2.stat().st_mtime
+
+            self.assertEqual(first_mtime, second_mtime)
+            self.assertEqual(result, result2)
+
+    def test_generate_config_writes_when_changed(self) -> None:
+        """Calling with different overrides updates the file."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            config_path = project_dir / ".agentmux" / "config.yaml"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text("version: 2\n", encoding="utf-8")
+
+            generate_config(
+                {"defaults": {"provider": "claude"}}, project_dir, defaults_mode=True
+            )
+
+            parsed = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            self.assertEqual("claude", parsed["defaults"]["provider"])
+
+    def test_generate_config_no_overwrite_prompt(self) -> None:
+        """generate_config never calls _confirm."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            config_path = project_dir / ".agentmux" / "config.yaml"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text("version: 2\n", encoding="utf-8")
+
+            with patch(
+                "agentmux.pipeline.init_command._confirm",
+                side_effect=AssertionError("_confirm should not be called"),
+            ):
+                generate_config({}, project_dir, defaults_mode=False)
+
+    def test_generate_config_merges_existing(self) -> None:
+        """Existing file key not in overrides is preserved in output."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            config_path = project_dir / ".agentmux" / "config.yaml"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                "version: 2\ngithub:\n  base_branch: develop\n",
+                encoding="utf-8",
+            )
+
+            generate_config(
+                {"defaults": {"provider": "claude"}},
+                project_dir,
+                defaults_mode=True,
+            )
+
+            parsed = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            self.assertEqual("develop", parsed["github"]["base_branch"])
+            self.assertEqual("claude", parsed["defaults"]["provider"])
+
+    # =========================================================================
+    # prompt_role_config() — current_project_config tests
+    # =========================================================================
+
+    def test_prompt_role_config_current_project_defaults_provider(self) -> None:
+        """current_project_config defaults.provider used as provider default."""
+        defaults = load_builtin_catalog()
+        current_project_config = {
+            "defaults": {"provider": "codex"},
+        }
+        captured_defaults: dict[str, str] = {}
+
+        def fake_select(message, choices, default=None, **_kwargs):
+            if "Default provider" in message:
+                captured_defaults["default"] = default
+            return _FakePrompt(choices[0])
+
+        fake_questionary = SimpleNamespace(select=fake_select)
+        with patch("agentmux.pipeline.init_command.questionary", fake_questionary):
+            prompt_role_config(
+                ["claude", "codex"],
+                defaults,
+                current_project_config=current_project_config,
+            )
+
+        self.assertEqual("codex", captured_defaults.get("default"))
+
+    def test_prompt_role_config_current_project_role_model(self) -> None:
+        """current_project_config roles.coder.model used as default in model prompt."""
+        defaults = load_builtin_catalog()
+        current_project_config = {
+            "defaults": {"provider": "claude"},
+            "roles": {"coder": {"model": "gpt-5.3-codex"}},
+        }
+        captured_model_defaults: dict[str, str] = {}
+
+        def fake_select(message, choices, default=None, **_kwargs):
+            return _FakePrompt("Customize roles")
+
+        def fake_text(message, default="", **_kwargs):
+            if "coder" in message:
+                captured_model_defaults["coder"] = default
+            return _FakePrompt("")
+
+        fake_questionary = SimpleNamespace(select=fake_select, text=fake_text)
+        with patch("agentmux.pipeline.init_command.questionary", fake_questionary):
+            prompt_role_config(
+                ["claude"], defaults, current_project_config=current_project_config
+            )
+
+        self.assertEqual("gpt-5.3-codex", captured_model_defaults.get("coder"))
+
+    def test_prompt_role_config_backward_compat(self) -> None:
+        """Calling without current_project_config still works."""
+        defaults = load_builtin_catalog()
+        answers = iter(["claude", "Use default provider for all roles"])
+
+        def fake_select(*_args, **_kwargs):
+            return _FakePrompt(next(answers))
+
+        fake_questionary = SimpleNamespace(select=fake_select)
+        with patch("agentmux.pipeline.init_command.questionary", fake_questionary):
+            overrides = prompt_role_config(["claude"], defaults)
+
+        self.assertEqual({}, overrides)
+
+    # =========================================================================
+    # run_init_provider() tests
+    # =========================================================================
+
+    def test_run_init_provider_unknown_raises(self) -> None:
+        """Unknown provider → SystemExit(1)."""
+        with self.assertRaises(SystemExit) as ctx:
+            run_init_provider("unknown_provider", Path("/tmp"))
+        self.assertEqual(1, ctx.exception.code)
+
+    def test_run_init_provider_copilot_noop(self) -> None:
+        """copilot → returns 0, no MCP calls."""
+        with patch("agentmux.pipeline.init_command.ensure_mcp_config") as mock_ensure:
+            result = run_init_provider("copilot", Path("/tmp"))
+            self.assertEqual(0, result)
+            mock_ensure.assert_not_called()
+
+    def test_run_init_provider_claude_home_level_mcp(self) -> None:
+        """claude → ensure_mcp_config called with Path.home() as project_dir
+        and a non-empty agents dict containing the provider."""
+        with (
+            patch("agentmux.pipeline.init_command.ensure_mcp_config") as mock_ensure,
+            patch("agentmux.pipeline.init_command.Path.home") as mock_home,
+        ):
+            mock_home.return_value = Path("/fake/home")
+            result = run_init_provider("claude", Path("/tmp/project"))
+
+        self.assertEqual(0, result)
+        mock_ensure.assert_called_once()
+        call_args = mock_ensure.call_args[0]
+        # agents dict (1st arg) must be non-empty and have provider="claude"
+        agents = call_args[0]
+        self.assertTrue(agents, "agents dict must not be empty")
+        for agent_cfg in agents.values():
+            self.assertEqual("claude", agent_cfg.provider)
+        # project_dir is the 4th positional arg
+        self.assertEqual(Path("/fake/home"), call_args[3])
+
+    def test_run_init_provider_opencode_project_mcp(self) -> None:
+        """opencode → ensure_mcp_config called with actual project_dir and
+        non-empty agents dict containing provider="opencode"."""
+        project_dir = Path("/tmp/project")
+        with (
+            patch("agentmux.pipeline.init_command.ensure_mcp_config") as mock_ensure,
+            patch(
+                "agentmux.pipeline.init_command.OpenCodeAgentConfigurator"
+            ) as mock_ocac,
+            patch(
+                "agentmux.pipeline.init_command._select",
+                return_value="project",
+            ),
+        ):
+            mock_instance = mock_ocac.return_value
+            mock_instance.install_all_agents.return_value = {}
+            result = run_init_provider("opencode", project_dir)
+
+        self.assertEqual(0, result)
+        mock_ensure.assert_called_once()
+        call_args = mock_ensure.call_args[0]
+        agents = call_args[0]
+        self.assertTrue(agents, "agents dict must not be empty")
+        for agent_cfg in agents.values():
+            self.assertEqual("opencode", agent_cfg.provider)
+        self.assertEqual(project_dir, call_args[3])
+
+    def test_run_init_provider_opencode_installs_agents(self) -> None:
+        """opencode → OpenCodeAgentConfigurator.install_all_agents called."""
+        project_dir = Path("/tmp/project")
+        with (
+            patch("agentmux.pipeline.init_command.ensure_mcp_config"),
+            patch(
+                "agentmux.pipeline.init_command.OpenCodeAgentConfigurator"
+            ) as mock_ocac,
+            patch(
+                "agentmux.pipeline.init_command._select",
+                return_value="project",
+            ),
+        ):
+            mock_instance = mock_ocac.return_value
+            mock_instance.install_all_agents.return_value = {
+                "coder": "created",
+                "architect": "created",
+            }
+            result = run_init_provider("opencode", project_dir)
+
+        self.assertEqual(0, result)
+        mock_instance.install_all_agents.assert_called_once()
+
+    def test_run_init_provider_opencode_defaults_mode_project_scope(self) -> None:
+        """defaults_mode=True → project scope used, no scope prompt."""
+        project_dir = Path("/tmp/project")
+        with (
+            patch("agentmux.pipeline.init_command.ensure_mcp_config"),
+            patch(
+                "agentmux.pipeline.init_command.OpenCodeAgentConfigurator"
+            ) as mock_ocac,
+            patch(
+                "agentmux.pipeline.init_command._select",
+                side_effect=AssertionError(
+                    "_select should not be called in defaults_mode"
+                ),
+            ),
+        ):
+            mock_instance = mock_ocac.return_value
+            mock_instance.config_path.return_value = project_dir / "opencode.json"
+            mock_instance.install_all_agents.return_value = {}
+            result = run_init_provider("opencode", project_dir, defaults_mode=True)
+
+        self.assertEqual(0, result)
+        mock_instance.install_all_agents.assert_called_once()
+        # Verify the path passed is project-scoped
+        call_args = mock_instance.install_all_agents.call_args
+        self.assertEqual(project_dir / "opencode.json", call_args[0][0])
 
 
 if __name__ == "__main__":

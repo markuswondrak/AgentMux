@@ -41,9 +41,31 @@ class Command:
 
 def handle_init(args: argparse.Namespace, project_dir: Path) -> int:
     """Handle the init command."""
+    provider = getattr(args, "provider", None)
+    if provider:
+        from .init_command import run_init_provider
+
+        return run_init_provider(
+            provider, project_dir, defaults_mode=bool(getattr(args, "defaults", False))
+        )
     from .init_command import run_init
 
     return run_init(defaults_mode=bool(getattr(args, "defaults", False)))
+
+
+def handle_configure(args: argparse.Namespace, project_dir: Path) -> int:
+    """Handle the configure command."""
+    from .configure_command import run_configure
+
+    return run_configure(
+        provider=getattr(args, "provider", None),
+        project_dir=project_dir,
+        role=getattr(args, "role", None),
+        model=getattr(args, "model", None),
+        agent=getattr(args, "agent", None),
+        force=bool(getattr(args, "force", False)),
+        global_scope=bool(getattr(args, "global_scope", False)),
+    )
 
 
 def handle_sessions(args: argparse.Namespace, project_dir: Path) -> int:
@@ -115,9 +137,37 @@ COMMANDS: list[Command] = [
         handler=handle_init,
         arguments=[
             Argument(
+                ("provider",),
+                nargs="?",
+                help="Provider to set up (claude, codex, gemini, opencode, copilot). "
+                "When supplied, runs provider-specific setup only.",
+            ),
+            Argument(
                 ("--defaults",),
                 action="store_true",
                 help="Run non-interactively with built-in defaults.",
+            ),
+        ],
+    ),
+    Command(
+        name="configure",
+        help="Configure provider, models, or agent entries for an existing project.",
+        handler=handle_configure,
+        arguments=[
+            Argument(("provider",), nargs="?", help="Provider to configure."),
+            Argument(("--role",), help="Role name for model update."),
+            Argument(("--model",), help="Model string to set for the specified role."),
+            Argument(
+                ("--agent",), metavar="ROLE|all", help="Install opencode agent entry."
+            ),
+            Argument(
+                ("--force",), action="store_true", help="Overwrite existing entries."
+            ),
+            Argument(
+                ("--global",),
+                dest="global_scope",
+                action="store_true",
+                help="Use global opencode.json scope.",
             ),
         ],
     ),
