@@ -137,7 +137,8 @@ src/agentmux/pipeline/init_command.py   — project initialization wizard
 src/agentmux/configuration/             — layered config loading, provider/model resolution, built-in defaults (v2 schema)
 src/agentmux/configuration/providers.py — built-in provider helpers for provider/model resolution
 
-src/agentmux/shared/models.py           — AgentConfig, GitHubConfig, RuntimeFiles
+src/agentmux/shared/phase_catalog.py    — ordered phase catalog: directories, optional flags, monitor ordering (Layer 1)
+src/agentmux/shared/models.py           — AgentConfig, GitHubConfig, RuntimeFiles; re-exports SESSION_DIR_NAMES from phase_catalog
 src/agentmux/sessions/__init__.py       — SessionService, session creation/resume
 src/agentmux/sessions/state_store.py    — state.json CRUD, feature-directory lifecycle, commit/cleanup helpers
 
@@ -147,6 +148,7 @@ src/agentmux/runtime/event_bus.py       — shared session event bus
 src/agentmux/runtime/file_events.py     — watchdog integration and created-files logging
 src/agentmux/runtime/interruption_sources.py — missing-pane interruption source
 
+src/agentmux/workflow/phase_registry.py — full phase registry: handler classes, roles, resume checks (Layer 2)
 src/agentmux/workflow/orchestrator.py   — orchestration loop on top of runtime event sources
 src/agentmux/workflow/phases.py         — workflow phase state machine
 src/agentmux/workflow/prompts.py        — prompt rendering and prompt-file creation

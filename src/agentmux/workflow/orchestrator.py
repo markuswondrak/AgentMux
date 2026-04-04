@@ -16,6 +16,7 @@ from ..shared.models import BATCH_AGENT_ROLES, GitHubConfig, WorkflowSettings
 from .event_router import WorkflowEvent, WorkflowEventRouter
 from .handlers import PHASE_HANDLERS
 from .interruptions import InterruptionService
+from .phase_registry import PHASE_RESEARCH_OWNERS
 from .prompts import build_initial_prompts
 from .transitions import PipelineContext
 
@@ -122,18 +123,8 @@ class PipelineOrchestrator:
             self._exit_event.set()
 
     def _determine_research_owner(self, state: dict, role: str) -> str | None:
-        """Determine which agent owns a research task based on current phase.
-
-        During product_management phase, the product-manager owns the research.
-        During architecting/planning/implementing phases, the architect owns
-        the research.
-        """
-        phase = state.get("phase", "")
-        if phase == "product_management":
-            return "product-manager"
-        elif phase in ("architecting", "planning", "implementing"):
-            return "architect"
-        return None
+        """Determine which agent owns a research task based on current phase."""
+        return PHASE_RESEARCH_OWNERS.get(str(state.get("phase", "")))
 
     def _on_event(self, event: SessionEvent) -> None:
         """Event callback - routes events to handlers.
