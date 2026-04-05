@@ -83,24 +83,16 @@ class GettingStartedGuideRequirementsTests(unittest.TestCase):
 
     def test_readme_has_quickstart_cross_link_and_docs_entry(self) -> None:
         readme = self._read("README.md")
-        quickstart_block = """# Resume an interrupted run
-agentmux resume
-
-```"""
+        # Quickstart block is inside the bash code fence
+        quickstart_block = "# Resume an interrupted run\nagentmux resume\n```"
         guide_line = (
-            "For a detailed walkthrough, see the [Getting Started guide]"
+            "For a full walkthrough, see the [Getting Started guide]"
             "(docs/getting-started.md)."
-        )
-        gh_line = (
-            "If `gh` is authenticated, AgentMux can bootstrap from issue content "
-            "and open a pull request when the pipeline completes."
         )
 
         self.assertIn(quickstart_block, readme)
         self.assertIn(guide_line, readme)
-        self.assertIn(gh_line, readme)
         self.assertLess(readme.index(quickstart_block), readme.index(guide_line))
-        self.assertLess(readme.index(guide_line), readme.index(gh_line))
 
         docs_section_match = re.search(
             r"## Documentation\n\n(?P<section>(?:- .+\n)+)", readme

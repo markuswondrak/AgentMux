@@ -31,9 +31,15 @@ class FakeRuntime:
         self.parallel_specs: list[list[tuple[int | str, str, str | None]]] = []
 
     def send(
-        self, role: str, prompt_file: Path, display_label: str | None = None
+        self,
+        role: str,
+        prompt_file: Path,
+        display_label: str | None = None,
+        prefix_command: str | None = None,
     ) -> None:
-        self.calls.append(("send", role, prompt_file.name, display_label))
+        self.calls.append(
+            ("send", role, prompt_file.name, display_label, prefix_command)
+        )
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(("send_many", role, _prompt_names(prompt_specs)))
@@ -168,7 +174,13 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             self.assertEqual(
                 [
                     ("kill_primary", "coder"),
-                    ("send", "coder", "coder_prompt_1.txt", "[coder] implementation"),
+                    (
+                        "send",
+                        "coder",
+                        "coder_prompt_1.txt",
+                        "[coder] implementation",
+                        None,
+                    ),
                 ],
                 ctx.runtime.calls,
             )
@@ -290,6 +302,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
                         "reviewer_logic",
                         "review_logic_prompt.md",
                         "[reviewer_logic] logic",
+                        None,
                     )
                 ],
                 ctx.runtime.calls,
@@ -310,7 +323,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             self.assertEqual(
                 [
                     ("kill_primary", "coder"),
-                    ("send", "coder", "fix_prompt.txt", "[coder] fix 1"),
+                    ("send", "coder", "fix_prompt.txt", "[coder] fix 1", None),
                 ],
                 ctx.runtime.calls,
             )

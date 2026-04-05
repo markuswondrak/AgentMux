@@ -32,9 +32,13 @@ class FakeRuntime:
         self.primary_panes = {"product-manager": "%7"}
 
     def send(
-        self, role: str, prompt_file: Path, display_label: str | None = None
+        self,
+        role: str,
+        prompt_file: Path,
+        display_label: str | None = None,
+        prefix_command: str | None = None,
     ) -> None:
-        self.calls.append(("send", role, prompt_file.name))
+        self.calls.append(("send", role, prompt_file.name, prefix_command))
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(
@@ -198,7 +202,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             handler = ProductManagementHandler()
             handler.enter(load_state(state_path), ctx)
             self.assertEqual(
-                ("send", "product-manager", "product_manager_prompt.md"),
+                ("send", "product-manager", "product_manager_prompt.md", None),
                 ctx.runtime.calls[-1],
             )
 

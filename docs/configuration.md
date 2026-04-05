@@ -174,7 +174,7 @@ In this example, the `coder` role receives both `[--shared-flag, shared-value, -
 
 `copilot` has `single_coder: true` set in its built-in provider config. This means the implementing phase sends **one combined prompt** to a single copilot pane instead of spawning separate panes for each sub-plan. The prompt embeds all plan and tasks content, and instructs copilot to use its own internal sub-agents to implement each plan. Copilot writes the `done_N` completion marker files as each plan finishes (or all at once at the end).
 
-When the coder provider is `copilot` with `single_coder: true`, the prompt is automatically prefixed with the `/fleet` slash command. This tells Copilot CLI to decompose the embedded plan into sub-agent tasks and execute them in parallel, with the main copilot instance acting as orchestrator. The `/fleet` prefix is applied transparently — no extra config flag is needed.
+When the coder provider is `copilot` with `single_coder: true`, the `/fleet` slash command is automatically sent as keystrokes before the prompt file reference. This tells Copilot CLI to decompose the embedded plan into sub-agent tasks and execute them in parallel, with the main copilot instance acting as orchestrator. The `/fleet` command is sent interactively (not embedded in the prompt file) because Copilot CLI only recognizes slash commands when entered as direct input. The prefix is applied transparently — no extra config flag is needed.
 
 This design avoids multiple premium-request invocations (one per sub-plan pane) in favour of a single invocation where copilot manages parallelism internally via `/fleet`.
 
@@ -191,7 +191,7 @@ providers:
       coder: [--allow-all]
 ```
 
-Note: The automatic `/fleet` prefix is only applied when the coder's provider is `copilot`. Other providers with `single_coder: true` receive the combined prompt without the prefix.
+Note: The automatic `/fleet` prefix command is only sent when the coder's provider is `copilot`. Other providers with `single_coder: true` receive the combined prompt without the prefix command.
 
 ## Strict schema
 

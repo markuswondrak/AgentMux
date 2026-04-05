@@ -31,9 +31,15 @@ class _FakeRuntime:
         self.parallel_specs: list[list[tuple[int | str, str, str | None]]] = []
 
     def send(
-        self, role: str, prompt_file: Path, display_label: str | None = None
+        self,
+        role: str,
+        prompt_file: Path,
+        display_label: str | None = None,
+        prefix_command: str | None = None,
     ) -> None:
-        self.calls.append(("send", role, prompt_file.name, display_label))
+        self.calls.append(
+            ("send", role, prompt_file.name, display_label, prefix_command)
+        )
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(("send_many", role, _prompt_names(prompt_specs)))
@@ -162,7 +168,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
 
             self.assertIn(
-                ("send", "coder", "coder_prompt_1.txt", "[coder] Foundation"),
+                ("send", "coder", "coder_prompt_1.txt", "[coder] Foundation", None),
                 ctx.runtime.calls,
             )
 
@@ -267,7 +273,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
 
             self.assertIn(
-                ("send", "coder", "coder_prompt_1.txt", "[coder] Foundation"),
+                ("send", "coder", "coder_prompt_1.txt", "[coder] Foundation", None),
                 ctx.runtime.calls,
             )
 
@@ -318,7 +324,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
             self.assertIsNone(next_phase)
             self.assertIn(
-                ("send", "coder", "coder_prompt_4.txt", "[coder] Integration"),
+                ("send", "coder", "coder_prompt_4.txt", "[coder] Integration", None),
                 ctx.runtime.calls,
             )
 
@@ -416,11 +422,11 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, resumed_state)
 
             self.assertIn(
-                ("send", "coder", "coder_prompt_3.txt", "[coder] UI polish"),
+                ("send", "coder", "coder_prompt_3.txt", "[coder] UI polish", None),
                 resumed_ctx.runtime.calls,
             )
             self.assertNotIn(
-                ("send", "coder", "coder_prompt_2.txt", "[coder] API wiring"),
+                ("send", "coder", "coder_prompt_2.txt", "[coder] API wiring", None),
                 resumed_ctx.runtime.calls,
             )
 
@@ -438,7 +444,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
             self.assertIsNone(next_phase)
             self.assertIn(
-                ("send", "coder", "coder_prompt_4.txt", "[coder] Integration"),
+                ("send", "coder", "coder_prompt_4.txt", "[coder] Integration", None),
                 resumed_ctx.runtime.calls,
             )
 
@@ -482,12 +488,18 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             # First plan should be dispatched (serial sends one at a time)
             self.assertIn(
-                ("send", "coder", "coder_prompt_1.txt", "[coder] Docs Update"),
+                ("send", "coder", "coder_prompt_1.txt", "[coder] Docs Update", None),
                 ctx.runtime.calls,
             )
             # Second plan should NOT be dispatched yet
             self.assertNotIn(
-                ("send", "coder", "coder_prompt_2.txt", "[coder] Test Validation"),
+                (
+                    "send",
+                    "coder",
+                    "coder_prompt_2.txt",
+                    "[coder] Test Validation",
+                    None,
+                ),
                 ctx.runtime.calls,
             )
 
@@ -507,7 +519,13 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             self.assertIsNone(next_phase)
             # Second plan should now be dispatched
             self.assertIn(
-                ("send", "coder", "coder_prompt_2.txt", "[coder] Test Validation"),
+                (
+                    "send",
+                    "coder",
+                    "coder_prompt_2.txt",
+                    "[coder] Test Validation",
+                    None,
+                ),
                 ctx.runtime.calls,
             )
 
@@ -537,7 +555,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             handler = FixingHandler()
             handler.enter(state, ctx)
             self.assertIn(
-                ("send", "coder", "fix_prompt.txt", "[coder] fix 1"), ctx.runtime.calls
+                ("send", "coder", "fix_prompt.txt", "[coder] fix 1", None),
+                ctx.runtime.calls,
             )
 
             _touch(ctx.files.implementation_dir / "done_1")

@@ -25,8 +25,11 @@ def send_to_role(
     prompt_file: Path,
     *,
     display_label: str | None = None,
+    prefix_command: str | None = None,
 ) -> None:
-    ctx.runtime.send(role, prompt_file, display_label=display_label)
+    ctx.runtime.send(
+        role, prompt_file, display_label=display_label, prefix_command=prefix_command
+    )
 
 
 def write_phase(

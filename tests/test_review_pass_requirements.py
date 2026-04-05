@@ -19,9 +19,15 @@ class FakeRuntime:
         self.calls: list[tuple[str, object]] = []
 
     def send(
-        self, role: str, prompt_file: Path, display_label: str | None = None
+        self,
+        role: str,
+        prompt_file: Path,
+        display_label: str | None = None,
+        prefix_command: str | None = None,
     ) -> None:
-        self.calls.append(("send", role, prompt_file.name, display_label))
+        self.calls.append(
+            ("send", role, prompt_file.name, display_label, prefix_command)
+        )
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(
@@ -130,6 +136,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
                     "reviewer_logic",
                     "review_logic_prompt.md",
                     "[reviewer_logic] logic",
+                    None,
                 ),
                 ctx.runtime.calls,
             )

@@ -27,9 +27,15 @@ class FakeRuntime:
         self.notifications: list[tuple[str, str]] = []
 
     def send(
-        self, role: str, prompt_file: Path, display_label: str | None = None
+        self,
+        role: str,
+        prompt_file: Path,
+        display_label: str | None = None,
+        prefix_command: str | None = None,
     ) -> None:
-        self.calls.append(("send", role, prompt_file.name, display_label))
+        self.calls.append(
+            ("send", role, prompt_file.name, display_label, prefix_command)
+        )
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(("send_many", role, len(prompt_specs)))

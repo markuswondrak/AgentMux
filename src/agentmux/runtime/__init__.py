@@ -32,7 +32,11 @@ SNAPSHOT_VERSION = 2
 
 class AgentRuntime(Protocol):
     def send(
-        self, role: str, prompt_file: Path, display_label: str | None = None
+        self,
+        role: str,
+        prompt_file: Path,
+        display_label: str | None = None,
+        prefix_command: str | None = None,
     ) -> None: ...
 
     def send_many(
@@ -388,7 +392,11 @@ class TmuxAgentRuntime:
         return pane_id
 
     def send(
-        self, role: str, prompt_file: Path, display_label: str | None = None
+        self,
+        role: str,
+        prompt_file: Path,
+        display_label: str | None = None,
+        prefix_command: str | None = None,
     ) -> None:
         pane_id = self._ensure_primary_pane(role)
         if not pane_id:
@@ -399,7 +407,7 @@ class TmuxAgentRuntime:
             display_label=display_label or self._display_label_for_task(role, None),
         )
         self._zone.show(pane_id)
-        send_prompt(pane_id, prompt_file)
+        send_prompt(pane_id, prompt_file, prefix_command=prefix_command)
         self._persist_snapshot()
 
     def send_many(

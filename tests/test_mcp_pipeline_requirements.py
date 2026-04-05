@@ -46,8 +46,9 @@ class _FakeRuntime:
         role: str,
         prompt_file: Path,
         display_label: str | None = None,
+        prefix_command: str | None = None,
     ) -> None:
-        _ = (role, prompt_file, display_label)
+        _ = (role, prompt_file, display_label, prefix_command)
 
     def shutdown(self, keep_session: bool) -> None:
         self.shutdown_calls.append(keep_session)

@@ -964,10 +964,23 @@ def send_text(target_pane: str, text: str) -> None:
     run_command(["tmux", "send-keys", "-t", target_pane, "Enter"], check=False)
 
 
-def send_prompt(target_pane: str | None, prompt_file: Path) -> None:
-    """Send a prompt reference message to an existing pane."""
+def send_prompt(
+    target_pane: str | None,
+    prompt_file: Path,
+    *,
+    prefix_command: str | None = None,
+) -> None:
+    """Send a prompt reference message to an existing pane.
+
+    If prefix_command is provided, it is sent as keystrokes BEFORE the
+    prompt file reference. This is needed for CLI slash commands (e.g.
+    /fleet for Copilot) that must be entered interactively to be recognized.
+    """
     if not target_pane or not tmux_pane_exists(target_pane):
         return
+    if prefix_command:
+        send_text(target_pane, prefix_command)
+        time.sleep(1.0)
     prompt_reference = f"Read and follow the instructions in {prompt_file.resolve()}"
     send_text(target_pane, prompt_reference)
 

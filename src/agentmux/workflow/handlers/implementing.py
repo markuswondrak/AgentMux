@@ -406,8 +406,8 @@ class ImplementingHandler:
         """Dispatch a single combined prompt (single-coder mode).
 
         When the coder uses copilot with single_coder mode, the prompt is
-        prefixed with ``/fleet`` so Copilot CLI decomposes the plan into
-        sub-agent tasks and executes them in parallel.
+        sent with a ``/fleet`` prefix command so Copilot CLI decomposes the
+        plan into sub-agent tasks and executes them in parallel.
         """
         all_plan_names = [
             str(name)
@@ -422,10 +422,11 @@ class ImplementingHandler:
 
         prompt_content = build_coder_whole_plan_prompt(ctx.files)
 
-        # Auto-enable /fleet for copilot single-coder mode
+        # Determine if /fleet prefix command is needed for copilot single-coder mode
         coder = ctx.agents.get("coder")
+        prefix_command = None
         if coder is not None and coder.single_coder and coder.provider == "copilot":
-            prompt_content = f"/fleet {prompt_content}"
+            prefix_command = "/fleet"
 
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
@@ -434,4 +435,10 @@ class ImplementingHandler:
             ),
             prompt_content,
         )
-        send_to_role(ctx, "coder", prompt_file, display_label=display_label)
+        send_to_role(
+            ctx,
+            "coder",
+            prompt_file,
+            display_label=display_label,
+            prefix_command=prefix_command,
+        )

@@ -569,6 +569,122 @@ class TestImplementingHandler:
         mock_ctx.runtime.deactivate.assert_called_once_with("coder")
         assert next_phase == "reviewing"
 
+    def test_enter_single_coder_copilot_sends_fleet_prefix(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Test that single-coder copilot mode sends /fleet as prefix_command."""
+        from agentmux.shared.models import AgentConfig
+
+        handler = ImplementingHandler()
+        state = {"last_event": EVENT_PLAN_WRITTEN}
+
+        # Configure coder as copilot with single_coder
+        mock_ctx.agents = {
+            "coder": AgentConfig(
+                role="coder",
+                cli="copilot",
+                model="claude-sonnet-4.6",
+                provider="copilot",
+                single_coder=True,
+            )
+        }
+
+        # Create execution plan
+        mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.planning_dir / "execution_plan.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "groups": [
+                        {
+                            "group_id": "group1",
+                            "mode": "serial",
+                            "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
+                        }
+                    ],
+                }
+            )
+        )
+        (mock_ctx.files.planning_dir / "plan_1.md").write_text("plan 1")
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+
+        with (
+            patch("agentmux.workflow.handlers.implementing.reset_markers"),
+            patch(
+                "agentmux.workflow.handlers.implementing.write_prompt_file"
+            ) as mock_write,
+            patch(
+                "agentmux.workflow.handlers.implementing.build_coder_whole_plan_prompt"
+            ) as mock_build,
+            patch("agentmux.workflow.handlers.implementing.send_to_role") as mock_send,
+        ):
+            mock_write.return_value = Path("/mock/prompt.md")
+            mock_build.return_value = "coder whole plan prompt"
+
+            handler.enter(state, mock_ctx)
+
+            mock_send.assert_called_once()
+            call_kwargs = mock_send.call_args[1]
+            assert call_kwargs.get("prefix_command") == "/fleet"
+
+    def test_enter_single_coder_non_copilot_no_fleet_prefix(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Test that single-coder non-copilot mode does NOT send /fleet prefix."""
+        from agentmux.shared.models import AgentConfig
+
+        handler = ImplementingHandler()
+        state = {"last_event": EVENT_PLAN_WRITTEN}
+
+        # Configure coder as non-copilot with single_coder
+        mock_ctx.agents = {
+            "coder": AgentConfig(
+                role="coder",
+                cli="some-cli",
+                model="some-model",
+                provider="some-provider",
+                single_coder=True,
+            )
+        }
+
+        # Create execution plan
+        mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.planning_dir / "execution_plan.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "groups": [
+                        {
+                            "group_id": "group1",
+                            "mode": "serial",
+                            "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
+                        }
+                    ],
+                }
+            )
+        )
+        (mock_ctx.files.planning_dir / "plan_1.md").write_text("plan 1")
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+
+        with (
+            patch("agentmux.workflow.handlers.implementing.reset_markers"),
+            patch(
+                "agentmux.workflow.handlers.implementing.write_prompt_file"
+            ) as mock_write,
+            patch(
+                "agentmux.workflow.handlers.implementing.build_coder_whole_plan_prompt"
+            ) as mock_build,
+            patch("agentmux.workflow.handlers.implementing.send_to_role") as mock_send,
+        ):
+            mock_write.return_value = Path("/mock/prompt.md")
+            mock_build.return_value = "coder whole plan prompt"
+
+            handler.enter(state, mock_ctx)
+
+            mock_send.assert_called_once()
+            call_kwargs = mock_send.call_args[1]
+            assert call_kwargs.get("prefix_command") is None
+
 
 class TestReviewingHandler:
     """Tests for ReviewingHandler."""
