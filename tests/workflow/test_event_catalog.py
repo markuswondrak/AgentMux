@@ -22,6 +22,7 @@ from agentmux.workflow.event_catalog import (
     WorkflowEventDefinition,
     event_display_label,
 )
+from agentmux.workflow.phase_registry import EVENT_EMITTERS
 
 ALL_CONSTANTS = [
     EVENT_FEATURE_CREATED,
@@ -93,17 +94,17 @@ class TestWorkflowEventDefinition:
         with pytest.raises((AttributeError, TypeError)):
             defn.name = "something_else"  # type: ignore[misc]
 
-    def test_consumed_by_is_tuple(self) -> None:
-        for key, defn in WORKFLOW_EVENT_CATALOG.items():
-            assert isinstance(defn.consumed_by, tuple), (
-                f"{key}: consumed_by should be tuple"
-            )
+    def test_definition_contains_only_event_metadata_fields(self) -> None:
+        assert tuple(WorkflowEventDefinition.__dataclass_fields__) == (
+            "name",
+            "display_label",
+            "description",
+        )
 
-    def test_transitions_to_is_tuple(self) -> None:
-        for key, defn in WORKFLOW_EVENT_CATALOG.items():
-            assert isinstance(defn.transitions_to, tuple), (
-                f"{key}: transitions_to should be tuple"
-            )
+    def test_definition_does_not_expose_phase_relationship_fields(self) -> None:
+        for defn in WORKFLOW_EVENT_CATALOG.values():
+            assert not hasattr(defn, "consumed_by")
+            assert not hasattr(defn, "transitions_to")
 
     def test_display_label_values(self) -> None:
         expected = {
@@ -144,6 +145,20 @@ class TestEventDisplayLabel:
         """Previously fabricated labels no longer exist in catalog."""
         assert event_display_label("plan_approved") == "plan approved"
         assert event_display_label("review_written") == "review written"
+
+
+class TestPhaseEventWiring:
+    def test_event_emitters_are_derived_from_phase_registry(self) -> None:
+        assert EVENT_EMITTERS == {
+            EVENT_PM_COMPLETED: ("product_management",),
+            EVENT_ARCHITECTURE_WRITTEN: ("architecting",),
+            EVENT_PLAN_WRITTEN: ("planning",),
+            EVENT_DESIGN_WRITTEN: ("designing",),
+            EVENT_IMPLEMENTATION_COMPLETED: ("implementing", "fixing"),
+            EVENT_REVIEW_FAILED: ("reviewing",),
+            EVENT_REVIEW_PASSED: ("reviewing",),
+            EVENT_CHANGES_REQUESTED: ("completing",),
+        }
 
 
 class TestValidateLastEvent:

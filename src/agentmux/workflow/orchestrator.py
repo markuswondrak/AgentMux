@@ -14,9 +14,8 @@ from ..runtime.interruption_sources import (
 from ..sessions.state_store import cleanup_feature_dir, load_state
 from ..shared.models import BATCH_AGENT_ROLES, GitHubConfig, WorkflowSettings
 from .event_router import WorkflowEvent, WorkflowEventRouter
-from .handlers import PHASE_HANDLERS
 from .interruptions import InterruptionService
-from .phase_registry import PHASE_RESEARCH_OWNERS
+from .phase_registry import PHASE_HANDLERS, PHASE_RESEARCH_OWNERS
 from .prompts import build_initial_prompts
 from .transitions import PipelineContext
 

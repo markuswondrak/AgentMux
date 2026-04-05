@@ -1,4 +1,7 @@
-"""Centralized catalog of all valid workflow last_event values.
+"""Centralized catalog of all valid workflow ``last_event`` values.
+
+This module intentionally stores only event metadata. Phase-to-event wiring
+lives in ``phase_registry.py`` so workflow relationships stay in one place.
 
 This module has no dependencies on any other agentmux module — it imports only
 from the Python standard library.
@@ -16,8 +19,6 @@ class WorkflowEventDefinition:
     name: str
     display_label: str
     description: str
-    consumed_by: tuple[str, ...]
-    transitions_to: tuple[str, ...]
 
 
 # ---------------------------------------------------------------------------
@@ -46,85 +47,61 @@ WORKFLOW_EVENT_CATALOG: dict[str, WorkflowEventDefinition] = {
         name=EVENT_FEATURE_CREATED,
         display_label="starting up",
         description="A new feature session was created.",
-        consumed_by=(),
-        transitions_to=(),
     ),
     EVENT_RESUMED: WorkflowEventDefinition(
         name=EVENT_RESUMED,
         display_label="resumed",
         description="An interrupted session was resumed.",
-        consumed_by=("reviewing",),
-        transitions_to=(),
     ),
     EVENT_PM_COMPLETED: WorkflowEventDefinition(
         name=EVENT_PM_COMPLETED,
         display_label="pm done",
         description="Product management phase completed.",
-        consumed_by=(),
-        transitions_to=("architecting",),
     ),
     EVENT_ARCHITECTURE_WRITTEN: WorkflowEventDefinition(
         name=EVENT_ARCHITECTURE_WRITTEN,
         display_label="architecture ready",
         description="Architect wrote architecture.md.",
-        consumed_by=(),
-        transitions_to=("planning",),
     ),
     EVENT_PLAN_WRITTEN: WorkflowEventDefinition(
         name=EVENT_PLAN_WRITTEN,
         display_label="plan ready",
         description="Planner wrote plan.md, execution_plan.json, and plan_meta.json.",
-        consumed_by=("implementing",),
-        transitions_to=("designing", "implementing"),
     ),
     EVENT_DESIGN_WRITTEN: WorkflowEventDefinition(
         name=EVENT_DESIGN_WRITTEN,
         display_label="design ready",
         description="Designer wrote design.md.",
-        consumed_by=("implementing",),
-        transitions_to=("implementing",),
     ),
     EVENT_IMPLEMENTATION_COMPLETED: WorkflowEventDefinition(
         name=EVENT_IMPLEMENTATION_COMPLETED,
         display_label="code done",
         description="All implementation subplans completed.",
-        consumed_by=(),
-        transitions_to=("reviewing",),
     ),
     EVENT_REVIEW_FAILED: WorkflowEventDefinition(
         name=EVENT_REVIEW_FAILED,
         display_label="fix needed",
         description="Reviewer issued a verdict:fail.",
-        consumed_by=("fixing",),
-        transitions_to=("fixing", "completing"),
     ),
     EVENT_REVIEW_PASSED: WorkflowEventDefinition(
         name=EVENT_REVIEW_PASSED,
         display_label="review passed",
         description="Reviewer issued a verdict:pass.",
-        consumed_by=(),
-        transitions_to=(),
     ),
     EVENT_CHANGES_REQUESTED: WorkflowEventDefinition(
         name=EVENT_CHANGES_REQUESTED,
         display_label="changes asked",
         description="User requested changes via the completion UI.",
-        consumed_by=("planning", "implementing"),
-        transitions_to=("planning",),
     ),
     EVENT_RUN_CANCELED: WorkflowEventDefinition(
         name=EVENT_RUN_CANCELED,
         display_label="canceled",
         description="The pipeline run was canceled.",
-        consumed_by=(),
-        transitions_to=("failed",),
     ),
     EVENT_RUN_FAILED: WorkflowEventDefinition(
         name=EVENT_RUN_FAILED,
         display_label="run failed",
         description="The pipeline run encountered a fatal error.",
-        consumed_by=(),
-        transitions_to=("failed",),
     ),
 }
 

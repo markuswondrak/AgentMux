@@ -196,6 +196,7 @@ class PhaseDescriptor:
         primary_roles: Agent roles activated during this phase.
         resume_check: Logic for infer_resume_phase().
         research_owner: Role notified when a batch researcher crashes in this phase.
+        emitted_events: Single source of truth for the events this phase emits.
     """
 
     name: str
@@ -312,6 +313,17 @@ PHASE_EVENT_LABELS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Derived lookups (replace previous scattered dicts)
 # ---------------------------------------------------------------------------
+
+# Reverse lookup derived from ``PhaseDescriptor.emitted_events`` so callers can
+# answer "which phases emit this event?" without reintroducing duplicated wiring.
+_event_emitters: dict[str, list[str]] = {}
+for descriptor in PHASE_REGISTRY:
+    for event_name in descriptor.emitted_events:
+        _event_emitters.setdefault(event_name, []).append(descriptor.name)
+
+EVENT_EMITTERS: dict[str, tuple[str, ...]] = {
+    name: tuple(phase_names) for name, phase_names in _event_emitters.items()
+}
 
 # Replaces PHASE_HANDLERS in workflow/handlers/__init__.py.
 # Instances are created once at import time (same behaviour as before).

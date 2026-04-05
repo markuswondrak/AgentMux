@@ -105,7 +105,7 @@ Execution scheduling is strict:
 
 ## Workflow Events
 
-`state.json` contains a `last_event` field that records the most recent workflow event driving the current phase. The authoritative catalog of valid values is in `src/agentmux/workflow/event_catalog.py`. Unknown values are rejected at write time by `validate_last_event()` in `phase_helpers.py`.
+`state.json` contains a `last_event` field that records the most recent workflow event driving the current phase. The authoritative catalog of valid values and display metadata is in `src/agentmux/workflow/event_catalog.py`. Phase-to-event emission wiring lives in `src/agentmux/workflow/phase_registry.py` via `PhaseDescriptor.emitted_events`. Unknown values are rejected at write time by `validate_last_event()` in `phase_helpers.py`.
 
 | Constant | String Value | Display Label | Emitted By | Consumed By | Transitions To |
 |---|---|---|---|---|---|
@@ -122,4 +122,4 @@ Execution scheduling is strict:
 | `EVENT_RUN_CANCELED` | `run_canceled` | `canceled` | orchestrator interruption | — | `failed` |
 | `EVENT_RUN_FAILED` | `run_failed` | `run failed` | orchestrator interruption | — | `failed` |
 
-See `src/agentmux/workflow/event_catalog.py` for the full `WorkflowEventDefinition` entries including `consumed_by` and `transitions_to` tuples.
+The table above summarizes runtime behavior from three sources: event metadata in `event_catalog.py`, phase emission wiring in `phase_registry.py`, and the phase-local consumption/transition logic in the individual handler modules.
