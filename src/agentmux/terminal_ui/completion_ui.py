@@ -23,6 +23,7 @@ from pathlib import Path
 
 try:
     from rich.console import Console
+    from rich.markdown import Markdown
     from rich.panel import Panel
     from rich.rule import Rule
     from rich.text import Text
@@ -67,12 +68,12 @@ _LOGO_LINES = [
     f"[blue]│[/blue]  [bold {_PRIMARY}]██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/bold {_PRIMARY}][blue]│[/blue]",  # noqa: E501
     f"[blue]│[/blue]  [bold {_PRIMARY}]╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/bold {_PRIMARY}][blue]│[/blue]",  # noqa: E501
     "[blue]├──────────────────────────────┬───────────────┤[/blue]",
-    f"[blue]│[/blue] [bold {_SECONDARY}]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold {_SECONDARY}][blue]│[/blue]             [bold green]██[/bold green][blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]████╗ ████║██║   ██║╚██╗██╔╝ [/bold {_SECONDARY}][blue]│[/blue]            [bold green]██[/bold green] [blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]██╔████╔██║██║   ██║ ╚███╔╝  [/bold {_SECONDARY}][blue]│[/blue]  [bold green]██[/bold green]       [bold green]██[/bold green]  [blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold {_SECONDARY}][blue]│[/blue]   [bold green]██[/bold green]     [bold green]██[/bold green]   [blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold {_SECONDARY}][blue]│[/blue]    [bold green]██[/bold green]   [bold green]██[/bold green]    [blue]│[/blue]",  # noqa: E501
-    f"[blue]│[/blue] [bold {_SECONDARY}]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold {_SECONDARY}][blue]│[/blue]     [bold green]█████[/bold green]     [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]███╗   ███╗██╗   ██╗██╗  ██╗ [/bold {_SECONDARY}][blue]│[/blue]            [bold green]██[/bold green][dim green]▓[/dim green][blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]████╗ ████║██║   ██║╚██╗██╔╝ [/bold {_SECONDARY}][blue]│[/blue]           [bold green]██[/bold green][dim green]▓[/dim green] [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]██╔████╔██║██║   ██║ ╚███╔╝  [/bold {_SECONDARY}][blue]│[/blue]  [bold green]██[/bold green][dim green]▓[/dim green]      [bold green]██[/bold green][dim green]▓[/dim green] [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]██║╚██╔╝██║██║   ██║ ██╔██╗  [/bold {_SECONDARY}][blue]│[/blue]   [bold green]██[/bold green][dim green]▓[/dim green]    [bold green]██[/bold green][dim green]▓[/dim green]  [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗ [/bold {_SECONDARY}][blue]│[/blue]    [bold green]██[/bold green][dim green]▓[/dim green]  [bold green]██[/bold green][dim green]▓[/dim green]   [blue]│[/blue]",  # noqa: E501
+    f"[blue]│[/blue] [bold {_SECONDARY}]╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝ [/bold {_SECONDARY}][blue]│[/blue]     [bold green]█████[/bold green][dim green]▓[/dim green]    [blue]│[/blue]",  # noqa: E501
     "[blue]╰──────────────────────────────┴───────────────╯[/blue]",
 ]
 
@@ -134,7 +135,7 @@ def _render_screen(
     console.print(summary_text)
     console.print(Rule("[dim]Summary[/dim]", style=_MUTED))
     console.print()
-    console.print(summary)
+    console.print(Markdown(summary))
     console.print()
 
     if interactive:
@@ -152,7 +153,8 @@ def _render_screen(
             Panel(
                 f"[bold {_PRIMARY}]  \\[Y][/bold {_PRIMARY}]"
                 "  Approve and complete the pipeline\n"
-                "[bold yellow]  \\[N][/bold yellow]  Request changes",
+                "[bold yellow]  \\[N][/bold yellow]  Request changes"
+                "  [dim]❯  describe what to change[/dim]",
                 title="[bold]Confirmation[/bold]",
                 border_style=_BORDER,
                 padding=(0, 2),
@@ -176,7 +178,7 @@ def _render_screen_plain(
     print(summary)
     print()
     print("[Y] Approve and complete the pipeline")
-    print("[N] Request changes")
+    print("[N] Request changes  >  describe what to change")
     print()
 
 
@@ -184,7 +186,7 @@ def _prompt_choice_interactive(console: Console) -> str:
     """Arrow-key navigable Yes/No menu using readchar. Returns 'y' or 'n'."""
     options = [
         ("y", "Approve and complete the pipeline", _PRIMARY),
-        ("n", "Request changes and restart planning", "yellow"),
+        ("n", "Request changes  ❯  describe what to change", "yellow"),
     ]
     selected = 0
     first_render = True
@@ -244,8 +246,11 @@ def _prompt_choice(console: Console | None) -> str:
             print("Please enter Y or N.")
 
 
-def _prompt_changes(console: Console | None) -> str:
-    """Ask the user to describe the changes they want. Returns the text."""
+def _prompt_changes(console: Console | None) -> str | None:
+    """Ask the user to describe the changes they want.
+
+    Returns the feedback text, or None if the user cancelled (Ctrl+C or /cancel).
+    """
     if console:
         console.print()
         console.print(
@@ -263,11 +268,15 @@ def _prompt_changes(console: Console | None) -> str:
     if console:
         console.print(
             f"[{_MUTED}]"
-            "(Enter your feedback below. Press Enter twice when done.)"
+            "(Enter feedback below. Press Enter twice when done,"
+            " or type /cancel to go back.)"
             f"[/{_MUTED}]"
         )
     else:
-        print("(Enter your feedback below. Press Enter twice when done.)")
+        print(
+            "(Enter feedback below. Press Enter twice when done,"
+            " or type /cancel to go back.)"
+        )
     print()
 
     blank_count = 0
@@ -275,7 +284,9 @@ def _prompt_changes(console: Console | None) -> str:
         try:
             line = input("> ")
         except (EOFError, KeyboardInterrupt):
-            break
+            return None
+        if line.strip() == "/cancel":
+            return None
         if line == "":
             blank_count += 1
             if blank_count >= 2:
@@ -308,42 +319,55 @@ def run(feature_dir: Path, project_dir: Path) -> None:
     changed_count = _git_changed_count(project_dir)
 
     console: Console | None = None
+    interactive = False
     if _RICH_AVAILABLE and sys.stdout.isatty():
         console = Console()
         interactive = _READCHAR_AVAILABLE and sys.stdin.isatty()
-        _render_screen(  # noqa: E501
-            console, summary, changed_count, feature_name, interactive=interactive
-        )
-    else:
-        _render_screen_plain(summary, changed_count, feature_name)
 
-    choice = _prompt_choice(console)
-
-    if choice == "y":
-        approval_path = completion_dir / "approval.json"
-        approval_path.write_text(
-            json.dumps({"action": "approve", "exclude_files": []}, indent=2) + "\n",
-            encoding="utf-8",
-        )
+    def _do_render() -> None:
         if console:
-            console.print()
-            console.print(
-                f"[{_SUCCESS}]✓ Approved. Completing pipeline...[/{_SUCCESS}]"
+            _render_screen(
+                console, summary, changed_count, feature_name, interactive=interactive
             )
         else:
-            print("\n✓ Approved. Completing pipeline...")
-    else:
-        changes_text = _prompt_changes(console)
-        changes_path = completion_dir / "changes.md"
-        changes_path.write_text(changes_text + "\n", encoding="utf-8")
-        if console:
-            console.print()
-            console.print(
-                "[yellow]Changes requested. "
-                "Restarting pipeline from planning...[/yellow]"
+            _render_screen_plain(summary, changed_count, feature_name)
+
+    _do_render()
+
+    while True:
+        choice = _prompt_choice(console)
+
+        if choice == "y":
+            approval_path = completion_dir / "approval.json"
+            approval_path.write_text(
+                json.dumps({"action": "approve", "exclude_files": []}, indent=2) + "\n",
+                encoding="utf-8",
             )
+            if console:
+                console.print()
+                console.print(
+                    f"[{_SUCCESS}]✓ Approved. Completing pipeline...[/{_SUCCESS}]"
+                )
+            else:
+                print("\n✓ Approved. Completing pipeline...")
+            break
         else:
-            print("\nChanges requested. Restarting pipeline from planning...")
+            changes_text = _prompt_changes(console)
+            if changes_text is not None:
+                changes_path = completion_dir / "changes.md"
+                changes_path.write_text(changes_text + "\n", encoding="utf-8")
+                if console:
+                    console.print()
+                    console.print(
+                        "[yellow]Changes requested. "
+                        "Restarting pipeline from planning...[/yellow]"
+                    )
+                else:
+                    print("\nChanges requested. Restarting pipeline from planning...")
+                break
+            else:
+                # User cancelled — re-render confirmation screen
+                _do_render()
 
 
 def main() -> None:
