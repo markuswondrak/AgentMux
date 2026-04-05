@@ -278,7 +278,7 @@ def _normalize_provider(name: str, raw: Any) -> dict[str, Any]:
     # Start with required fields
     result: dict[str, Any] = {
         "command": str(raw.get("command", name)),
-        "model_flag": str(raw.get("model_flag", "--model")),
+        "model_flag": raw.get("model_flag"),
         "role_args": {
             str(role): _normalize_args(f"providers.{name}.role_args.{role}", args)
             for role, args in role_args.items()
@@ -439,7 +439,7 @@ def _resolve_loaded_config(
             role=role,
             cli=str(provider.get("command", provider_name)),
             model=model,
-            model_flag=str(provider.get("model_flag", "--model")),
+            model_flag=provider.get("model_flag"),
             args=list(args),
             trust_snippet=provider.get("trust_snippet"),
             provider=provider_name,

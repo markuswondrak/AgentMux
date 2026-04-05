@@ -50,7 +50,7 @@ class AgentConfig:
     role: str
     cli: str
     model: str
-    model_flag: str = "--model"
+    model_flag: str | None = "--model"
     args: list[str] | None = None
     env: dict[str, str] | None = None
     trust_snippet: str | None = None

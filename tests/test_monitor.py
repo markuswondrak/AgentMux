@@ -7,7 +7,12 @@ from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from agentmux import monitor
-from agentmux.monitor.state_reader import EVENT_LABELS, OPTIONAL_PHASES, PIPELINE_STATES
+from agentmux.monitor.state_reader import (
+    EVENT_LABELS,
+    OPTIONAL_PHASES,
+    PIPELINE_STATES,
+    read_session_summary,
+)
 from agentmux.shared.models import SESSION_DIR_NAMES, RuntimeFiles
 
 
@@ -822,6 +827,112 @@ class MonitorTests(unittest.TestCase):
             self.assertNotIn("\033\\", stripped)
             # But should still contain the visible path text
             self.assertIn("02_planning/plan.md", stripped)
+
+    def test_render_shows_session_name_in_footer(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+
+            state_path.write_text('{"phase": "implementing"}', encoding="utf-8")
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+
+            output = self._strip_ansi(self._render(feature_dir, width=40, height=18))
+
+            self.assertIn("session-x", output)
+
+    def test_render_uses_issue_title_when_present_in_state(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            requirements_path = feature_dir / "requirements.md"
+
+            state_path.write_text(
+                '{"phase": "implementing", "issue_title": "Fix auth bypass bug"}',
+                encoding="utf-8",
+            )
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            requirements_path.write_text(
+                (
+                    "# Requirements\n\n## Initial Request\n"
+                    "fallback description from requirements\n"
+                ),
+                encoding="utf-8",
+            )
+
+            output = self._strip_ansi(self._render(feature_dir, width=40, height=18))
+
+            self.assertIn("Fix auth bypass bug", output)
+            self.assertNotIn("fallback description", output)
+
+    def test_render_falls_back_to_requirements_when_no_issue_title(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            requirements_path = feature_dir / "requirements.md"
+
+            state_path.write_text('{"phase": "implementing"}', encoding="utf-8")
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+            requirements_path.write_text(
+                (
+                    "# Requirements\n\n## Initial Request\n"
+                    "build a todo app with filters\n"
+                ),
+                encoding="utf-8",
+            )
+
+            output = self._strip_ansi(self._render(feature_dir, width=40, height=18))
+
+            self.assertIn("build a todo app", output)
+
+    def test_read_session_summary_prefers_issue_title(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            requirements_path = feature_dir / "requirements.md"
+
+            state_path.write_text(
+                '{"issue_title": "GitHub Issue Title"}', encoding="utf-8"
+            )
+            requirements_path.write_text(
+                "# Requirements\n\n## Initial Request\nFallback text\n",
+                encoding="utf-8",
+            )
+
+            result = read_session_summary(state_path)
+            self.assertEqual("GitHub Issue Title", result)
+
+    def test_read_session_summary_falls_back_to_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            requirements_path = feature_dir / "requirements.md"
+
+            state_path.write_text('{"phase": "planning"}', encoding="utf-8")
+            requirements_path.write_text(
+                "# Requirements\n\n## Initial Request\nFallback text\n",
+                encoding="utf-8",
+            )
+
+            result = read_session_summary(state_path)
+            self.assertEqual("Fallback text", result)
+
+    def test_read_session_summary_handles_empty_issue_title(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            requirements_path = feature_dir / "requirements.md"
+
+            state_path.write_text('{"issue_title": ""}', encoding="utf-8")
+            requirements_path.write_text(
+                "# Requirements\n\n## Initial Request\nFallback text\n",
+                encoding="utf-8",
+            )
+
+            result = read_session_summary(state_path)
+            self.assertEqual("Fallback text", result)
 
 
 if __name__ == "__main__":

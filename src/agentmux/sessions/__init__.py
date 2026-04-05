@@ -42,6 +42,7 @@ class SessionCreateRequest:
     product_manager: bool = False
     gh_available: bool = False
     issue_number: str | None = None
+    issue_title: str | None = None
 
 
 @dataclass(frozen=True)
@@ -183,6 +184,8 @@ class SessionService:
         state["gh_available"] = bool(request.gh_available)
         if request.issue_number is not None:
             state["issue_number"] = request.issue_number
+        if request.issue_title is not None:
+            state["issue_title"] = request.issue_title
         state["updated_at"] = now_iso()
         state["updated_by"] = "pipeline"
         write_state(files.state, state)

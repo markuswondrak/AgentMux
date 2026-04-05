@@ -262,6 +262,30 @@ Each role resolves to an `AgentConfig` with:
 
 The tmux runtime launches agents from that fully resolved config. AgentMux still never talks to model APIs directly.
 
+## OpenCode provider: model configuration caveat
+
+When using the `opencode` provider with `--agent`, opencode **ignores** the `--model` flag entirely. The model is determined solely by the `agent.<agent-name>.model` entry in `opencode.json`.
+
+AgentMux detects this mismatch at startup: if `model:` is configured for an opencode role in agentmux config, a warning is printed to stderr and the user is prompted to choose:
+
+- **[a]** Add the configured model to `opencode.json` for the matching agent, then continue (AgentMux updates the file automatically)
+- **[y]** Continue without updating `opencode.json` (the model from `opencode.json` will be used)
+- **[n]** Abort (default)
+
+To configure which model opencode uses, set it in `opencode.json`:
+
+```json
+{
+  "agent": {
+    "agentmux-coder": {
+      "model": "qwen3"
+    }
+  }
+}
+```
+
+The warning shows the full picture: what was configured in agentmux, what will actually happen, and how to fix it.
+
 ## Runtime MCP setup for research tools
 
 MCP setup for research uses a **two-layer configuration approach** that separates persistent project-level config from runtime-generated config.

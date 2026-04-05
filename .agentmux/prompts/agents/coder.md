@@ -1,0 +1,1 @@
+- When surfacing configuration mismatches or overrides, always show the full picture: what was configured, what will actually happen, and how to fix it. Never show partial information that leaves the user guessing about the outcome.

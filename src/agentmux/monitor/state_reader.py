@@ -294,6 +294,19 @@ def read_feature_request(state_path: Path) -> str:
     return ""
 
 
+def read_session_summary(state_path: Path) -> str:
+    """Get the session display summary.
+
+    Returns issue_title if bootstrapped from a GitHub issue,
+    otherwise falls back to the first line of requirements.md.
+    """
+    state = load_state(state_path)
+    issue_title = state.get("issue_title")
+    if isinstance(issue_title, str) and issue_title.strip():
+        return issue_title.strip()
+    return read_feature_request(state_path)
+
+
 def format_event(raw: str) -> str:
     from ..workflow.interruptions import monitor_label_from_event
 

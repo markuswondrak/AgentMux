@@ -326,5 +326,108 @@ class V2ConfigLayeredLoadingTests(unittest.TestCase):
                 self.assertEqual(loaded.agents["architect"].provider, "custom")
 
 
+class V2ConfigNullableModelFlagTests(unittest.TestCase):
+    """Sub-plan 2: nullable model_flag through config resolution pipeline."""
+
+    def test_opencode_provider_produces_null_model_flag(self) -> None:
+        """When opencode is the default provider, all roles should have model_flag=None."""  # noqa: E501
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yaml"
+            cfg = {
+                "version": 2,
+                "defaults": {
+                    "provider": "opencode",
+                    "model": "some-model",
+                },
+            }
+            cfg_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+
+            loaded = load_explicit_config(cfg_path)
+            self.assertIsNone(loaded.agents["coder"].model_flag)
+            self.assertIsNone(loaded.agents["architect"].model_flag)
+
+    def test_claude_provider_retains_model_flag(self) -> None:
+        """When claude is the provider, all roles should have model_flag='--model'."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yaml"
+            cfg = {
+                "version": 2,
+                "defaults": {
+                    "provider": "claude",
+                    "model": "sonnet",
+                },
+            }
+            cfg_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+
+            loaded = load_explicit_config(cfg_path)
+            self.assertEqual("--model", loaded.agents["coder"].model_flag)
+            self.assertEqual("--model", loaded.agents["architect"].model_flag)
+
+    def test_explicit_null_model_flag_in_yaml(self) -> None:
+        """A custom provider with model_flag: null should produce None."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yaml"
+            cfg = {
+                "version": 2,
+                "providers": {
+                    "custom": {
+                        "command": "custom-cli",
+                        "model_flag": None,
+                        "role_args": {},
+                    },
+                },
+                "roles": {
+                    "coder": {"provider": "custom", "model": "custom-model"},
+                },
+            }
+            cfg_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+
+            loaded = load_explicit_config(cfg_path)
+            self.assertIsNone(loaded.agents["coder"].model_flag)
+
+    def test_explicit_model_flag_value_is_preserved(self) -> None:
+        """A custom provider with model_flag: --model-name should preserve it."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yaml"
+            cfg = {
+                "version": 2,
+                "providers": {
+                    "custom": {
+                        "command": "custom-cli",
+                        "model_flag": "--model-name",
+                        "role_args": {},
+                    },
+                },
+                "roles": {
+                    "coder": {"provider": "custom", "model": "custom-model"},
+                },
+            }
+            cfg_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+
+            loaded = load_explicit_config(cfg_path)
+            self.assertEqual("--model-name", loaded.agents["coder"].model_flag)
+
+    def test_absent_model_flag_normalizes_to_none(self) -> None:
+        """A custom provider with no model_flag key should produce None."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yaml"
+            cfg = {
+                "version": 2,
+                "providers": {
+                    "custom": {
+                        "command": "custom-cli",
+                        "role_args": {},
+                    },
+                },
+                "roles": {
+                    "coder": {"provider": "custom", "model": "custom-model"},
+                },
+            }
+            cfg_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+
+            loaded = load_explicit_config(cfg_path)
+            self.assertIsNone(loaded.agents["coder"].model_flag)
+
+
 if __name__ == "__main__":
     unittest.main()

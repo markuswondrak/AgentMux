@@ -29,7 +29,7 @@ from ..sessions.state_store import (
     load_state,
     write_state,
 )
-from ..shared.models import WorkflowSettings
+from ..shared.models import AgentConfig, WorkflowSettings
 from ..terminal_ui.console import ConsoleUI
 from ..terminal_ui.screens import goodbye_canceled, goodbye_error, goodbye_success
 from ..workflow.interruptions import InterruptionService
@@ -92,6 +92,47 @@ def _read_last_completion(project_dir: Path) -> dict[str, str | None]:
         "pr_url": pr_url_raw or None,
         "branch_name": branch_name or None,
     }
+
+
+def _extract_opencode_agent_name(agent: AgentConfig) -> str | None:
+    """Return the --agent argument value from agent.args, or None if not found."""
+    args = agent.args or []
+    for i, arg in enumerate(args):
+        if arg == "--agent" and i + 1 < len(args):
+            return args[i + 1]
+    return None
+
+
+def _read_opencode_actual_model(
+    opencode_json_path: Path, agent_name: str
+) -> str | None:
+    """Read the model configured for agent_name in opencode.json.
+
+    Returns None on any error (file not found, JSON parse error, missing key).
+    """
+    try:
+        data = json.loads(opencode_json_path.read_text(encoding="utf-8"))
+        model = data["agent"][agent_name]["model"]
+        return str(model) if isinstance(model, str) else None
+    except Exception:
+        return None
+
+
+def _update_opencode_json(
+    opencode_json_path: Path, agent_name: str, model: str
+) -> None:
+    """Deep-merge model into opencode.json under agent.<agent_name>.model.
+
+    Creates the file if it does not exist. Propagates IOError/OSError on write failure.
+    """
+    try:
+        data = json.loads(opencode_json_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+    agent_data = data.setdefault("agent", {})
+    existing = agent_data.get(agent_name, {})
+    agent_data[agent_name] = {**existing, "model": model}
+    opencode_json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 class PipelineApplication:
@@ -189,12 +230,107 @@ class PipelineApplication:
             return candidate
         return WorkflowSettings()
 
+    def _check_opencode_model_conflicts(
+        self,
+        loaded,
+        project_dir: Path,
+    ) -> bool:
+        """Return True if pipeline should proceed, False if user aborted."""
+        opencode_json_path = project_dir / "opencode.json"
+        roles_raw = getattr(loaded, "raw", {}).get("roles", {})
+
+        for role, agent in loaded.agents.items():
+            if agent.provider != "opencode":
+                continue
+            if "model" not in roles_raw.get(role, {}):
+                continue
+
+            configured_model = str(roles_raw[role]["model"])
+            agent_name = _extract_opencode_agent_name(agent)
+            actual_model = (
+                _read_opencode_actual_model(opencode_json_path, agent_name)
+                if agent_name is not None
+                else None
+            )
+
+            # Build warning message
+            agent_label = agent_name or "<unknown agent name>"
+            if actual_model is not None:
+                model_line = (
+                    f"   Model '{actual_model}' will be used instead\n"
+                    f"   (from opencode.json: agent.{agent_label}.model)."
+                )
+            else:
+                model_line = (
+                    f"   The actual model used will be whatever opencode.json "
+                    f"configures for '{agent_label}'\n"
+                    f"   (model not found in opencode.json)."
+                )
+
+            if agent_name is not None:
+                json_snippet = (
+                    f"   {{\n"
+                    f'     "agent": {{\n'
+                    f'       "{agent_name}": {{\n'
+                    f'         "model": "{configured_model}"\n'
+                    f"       }}\n"
+                    f"     }}\n"
+                    f"   }}"
+                )
+                update_hint = (
+                    f"\n   To use '{configured_model}', update your opencode.json:\n"
+                    + json_snippet
+                )
+            else:
+                update_hint = ""
+
+            sys.stderr.write(
+                f"\n\u26a0  Warning: Role '{role}' has model "
+                f"'{configured_model}' set in agentmux config,\n"
+                f"   but opencode ignores --model when --agent is used.\n"
+                + model_line
+                + "\n"
+                + update_hint
+                + "\n"
+                f"\nContinue anyway?\n"
+                f"  [a] Add '{configured_model}' to opencode.json for {agent_label},"
+                f" then continue\n"
+                f"  [y] Continue without updating opencode.json\n"
+                f"  [n] Abort (default)\n"
+            )
+            sys.stderr.flush()
+
+            choice = self.ui.input_fn("").strip().lower()
+
+            if choice == "a":
+                if agent_name is None:
+                    sys.stderr.write(
+                        "Error: Cannot update opencode.json — agent name unknown.\n"
+                    )
+                    return False
+                try:
+                    _update_opencode_json(
+                        opencode_json_path, agent_name, configured_model
+                    )
+                except OSError as exc:
+                    sys.stderr.write(f"Error: Failed to update opencode.json: {exc}\n")
+                    return False
+            elif choice == "y":
+                continue
+            else:
+                return False
+
+        return True
+
     def _run_launcher(self, args, loaded) -> int:
         if args.resume and getattr(args, "issue", None):
             raise SystemExit("--issue cannot be used with --resume.")
 
         mcp = self._mcp_preparer()
         mcp.ensure_project_config(loaded.agents)
+
+        if not self._check_opencode_model_conflicts(loaded, self.project_dir):
+            return 1
 
         prepared = self._prepare_session(args, loaded)
         if args.resume:
@@ -258,6 +394,7 @@ class PipelineApplication:
                     product_manager=bool(args.product_manager),
                     gh_available=issue.gh_available,
                     issue_number=issue.issue_number,
+                    issue_title=issue.slug_source,
                 )
             )
         else:

@@ -17,8 +17,8 @@ from .state_reader import (
     get_role_labels,
     get_role_states,
     load_state,
-    read_feature_request,
     read_monitor_log_entries,
+    read_session_summary,
     trim_model,
 )
 
@@ -152,7 +152,7 @@ def _wrap_feature_lines(text: str, width: int, *, max_lines: int = 4) -> list[st
 
 
 def _render_feature_header(width: int, state_path: Path) -> list[str]:
-    feature_request = read_feature_request(state_path)
+    feature_request = read_session_summary(state_path)
     logo_width = max(_vlen(row) for _, row in MONITOR_HEADER_LOGO)
     gap = 2
     text_width = width - logo_width - gap
@@ -831,7 +831,6 @@ class Monitor:
         header_rows = _render_feature_header(width, self.files.state)
         if header_rows:
             body.extend(header_rows)
-        body.append(_separator(width))
         body.append("")
         body.extend(
             _render_pipeline_section(
@@ -863,7 +862,8 @@ class Monitor:
         seconds = elapsed_seconds % 60
         footer = [
             _separator(width),
-            f"{DIM}◷ {hours}:{minutes:02d}:{seconds:02d}{RESET}",
+            f"{DIM}◷ {hours}:{minutes:02d}:{seconds:02d}  │  "
+            f"{self.session_name}{RESET}",
         ]
 
         log_rows: list[str] = []

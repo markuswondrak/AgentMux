@@ -178,7 +178,6 @@ providers:
       - yolo
   opencode:
     command: opencode
-    model_flag: --model
     trust_snippet: null
     batch_subcommand: run
     role_args:
