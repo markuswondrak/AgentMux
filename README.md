@@ -1,100 +1,80 @@
 # AgentMux
 
 [![test](https://github.com/markuswondrak/AgentMux/actions/workflows/ci.yml/badge.svg)](https://github.com/markuswondrak/AgentMux/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-**Multi-agent software development pipelines using the AI CLI tools you already have.**
+**Run a full multi-agent software pipeline using the AI subscriptions you already have.**
 
-AgentMux orchestrates a structured workflow across multiple AI agents by driving existing CLI tools like `claude`, `codex`, `gemini`, and `opencode` through tmux. The pipeline owns the workflow; the agents execute focused role prompts against a shared file protocol.
+AgentMux orchestrates a structured PM → Architect → Plan → Code → Review → Done workflow across `claude`, `codex`, `gemini`, and `opencode` — driving them through tmux, not the API. No pay-per-token. No new credentials. Just your existing CLI tools working in concert.
 
 ---
 <img width="1595" height="1071" alt="agentmux" src="https://github.com/user-attachments/assets/806e0fe8-decc-4869-80be-35f99f03481b" />
 ---
 
-## How it works
+## Why AgentMux
 
-The pipeline is static and deterministic. AgentMux moves work through planning, implementation, review, and completion phases by selecting the right role, rendering the right prompt, and injecting a prompt-file reference into that role's tmux pane.
-
-Agents do not talk to each other directly. They coordinate through the session directory and the orchestrator's state machine.
-
-## Architecture
-
-The codebase is organized around component packages with clear ownership boundaries:
-
-- `agentmux/pipeline/` — CLI entrypoint, init flow, and top-level application coordination
-- `agentmux/workflow/` — phases, prompt rendering, transitions, orchestration, interruption policy
-- `agentmux/runtime/` — tmux runtime control, event bus, file and interruption sources
-- `agentmux/monitor/` — monitor command, state aggregation, terminal rendering
-- `agentmux/integrations/` — GitHub, MCP research integration, completion side effects
-- `agentmux/configuration/` — layered config loading, providers, defaults
-- `agentmux/sessions/` — session preparation and persisted state
-- `agentmux/terminal_ui/` — interactive console prompts and terminal layout helpers
-- `agentmux/shared/` — shared models
+- **No API costs** — injects prompts into tmux panes, reusing your existing Claude, Codex, Gemini, or OpenCode subscriptions. No tokens billed to you directly.
+- **Structured pipeline** — a deterministic state machine moves work through planning, implementation, and review phases. Agents don't freelance; they execute focused roles.
+- **Mix providers per role** — run the architect on Claude Max, the coder on Codex, and the reviewer on Gemini. Each role is independently configurable.
+- **Watch it work** — the session is a live tmux window. Attach at any time to observe, intervene, or take over.
+- **GitHub-native** — bootstrap from an issue, auto-open a pull request when the pipeline completes.
 
 ## Quickstart
 
 ```bash
-# Option 1: Install from GitHub
-python3 -m pip install git+https://github.com/markuswondrak/AgentMux.git
-
-# Option 2: Install isolated CLI with pipx
+# Install with pipx (recommended)
 pipx install git+https://github.com/markuswondrak/AgentMux.git
 
-# Update to latest main (pipx upgrade is unreliable for git installs)
-pipx install --force git+https://github.com/markuswondrak/AgentMux.git
-
-# Option 3: Editable install for local development
-python3 -m pip install -e .
+# Initialize a project (interactive setup)
+cd your-repo
+agentmux init
 
 # Run a feature from description to reviewed, committed code
 agentmux "Add rate limiting to the API"
 
-# Optional: start with a product management phase
-agentmux "Add rate limiting to the API" --product-manager
-
 # Bootstrap from a GitHub issue
-agentmux --issue 42
-agentmux --issue https://github.com/owner/repo/issues/42
+agentmux issue 42
 
 # Resume an interrupted run
 agentmux resume
-
 ```
 
-For a detailed walkthrough, see the [Getting Started guide](docs/getting-started.md).
+For a full walkthrough, see the [Getting Started guide](docs/getting-started.md).
 
-If `gh` is authenticated, AgentMux can bootstrap from issue content and open a pull request when the pipeline completes.
+## How it works
+
+AgentMux creates a tmux session with a control pane and one pane per agent role. A file-watching orchestrator tracks session artifacts written by agents and advances the workflow state machine when the right files appear. Agents coordinate through a shared file protocol — they never talk to each other directly. The orchestrator decides what happens next and injects the appropriate prompt into the right pane.
 
 ## Configuration
 
-Project config lives in `.agentmux/config.yaml`. AgentMux resolves built-in defaults from `agentmux/configuration/defaults/config.yaml`, optional user config from `~/.config/agentmux/config.yaml`, then project config, with `--config <path>` as the final override.
+Project config lives in `.agentmux/config.yaml`. Run `agentmux init` to scaffold it interactively, or create it manually:
 
 ```yaml
-version: 1
+version: 2
 
 defaults:
   provider: claude
-  profile: standard
-  completion:
-    skip_final_approval: false
+  model: sonnet
 
 roles:
   architect:
-    profile: max
+    model: opus
   coder:
     provider: codex
-    profile: standard
   reviewer:
-    profile: standard
+    model: sonnet
 ```
 
-Profiles (`max`, `standard`, `low`) map to provider-specific models and launch arguments through the layered configuration system.
+Config is resolved in layers: built-in defaults → `~/.config/agentmux/config.yaml` → project config → `--config <path>`. See [`docs/configuration.md`](docs/configuration.md) for the full schema.
 
 ## Supported providers
 
-- `claude` — Claude Code CLI
-- `codex` — OpenAI Codex CLI
-- `gemini` — Google Gemini CLI
-- `opencode` — OpenCode CLI
+| Provider | CLI tool |
+|----------|----------|
+| `claude` | Claude Code CLI |
+| `codex` | OpenAI Codex CLI |
+| `gemini` | Google Gemini CLI |
+| `opencode` | OpenCode CLI |
 
 ## Agent roles
 
@@ -116,7 +96,7 @@ Profiles (`max`, `standard`, `low`) map to provider-specific models and launch a
 ## Documentation
 
 - [`docs/getting-started.md`](docs/getting-started.md) — installation, setup, and first pipeline run
-- [`docs/configuration.md`](docs/configuration.md) — layered launcher/profile configuration
+- [`docs/configuration.md`](docs/configuration.md) — layered config schema, providers, and model selection
 - [`docs/file-protocol.md`](docs/file-protocol.md) — shared file protocol between agents and orchestrator
 - [`docs/monitor.md`](docs/monitor.md) — monitor command, state view, and terminal rendering
 - [`docs/prompts.md`](docs/prompts.md) — built-in prompts and project prompt extensions
