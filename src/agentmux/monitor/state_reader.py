@@ -8,47 +8,12 @@ from pathlib import Path
 
 from ..agent_labels import role_display_label
 from ..shared.phase_catalog import ALWAYS_VISIBLE_STATES as ALWAYS_VISIBLE_STATES
+from ..shared.phase_catalog import (
+    MONITOR_FILE_EVENT_PATTERNS as MONITOR_FILE_EVENT_PATTERNS,
+)
 from ..shared.phase_catalog import OPTIONAL_PHASES as OPTIONAL_PHASES
 from ..shared.phase_catalog import PIPELINE_STATES as PIPELINE_STATES
-
-EVENT_LABELS: dict[str, str] = {
-    "feature_created": "starting up",
-    "resumed": "resumed",
-    "plan_written": "plan ready",
-    "design_written": "design ready",
-    "research_dispatched": "researching…",
-    "research_complete": "research done",
-    "web_research_dispatched": "web research…",
-    "web_research_complete": "web research done",
-    "implementation_started": "coding…",
-    "implementation_completed": "code done",
-    "review_written": "review ready",
-    "fix_requested": "fix needed",
-    "fix_completed": "fix done",
-    "approved": "approved ✓",
-    "changes_requested": "changes asked",
-    "plan_approved": "plan approved",
-    "confirmation_sent": "awaiting ok",
-    "pm_completed": "pm done",
-}
-MONITOR_FILE_EVENT_PATTERNS = (
-    "requirements.md",
-    "01_product_management/analysis.md",
-    "02_planning/plan.md",
-    "02_planning/tasks.md",
-    "03_research/code-*/summary.md",
-    "03_research/code-*/detail.md",
-    "03_research/code-*/done",
-    "03_research/web-*/summary.md",
-    "03_research/web-*/detail.md",
-    "03_research/web-*/done",
-    "04_design/design.md",
-    "05_implementation/done_*",
-    "06_review/review.md",
-    "06_review/fix_request.md",
-    "08_completion/changes.md",
-    "08_completion/approval.json",
-)
+from ..workflow.phase_registry import PHASE_EVENT_LABELS as EVENT_LABELS
 
 
 @dataclass(frozen=True)

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from .sessions.state_store import feature_slug_from_dir
-from .shared.models import BATCH_AGENT_ROLES, SESSION_DIR_NAMES
+from .shared.models import SESSION_DIR_NAMES
 from .workflow.execution_plan import load_execution_plan
 
 _PLAN_ID_RE = re.compile(r"^plan_(\d+)(?:\.md)?$")
@@ -97,6 +98,23 @@ def _coder_detail(feature_dir: Path, state: dict, task_id: int | str | None) -> 
     return "implementation"
 
 
+DetailFn = Callable[["Path", dict, "int | str | None"], "str | None"]
+
+ROLE_DETAIL_DISPATCH: dict[str, DetailFn] = {
+    "architect": lambda fd, s, t: "planning",
+    "product-manager": lambda fd, s, t: "analysis",
+    "planner": lambda fd, s, t: "planning",
+    "designer": lambda fd, s, t: design_subject(fd),
+    "coder": lambda fd, s, t: _coder_detail(fd, s, t),
+    "reviewer": lambda fd, s, t: f"iteration {_review_iteration(s) + 1}",
+    "reviewer_logic": lambda fd, s, t: "logic",
+    "reviewer_quality": lambda fd, s, t: "quality",
+    "reviewer_expert": lambda fd, s, t: "expert",
+    "code-researcher": lambda fd, s, t: str(t) if t is not None else None,
+    "web-researcher": lambda fd, s, t: str(t) if t is not None else None,
+}
+
+
 def role_display_label(
     feature_dir: Path,
     role: str,
@@ -105,23 +123,11 @@ def role_display_label(
     state: dict | None = None,
 ) -> str:
     current_state = state if state is not None else _load_state_safe(feature_dir)
-
-    if role == "architect":
-        return format_agent_label(role, "planning")
-    if role == "product-manager":
-        return format_agent_label(role, "analysis")
-    if role == "designer":
-        return format_agent_label(role, design_subject(feature_dir))
-    if role == "coder":
-        return format_agent_label(
-            role, _coder_detail(feature_dir, current_state, task_id)
-        )
-    if role == "reviewer":
-        return format_agent_label(
-            role, f"iteration {_review_iteration(current_state) + 1}"
-        )
-    if role in BATCH_AGENT_ROLES and task_id is not None:
-        return format_agent_label(role, str(task_id))
-    if task_id is not None:
-        return format_agent_label(role, str(task_id))
-    return format_agent_label(role)
+    detail_fn = ROLE_DETAIL_DISPATCH.get(role)
+    if detail_fn is not None:
+        detail = detail_fn(feature_dir, current_state, task_id)
+    elif task_id is not None:
+        detail = str(task_id)
+    else:
+        detail = None
+    return format_agent_label(role, detail)

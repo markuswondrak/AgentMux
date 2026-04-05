@@ -29,9 +29,15 @@ The control pane renders a live status box with the following sections:
 
 ## Key constants
 
-- `ALWAYS_VISIBLE_STATES` — phases shown in all cases
-- `OPTIONAL_PHASES` — phases hidden until they are the active phase
-- `EVENT_LABELS` — mapping of internal event names (e.g. `plan_written`) to user-friendly labels (e.g. "plan ready")
+- `ALWAYS_VISIBLE_STATES` — phases shown in all cases (defined in `shared/phase_catalog.py`)
+- `OPTIONAL_PHASES` — phases hidden until they are the active phase (defined in `shared/phase_catalog.py`)
+- `MONITOR_FILE_EVENT_PATTERNS` — fnmatch globs for monitor-relevant file events; derived from
+  `PhaseEntry.monitor_file_patterns` across `PHASE_CATALOG` in `shared/phase_catalog.py`;
+  re-exported from `monitor/state_reader.py` for backward compatibility
+- `EVENT_LABELS` / `PHASE_EVENT_LABELS` — mapping of internal event names (e.g. `plan_written`)
+  to user-friendly labels (e.g. "plan ready"); derived from `PhaseDescriptor.event_labels` across
+  `PHASE_REGISTRY` in `workflow/phase_registry.py`; re-exported as `EVENT_LABELS` from
+  `monitor/state_reader.py`
 
 ## Staged implementation display notes
 

@@ -129,7 +129,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
                     "send",
                     "reviewer_logic",
                     "review_logic_prompt.md",
-                    "[reviewer_logic]",
+                    "[reviewer_logic] logic",
                 ),
                 ctx.runtime.calls,
             )

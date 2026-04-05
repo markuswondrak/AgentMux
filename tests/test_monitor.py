@@ -7,6 +7,7 @@ from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from agentmux import monitor
+from agentmux.agent_labels import role_display_label
 from agentmux.monitor.state_reader import (
     EVENT_LABELS,
     OPTIONAL_PHASES,
@@ -933,6 +934,111 @@ class MonitorTests(unittest.TestCase):
 
             result = read_session_summary(state_path)
             self.assertEqual("Fallback text", result)
+
+    def test_monitor_file_event_patterns_contains_all_expected_patterns(self) -> None:
+        from agentmux.monitor.state_reader import MONITOR_FILE_EVENT_PATTERNS
+
+        expected = {
+            "requirements.md",
+            "01_product_management/analysis.md",
+            "02_planning/plan.md",
+            "02_planning/tasks.md",
+            "03_research/code-*/summary.md",
+            "03_research/code-*/detail.md",
+            "03_research/code-*/done",
+            "03_research/web-*/summary.md",
+            "03_research/web-*/detail.md",
+            "03_research/web-*/done",
+            "04_design/design.md",
+            "05_implementation/done_*",
+            "06_review/review.md",
+            "06_review/fix_request.md",
+            "08_completion/changes.md",
+            "08_completion/approval.json",
+        }
+        for pattern in expected:
+            self.assertIn(pattern, MONITOR_FILE_EVENT_PATTERNS)
+
+    def test_event_labels_contains_all_expected_keys(self) -> None:
+        expected_keys = {
+            "feature_created",
+            "resumed",
+            "plan_written",
+            "design_written",
+            "research_dispatched",
+            "research_complete",
+            "web_research_dispatched",
+            "web_research_complete",
+            "implementation_started",
+            "implementation_completed",
+            "review_written",
+            "fix_requested",
+            "fix_completed",
+            "approved",
+            "changes_requested",
+            "plan_approved",
+            "confirmation_sent",
+            "pm_completed",
+        }
+        for key in expected_keys:
+            self.assertIn(key, EVENT_LABELS)
+            self.assertIsInstance(EVENT_LABELS[key], str)
+            self.assertTrue(EVENT_LABELS[key])  # non-empty
+
+    def test_role_display_label_dispatch_for_all_known_roles(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            fd = Path(td)
+            (fd / "state.json").write_text(
+                '{"phase": "implementing"}', encoding="utf-8"
+            )
+
+            self.assertEqual(
+                role_display_label(fd, "architect"), "[architect] planning"
+            )
+            self.assertEqual(
+                role_display_label(fd, "product-manager"), "[product-manager] analysis"
+            )
+            self.assertEqual(role_display_label(fd, "planner"), "[planner] planning")
+            self.assertEqual(
+                role_display_label(fd, "reviewer_logic"), "[reviewer_logic] logic"
+            )
+            self.assertEqual(
+                role_display_label(fd, "reviewer_quality"), "[reviewer_quality] quality"
+            )
+            self.assertEqual(
+                role_display_label(fd, "reviewer_expert"), "[reviewer_expert] expert"
+            )
+            self.assertEqual(
+                role_display_label(fd, "code-researcher", task_id="caching"),
+                "[code-researcher] caching",
+            )
+            self.assertEqual(
+                role_display_label(fd, "web-researcher", task_id="api-docs"),
+                "[web-researcher] api-docs",
+            )
+            # unknown role without task_id
+            self.assertEqual(role_display_label(fd, "unknown-role"), "[unknown-role]")
+            # unknown role with task_id falls back to showing the id
+            self.assertEqual(
+                role_display_label(fd, "unknown-role", task_id=3), "[unknown-role] 3"
+            )
+
+    def test_role_display_label_new_reviewer_roles_have_detail(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            fd = Path(td)
+            (fd / "state.json").write_text('{"phase": "reviewing"}', encoding="utf-8")
+
+            logic_label = role_display_label(fd, "reviewer_logic")
+            quality_label = role_display_label(fd, "reviewer_quality")
+            expert_label = role_display_label(fd, "reviewer_expert")
+
+            self.assertIn("logic", logic_label)
+            self.assertIn("quality", quality_label)
+            self.assertIn("expert", expert_label)
 
 
 if __name__ == "__main__":

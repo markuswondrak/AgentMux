@@ -15,14 +15,6 @@ body:
     attributes:
       label: Proposed solution
       description: What should agentmux do differently?
-    validations:
-      required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
-      description: Other approaches you thought about, or workarounds you're using today.
 
   - type: dropdown
     id: area
