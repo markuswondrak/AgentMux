@@ -11,7 +11,6 @@ import yaml
 from agentmux.configuration import load_explicit_config, load_layered_config
 from agentmux.configuration.providers import PROVIDERS, get_provider, resolve_agent
 from agentmux.runtime.tmux_control import (
-    _build_batch_command,
     accept_trust_prompt,
     build_agent_command,
 )
@@ -397,27 +396,29 @@ roles:
         self.assertIn("--model-name", cmd)
         self.assertIn("kimi-2.5", cmd)
 
-    def test_batch_command_uses_model_flag_fallback_for_opencode(self) -> None:
-        """When model_flag is None, batch command should fall back to --model."""
-        cmd = _build_batch_command(
+    def test_batch_command_omits_model_flag_when_none(self) -> None:
+        """When model_flag is None, batch command should NOT include --model."""
+        cmd = build_agent_command(
             AgentConfig(
                 role="code-researcher",
                 cli="opencode",
                 model="opencode/qwen3-plus",
                 model_flag=None,
+                batch_subcommand="run",
                 args=["--agent", "agentmux-researcher"],
             ),
             prompt_file="/tmp/prompt.md",
         )
         self.assertIn("opencode", cmd)
-        self.assertIn("--model", cmd)
-        self.assertIn("opencode/qwen3-plus", cmd)
+        self.assertIn("run", cmd)
+        self.assertNotIn("--model", cmd)
+        self.assertNotIn("opencode/qwen3-plus", cmd)
         self.assertIn("/tmp/prompt.md", cmd)
         self.assertIn("--agent", cmd)
 
     def test_batch_command_preserves_explicit_model_flag(self) -> None:
         """When model_flag is explicitly set, batch command should use it."""
-        cmd = _build_batch_command(
+        cmd = build_agent_command(
             AgentConfig(
                 role="code-researcher",
                 cli="claude",
