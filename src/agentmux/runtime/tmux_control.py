@@ -33,10 +33,51 @@ def build_agent_command(agent: AgentConfig) -> str:
         ]
         env_prefix = f"env {' '.join(env_items)} "
     extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
+    if agent.model_flag is not None:
+        model_segment = f" {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}"
+    else:
+        model_segment = ""
     return (
-        env_prefix + f"{shlex.quote(agent.cli)} {shlex.quote(agent.model_flag)} "
-        f"{shlex.quote(agent.model)}" + (f" {extra_args}" if extra_args else "")
+        env_prefix
+        + shlex.quote(agent.cli)
+        + model_segment
+        + (f" {extra_args}" if extra_args else "")
     )
+
+
+def _build_batch_command(agent: AgentConfig, prompt_file: str) -> str:
+    """Build the command string for a batch-mode agent pane.
+
+    When ``agent.model_flag`` is ``None`` (e.g. opencode), falls back to
+    ``"--model"`` so the model value is still passed correctly.
+    """
+    env_prefix = ""
+    if agent.env:
+        env_items = [
+            f"{shlex.quote(str(key))}={shlex.quote(str(value))}"
+            for key, value in agent.env.items()
+        ]
+        env_prefix = f"env {' '.join(env_items)} "
+
+    extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
+
+    cli_segment = (
+        f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)}"
+        if agent.batch_subcommand
+        else f"{shlex.quote(agent.cli)}"
+    )
+
+    batch_model_flag = agent.model_flag or "--model"
+
+    cmd = (
+        env_prefix
+        + cli_segment
+        + f" {shlex.quote(batch_model_flag)} {shlex.quote(agent.model)}"
+        + (f" {extra_args}" if extra_args else "")
+        + f" {shlex.quote(prompt_file)}"
+    )
+
+    return cmd
 
 
 def tmux_session_exists(session_name: str) -> bool:
@@ -550,6 +591,7 @@ def tmux_new_session(
             "none",
         ]
     )
+    run_command(["tmux", "set-option", "-t", session_name, "pane-border-lines", "none"])
     run_command(
         [
             "tmux",
@@ -726,33 +768,7 @@ def create_batch_agent_pane(
     agent = agents[agent_name]
 
     # Build command with prompt file path as final argument (absolute path)
-    # The prompt file is in the session directory, not the project directory
-    env_prefix = ""
-    if agent.env:
-        env_items = [
-            f"{shlex.quote(str(key))}={shlex.quote(str(value))}"
-            for key, value in agent.env.items()
-        ]
-        env_prefix = f"env {' '.join(env_items)} "
-
-    extra_args = " ".join(shlex.quote(a) for a in (agent.args or []))
-
-    # Build CLI segment: include batch_subcommand if present
-    # (e.g., opencode: `opencode run`)
-    # The pane CWD is already set to project_dir via tmux -c.
-    cli_segment = (
-        f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)}"
-        if agent.batch_subcommand
-        else f"{shlex.quote(agent.cli)}"
-    )
-
-    agent_cmd = (
-        env_prefix
-        + cli_segment
-        + f" {shlex.quote(agent.model_flag)} {shlex.quote(agent.model)}"
-        + (f" {extra_args}" if extra_args else "")
-        + f" {shlex.quote(prompt_file)}"
-    )
+    agent_cmd = _build_batch_command(agent, prompt_file)
 
     # Redirect stderr to output log if provided (captures all agent output)
     if output_log_path:

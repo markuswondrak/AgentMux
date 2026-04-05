@@ -10,7 +10,7 @@ from . import load_builtin_catalog
 class Provider:
     name: str
     cli: str
-    model_flag: str
+    model_flag: str | None
     trust_snippet: str | None
     default_args: dict[str, list[str]]
     batch_subcommand: str | None = None
@@ -40,7 +40,7 @@ def _build_builtin_providers() -> dict[str, Provider]:
         result[str(name)] = Provider(
             name=str(name),
             cli=str(provider.get("command", name)),
-            model_flag=str(provider.get("model_flag", "--model")),
+            model_flag=provider.get("model_flag"),
             trust_snippet=provider.get("trust_snippet"),
             default_args=role_args,
             batch_subcommand=provider.get("batch_subcommand"),
