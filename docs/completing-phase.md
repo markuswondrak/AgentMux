@@ -15,7 +15,7 @@ When the review passes, the workflow kills all `coder` panes and sends the revie
    - `true`: completion auto-prepares approval inside `08_completion/approval.json` with `{"action": "approve", "exclude_files": []}`.
    In both modes, the workflow still enters `completing`, and `completing` remains the owner of commit, cleanup, and PR finalization.
 
-4. **Native confirmation UI** — The TUI displays the agentmux logo, a formatted summary of what was implemented, the count of changed files, and a `[Y] / [N]` confirmation panel. If the user presses `Y`, it writes `08_completion/approval.json`. If the user presses `N`, it prompts for feedback text and writes `08_completion/changes.md`.
+4. **Native confirmation UI** — The TUI displays the agentmux logo, the reviewer summary rendered as Markdown (headings, bold, lists, code blocks), the count of changed files, and a `[Y] / [N]` confirmation panel. The `[N]` option includes a visual affordance (`❯ describe what to change`) indicating that a text prompt follows. If the user presses `Y`, it writes `08_completion/approval.json`. If the user presses `N`, it prompts for feedback text and writes `08_completion/changes.md`. Typing `/cancel` or pressing `Ctrl+C` during the feedback prompt cancels and returns to the `[Y] / [N]` screen.
 
 5. **Reviewer-stage preference capture** — During the summary step, the reviewer may also write `08_completion/approved_preferences.json` with approved reusable preferences. This proposal is session-scoped; it is not a direct write to project prompt extensions.
 

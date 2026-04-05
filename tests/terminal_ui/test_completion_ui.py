@@ -136,7 +136,7 @@ def test_prompt_changes_multiline_two_blanks_end() -> None:
     assert result == "Line one\nLine two"
 
 
-def test_prompt_changes_eof_returns_partial() -> None:
+def test_prompt_changes_eof_returns_none() -> None:
     inputs = iter(["Some text"])
 
     def mock_input(_="") -> str:  # type: ignore[return]
@@ -148,7 +148,16 @@ def test_prompt_changes_eof_returns_partial() -> None:
     with patch("builtins.input", side_effect=mock_input):
         result = _prompt_changes(None)
 
-    assert result == "Some text"
+    assert result is None
+
+
+def test_prompt_changes_cancel_returns_none() -> None:
+    inputs = iter(["Some text", "/cancel"])
+
+    with patch("builtins.input", side_effect=lambda _="": next(inputs)):
+        result = _prompt_changes(None)
+
+    assert result is None
 
 
 # ──────────────────────────────────────────────────────────────
