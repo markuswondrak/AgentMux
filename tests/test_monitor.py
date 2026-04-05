@@ -221,8 +221,9 @@ class MonitorTests(unittest.TestCase):
             output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
 
             self.assertIn("› groups: 1/3 done", output)
-            self.assertIn("› active: g2 serial · plan_2", output)
-            self.assertIn("› done: g1 · queued: g3", output)
+            self.assertIn("› ✓ g1", output)
+            self.assertIn("› ▶ g2 serial · plan_2", output)
+            self.assertIn("› · g3", output)
 
     def test_render_implementing_shows_parallel_group_progress(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -247,8 +248,8 @@ class MonitorTests(unittest.TestCase):
             output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
 
             self.assertIn("› groups: 0/2 done", output)
-            self.assertIn("› active: g1 parallel · plan_1, plan_2", output)
-            self.assertIn("› queued: g2", output)
+            self.assertIn("› ▶ g1 parallel · plan_1, plan_2", output)
+            self.assertIn("› · g2", output)
 
     def test_render_implementing_mixed_schedule_summarizes_future_groups(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -273,8 +274,10 @@ class MonitorTests(unittest.TestCase):
             output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
 
             self.assertIn("› groups: 1/4 done", output)
-            self.assertIn("› active: g2 parallel · 3 plans", output)
-            self.assertIn("› done: g1 · queued: g3, g4", output)
+            self.assertIn("› ✓ g1", output)
+            self.assertIn("› ▶ g2 parallel · 3 plans", output)
+            self.assertIn("› · g3", output)
+            self.assertIn("› · g4", output)
 
     def test_render_implementing_reads_root_level_implementation_progress_fields(
         self,
@@ -301,8 +304,9 @@ class MonitorTests(unittest.TestCase):
             output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
 
             self.assertIn("› groups: 1/3 done", output)
-            self.assertIn("› active: g2 parallel · plan_2, plan_3", output)
-            self.assertIn("› done: g1 · queued: g3", output)
+            self.assertIn("› ✓ g1", output)
+            self.assertIn("› ▶ g2 parallel · plan_2, plan_3", output)
+            self.assertIn("› · g3", output)
             self.assertNotIn("› 4 subplans", output)
 
     def test_render_implementing_staged_details_remain_readable_when_narrow(
@@ -330,8 +334,62 @@ class MonitorTests(unittest.TestCase):
             output = self._strip_ansi(self._render(feature_dir, width=34, height=24))
 
             self.assertIn("› groups:", output)
-            self.assertIn("› active:", output)
-            self.assertIn("› done:", output)
+            self.assertIn("› ✓ g1", output)
+            self.assertIn("› ▶ g2", output)
+            self.assertIn("› · g3", output)
+
+    def test_render_implementing_single_group_only(self) -> None:
+        """Only active group, no completed or queued groups."""
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            state_path.write_text(
+                (
+                    '{"phase":"implementing","execution_progress":{'
+                    '"total_groups":1,'
+                    '"completed_groups":0,'
+                    '"active_group_index":0,'
+                    '"active_group_mode":"serial",'
+                    '"active_plan_ids":["plan_1"],'
+                    '"groups":[{"id":"g1"}]'
+                    "}}"
+                ),
+                encoding="utf-8",
+            )
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+
+            output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
+
+            self.assertIn("› groups: 0/1 done", output)
+            self.assertIn("› ▶ g1 serial · plan_1", output)
+            self.assertNotIn("› ✓", output)
+            self.assertNotIn("› ·", output)
+
+    def test_render_implementing_no_groups(self) -> None:
+        """No progress section when total=0 (extractor returns None)."""
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            state_path = feature_dir / "state.json"
+            runtime_state_path = feature_dir / "runtime_state.json"
+            state_path.write_text(
+                (
+                    '{"phase":"implementing","execution_progress":{'
+                    '"total_groups":0,'
+                    '"completed_groups":0,'
+                    '"groups":[]'
+                    "}}"
+                ),
+                encoding="utf-8",
+            )
+            runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
+
+            output = self._strip_ansi(self._render(feature_dir, width=80, height=24))
+
+            # When total=0, _extract_execution_progress returns None,
+            # so no progress lines render.
+            self.assertNotIn("› groups:", output)
+            self.assertNotIn("› active:", output)
 
     def test_render_does_not_show_documents_section_even_when_docs_exist(self) -> None:
         with tempfile.TemporaryDirectory() as td:

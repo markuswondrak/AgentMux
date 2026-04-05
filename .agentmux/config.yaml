@@ -1,11 +1,14 @@
 version: 2
 
 defaults:
-  session_name: multi-agent-mvp
-  provider: copilot
+  session_name: agentmux
+  provider: opencode
   max_review_iterations: 3
 
-# roles:
-#  coder:
-#    provider: opencode
-#    model: opencode/qwen3.6-plus-free
+roles:
+  reviewer_expert:
+    provider: copilot
+  reviewer_logic:
+    provider: copilot
+  reviewer_quality:
+    provider: copilot
