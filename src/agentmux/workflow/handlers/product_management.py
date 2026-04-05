@@ -5,14 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from agentmux.workflow.event_router import (
+    EventSpec,
     WorkflowEvent,
     extract_research_topic,
-    path_matches,
 )
 from agentmux.workflow.phase_helpers import (
     apply_role_preferences,
     dispatch_research_task,
-    filter_file_created_event,
     notify_research_complete,
     send_to_role,
 )
@@ -23,6 +22,39 @@ from agentmux.workflow.prompts import (
 
 if TYPE_CHECKING:
     from ..transitions import PipelineContext
+
+
+def _file_exists(path: str, ctx: PipelineContext, state: dict) -> bool:
+    return (ctx.files.feature_dir / path).exists()
+
+
+_SPECS = (
+    EventSpec(
+        name="pm_completed",
+        watch_paths=("01_product_management/done",),
+        is_ready=_file_exists,
+    ),
+    EventSpec(
+        name="code_research_requested",
+        watch_paths=("03_research/code-*/request.md",),
+        is_ready=_file_exists,
+    ),
+    EventSpec(
+        name="web_research_requested",
+        watch_paths=("03_research/web-*/request.md",),
+        is_ready=_file_exists,
+    ),
+    EventSpec(
+        name="code_research_done",
+        watch_paths=("03_research/code-*/done",),
+        is_ready=_file_exists,
+    ),
+    EventSpec(
+        name="web_research_done",
+        watch_paths=("03_research/web-*/done",),
+        is_ready=_file_exists,
+    ),
+)
 
 
 class ProductManagementHandler:
@@ -43,6 +75,9 @@ class ProductManagementHandler:
         send_to_role(ctx, "product-manager", prompt_file)
         return {}  # No state updates
 
+    def get_event_specs(self) -> tuple[EventSpec, ...]:
+        return _SPECS
+
     def handle_event(
         self,
         event: WorkflowEvent,
@@ -50,35 +85,28 @@ class ProductManagementHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for product_management phase."""
-        path = filter_file_created_event(event)
-        if path is None:
-            return {}, None
-
-        # Check for pm completion
-        if path == "01_product_management/done":
+        if event.kind == "pm_completed":
             return self._handle_pm_completed(state, ctx)
 
-        # Check for research request
-        if path_matches("03_research/code-*/request.md", path):
-            topic = extract_research_topic(path, "code-")
+        if event.kind == "code_research_requested":
+            topic = extract_research_topic(event.path or "", "code-")
             if topic:
                 return dispatch_research_task("code-researcher", topic, state, ctx)
 
-        if path_matches("03_research/web-*/request.md", path):
-            topic = extract_research_topic(path, "web-")
+        if event.kind == "web_research_requested":
+            topic = extract_research_topic(event.path or "", "web-")
             if topic:
                 return dispatch_research_task("web-researcher", topic, state, ctx)
 
-        # Check for research done
-        if path_matches("03_research/code-*/done", path):
-            topic = extract_research_topic(path, "code-")
+        if event.kind == "code_research_done":
+            topic = extract_research_topic(event.path or "", "code-")
             if topic:
                 return notify_research_complete(
                     "code-researcher", topic, state, ctx, "product-manager"
                 )
 
-        if path_matches("03_research/web-*/done", path):
-            topic = extract_research_topic(path, "web-")
+        if event.kind == "web_research_done":
+            topic = extract_research_topic(event.path or "", "web-")
             if topic:
                 return notify_research_complete(
                     "web-researcher", topic, state, ctx, "product-manager"

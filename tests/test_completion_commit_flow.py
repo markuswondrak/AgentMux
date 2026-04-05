@@ -209,7 +209,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 ) as commit_mock,
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -256,7 +256,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 ) as commit_mock,
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -303,7 +303,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 ),
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -354,7 +354,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 ) as pr_mock,
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -399,7 +399,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 patch("agentmux.integrations.completion.create_pr_only") as pr_mock,
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -459,7 +459,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
                 ) as commit_mock,
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -489,7 +489,7 @@ class CompletionCommitFlowTests(unittest.TestCase):
             state["implementation_completed_group_ids"] = ["group_1"]
 
             event = WorkflowEvent(
-                kind="file.created",
+                kind="changes_requested",
                 path="08_completion/changes.md",
                 payload={},
             )

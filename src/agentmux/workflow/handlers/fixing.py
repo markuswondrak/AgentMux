@@ -5,9 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from agentmux.agent_labels import role_display_label
-from agentmux.workflow.event_router import WorkflowEvent
+from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.phase_helpers import (
-    filter_file_created_event,
     reset_markers,
     send_to_role,
 )
@@ -46,6 +45,17 @@ class FixingHandler:
             "completed_subplans": [],
         }
 
+    def get_event_specs(self) -> tuple[EventSpec, ...]:
+        return (
+            EventSpec(
+                name="fix_done",
+                watch_paths=("05_implementation/done_1",),
+                is_ready=lambda path, ctx, state: (
+                    ctx.files.feature_dir / path
+                ).exists(),
+            ),
+        )
+
     def handle_event(
         self,
         event: WorkflowEvent,
@@ -53,14 +63,8 @@ class FixingHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for fixing phase."""
-        path = filter_file_created_event(event)
-        if path is None:
-            return {}, None
-
-        # Check for implementation completion
-        if path == "05_implementation/done_1":
+        if event.kind == "fix_done":
             ctx.runtime.finish_many("coder")
             ctx.runtime.deactivate("coder")
             return {"last_event": "implementation_completed"}, "reviewing"
-
         return {}, None

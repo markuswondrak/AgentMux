@@ -120,7 +120,7 @@ class TestProductManagementHandler:
     def test_handle_pm_completed(self, mock_ctx: MagicMock, empty_state: dict) -> None:
         """Test handling of pm_done marker."""
         handler = ProductManagementHandler()
-        event = WorkflowEvent(kind="file.created", path="01_product_management/done")
+        event = WorkflowEvent(kind="pm_completed", path="01_product_management/done")
 
         with patch(
             "agentmux.workflow.handlers.product_management.apply_role_preferences"
@@ -138,7 +138,7 @@ class TestProductManagementHandler:
         """Test dispatching code-researcher task."""
         handler = ProductManagementHandler()
         event = WorkflowEvent(
-            kind="file.created", path="03_research/code-auth/request.md"
+            kind="code_research_requested", path="03_research/code-auth/request.md"
         )
 
         # Create the request file
@@ -170,7 +170,7 @@ class TestProductManagementHandler:
         """Test dispatching web-researcher task."""
         handler = ProductManagementHandler()
         event = WorkflowEvent(
-            kind="file.created", path="03_research/web-api/request.md"
+            kind="web_research_requested", path="03_research/web-api/request.md"
         )
 
         # Create the request file
@@ -200,7 +200,9 @@ class TestProductManagementHandler:
     ) -> None:
         """Test handling code-research completion."""
         handler = ProductManagementHandler()
-        event = WorkflowEvent(kind="file.created", path="03_research/code-auth/done")
+        event = WorkflowEvent(
+            kind="code_research_done", path="03_research/code-auth/done"
+        )
 
         # Setup state with dispatched task
         state = {"research_tasks": {"auth": "dispatched"}}
@@ -217,7 +219,7 @@ class TestProductManagementHandler:
         """Test that already dispatched research is not re-dispatched."""
         handler = ProductManagementHandler()
         event = WorkflowEvent(
-            kind="file.created", path="03_research/code-auth/request.md"
+            kind="code_research_requested", path="03_research/code-auth/request.md"
         )
 
         # Setup state with already dispatched task
@@ -295,7 +297,7 @@ class TestPlanningHandler:
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
         handler = PlanningHandler()
-        event = WorkflowEvent(kind="file.created", path="02_planning/plan.md")
+        event = WorkflowEvent(kind="plan_written", path="02_planning/plan.md")
 
         # Create all required files
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
@@ -304,6 +306,7 @@ class TestPlanningHandler:
         (mock_ctx.files.planning_dir / "plan_meta.json").write_text(
             '{"needs_design": false}'
         )
+        (mock_ctx.files.planning_dir / "execution_plan.json").write_text("{}")
 
         with (
             patch("agentmux.workflow.handlers.planning.load_execution_plan"),
@@ -325,7 +328,7 @@ class TestPlanningHandler:
     ) -> None:
         """Test transition to designing when needs_design is true."""
         handler = PlanningHandler()
-        event = WorkflowEvent(kind="file.created", path="02_planning/plan.md")
+        event = WorkflowEvent(kind="plan_written", path="02_planning/plan.md")
 
         # Create all required files
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
@@ -334,6 +337,7 @@ class TestPlanningHandler:
         (mock_ctx.files.planning_dir / "plan_meta.json").write_text(
             '{"needs_design": true}'
         )
+        (mock_ctx.files.planning_dir / "execution_plan.json").write_text("{}")
 
         # Add designer to agents
         mock_ctx.agents = {"designer": MagicMock()}
@@ -354,13 +358,14 @@ class TestPlanningHandler:
     ) -> None:
         """Test that changes.md is deleted on plan_written transition."""
         handler = PlanningHandler()
-        event = WorkflowEvent(kind="file.created", path="02_planning/plan.md")
+        event = WorkflowEvent(kind="plan_written", path="02_planning/plan.md")
 
         # Create all required files including changes.md
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
         mock_ctx.files.plan.write_text("plan")
         mock_ctx.files.tasks.write_text("tasks")
         (mock_ctx.files.planning_dir / "plan_meta.json").write_text("{}")
+        (mock_ctx.files.planning_dir / "execution_plan.json").write_text("{}")
         mock_ctx.files.changes.write_text("changes")
 
         with (
@@ -415,7 +420,11 @@ class TestDesigningHandler:
     ) -> None:
         """Test transition on design.md creation."""
         handler = DesigningHandler()
-        event = WorkflowEvent(kind="file.created", path="04_design/design.md")
+        event = WorkflowEvent(kind="design_written", path="04_design/design.md")
+
+        # Create the design file so is_ready predicate passes
+        mock_ctx.files.design.parent.mkdir(parents=True, exist_ok=True)
+        mock_ctx.files.design.write_text("design")
 
         updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
@@ -474,7 +483,11 @@ class TestImplementingHandler:
     def test_handle_subplan_completed_parallel_mode(self, mock_ctx: MagicMock) -> None:
         """Test handling subplan completion in parallel mode."""
         handler = ImplementingHandler()
-        event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
+        event = WorkflowEvent(kind="done_marker", path="05_implementation/done_1")
+
+        # Create the done marker so is_ready predicate passes
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.implementation_dir / "done_1").touch()
 
         # Setup state for parallel group
         state = {
@@ -504,7 +517,6 @@ class TestImplementingHandler:
         )
         (mock_ctx.files.planning_dir / "plan_1.md").write_text("plan 1")
         (mock_ctx.files.planning_dir / "plan_2.md").write_text("plan 2")
-        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
 
         updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
@@ -516,7 +528,7 @@ class TestImplementingHandler:
     def test_handle_implementation_completed(self, mock_ctx: MagicMock) -> None:
         """Test transition when all implementation is complete."""
         handler = ImplementingHandler()
-        event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
+        event = WorkflowEvent(kind="done_marker", path="05_implementation/done_1")
 
         # Setup state with all markers complete
         state = {
@@ -585,7 +597,7 @@ class TestReviewingHandler:
     def test_handle_review_passed(self, mock_ctx: MagicMock, empty_state: dict) -> None:
         """Test that VERDICT:PASS stays in reviewing and requests summary."""
         handler = ReviewingHandler()
-        event = WorkflowEvent(kind="file.created", path="06_review/review.md")
+        event = WorkflowEvent(kind="review_ready", path="06_review/review.md")
 
         # Create review.md with pass verdict
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
@@ -605,7 +617,7 @@ class TestReviewingHandler:
     ) -> None:
         """Test transition to fixing when under max iterations."""
         handler = ReviewingHandler()
-        event = WorkflowEvent(kind="file.created", path="06_review/review.md")
+        event = WorkflowEvent(kind="review_ready", path="06_review/review.md")
 
         # Create review.md with fail verdict
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
@@ -622,7 +634,7 @@ class TestReviewingHandler:
     ) -> None:
         """Test transition to completing when max iterations reached."""
         handler = ReviewingHandler()
-        event = WorkflowEvent(kind="file.created", path="06_review/review.md")
+        event = WorkflowEvent(kind="review_ready", path="06_review/review.md")
 
         # Create review.md with fail verdict
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
@@ -671,7 +683,11 @@ class TestFixingHandler:
     ) -> None:
         """Test transition on done_1 marker."""
         handler = FixingHandler()
-        event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
+        event = WorkflowEvent(kind="fix_done", path="05_implementation/done_1")
+
+        # Create the done marker so is_ready predicate passes
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.implementation_dir / "done_1").touch()
 
         updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
@@ -716,7 +732,9 @@ class TestCompletingHandler:
     ) -> None:
         """Test handling approval with commit and PR creation."""
         handler = CompletingHandler()
-        event = WorkflowEvent(kind="file.created", path="08_completion/approval.json")
+        event = WorkflowEvent(
+            kind="approval_received", path="08_completion/approval.json"
+        )
 
         # Create approval.json
         mock_ctx.files.completion_dir.mkdir(parents=True, exist_ok=True)
@@ -766,7 +784,11 @@ class TestCompletingHandler:
     ) -> None:
         """Test transition to planning when changes requested."""
         handler = CompletingHandler()
-        event = WorkflowEvent(kind="file.created", path="08_completion/changes.md")
+        event = WorkflowEvent(kind="changes_requested", path="08_completion/changes.md")
+
+        # Create the changes file so is_ready predicate passes
+        mock_ctx.files.completion_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.completion_dir / "changes.md").write_text("changes")
 
         # Set some state that should be reset
         state = {
@@ -871,7 +893,7 @@ class TestHandlerEdgeCases:
         """Test that handlers preserve existing state fields."""
         handler = ProductManagementHandler()
         event = WorkflowEvent(
-            kind="file.created", path="03_research/code-auth/request.md"
+            kind="code_research_requested", path="03_research/code-auth/request.md"
         )
 
         # Create the request file
@@ -898,25 +920,6 @@ class TestHandlerEdgeCases:
 
 class TestPhaseHelpers:
     """Tests for extracted phase helper functions."""
-
-    def test_filter_file_created_event_returns_path(self) -> None:
-        """Test that file.created events return their path."""
-        from agentmux.workflow.event_router import WorkflowEvent
-        from agentmux.workflow.phase_helpers import filter_file_created_event
-
-        event = WorkflowEvent(kind="file.created", path="some/path.txt")
-        assert filter_file_created_event(event) == "some/path.txt"
-
-    def test_filter_file_created_event_returns_none_for_other_events(self) -> None:
-        """Test that non-file.created events return None."""
-        from agentmux.workflow.event_router import WorkflowEvent
-        from agentmux.workflow.phase_helpers import filter_file_created_event
-
-        event = WorkflowEvent(kind="interruption.pane_exited", payload={"pane": "test"})
-        assert filter_file_created_event(event) is None
-
-        event = WorkflowEvent(kind="file.activity", path="some/path.txt")
-        assert filter_file_created_event(event) is None
 
     def test_dispatch_research_task_skips_already_dispatched(
         self, mock_ctx: MagicMock

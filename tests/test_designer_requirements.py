@@ -261,7 +261,7 @@ class DesignerRequirementsTests(unittest.TestCase):
 
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="plan_written",
                 path="02_planning/plan_meta.json",
                 payload={},
             )
@@ -305,7 +305,7 @@ class DesignerRequirementsTests(unittest.TestCase):
 
             handler = DesigningHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="design_written",
                 path="04_design/design.md",
                 payload={},
             )

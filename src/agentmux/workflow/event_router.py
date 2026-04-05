@@ -9,11 +9,37 @@ from __future__ import annotations
 
 import fnmatch
 import re
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from .transitions import PipelineContext
+
+
+@dataclass(frozen=True)
+class EventSpec:
+    """Declarative specification of a workflow event.
+
+    An event fires when any file matching ``watch_paths`` is created or
+    modified **and** ``is_ready`` returns True.  This decouples the logical
+    event (e.g. "review is complete") from the raw OS file signal, so
+    streamed/incremental writes are handled correctly: the event won't fire
+    until the content actually satisfies the condition, regardless of how
+    many ``file.created`` / ``file.activity`` signals preceded it.
+
+    Attributes:
+        name:        Logical event name dispatched to ``handle_event``.
+        watch_paths: Glob patterns (relative to feature dir); any
+                     ``file.created`` or ``file.activity`` on a matching path
+                     triggers ``is_ready`` evaluation.
+        is_ready:    ``(triggering_path, ctx, state) -> bool``
+                     Return True when the event should fire.
+    """
+
+    name: str
+    watch_paths: tuple[str, ...]
+    is_ready: Callable[[str, PipelineContext, dict], bool]
 
 
 @dataclass(frozen=True)
@@ -38,6 +64,17 @@ class PhaseHandler(Protocol):
 
     Each phase (planning, implementing, etc.) implements this protocol.
     The router calls enter() once per phase, then handle_event() for each event.
+
+    Handlers declare their events via ``get_event_specs()``.  When a handler
+    returns non-empty specs, the router evaluates them on every
+    ``file.created`` / ``file.activity`` event and only calls ``handle_event``
+    when a spec's ``is_ready`` predicate returns True.  The ``event.kind``
+    passed to ``handle_event`` will be the spec's logical name (not the raw
+    ``"file.created"`` / ``"file.activity"`` string), while ``event.path``
+    carries the triggering file path for topic extraction etc.
+
+    Handlers that return empty specs receive raw ``WorkflowEvent`` objects
+    as before (backward-compatible fallback).
     """
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
@@ -57,6 +94,15 @@ class PhaseHandler(Protocol):
         """
         ...
 
+    def get_event_specs(self) -> Sequence[EventSpec]:
+        """Return the event specs this handler cares about.
+
+        Returns:
+            Sequence of EventSpec objects.  Return empty sequence (or don't
+            override) to receive raw WorkflowEvents in handle_event instead.
+        """
+        ...
+
     def handle_event(
         self, event: WorkflowEvent, state: dict, ctx: PipelineContext
     ) -> tuple[dict, str | None]:
@@ -68,7 +114,9 @@ class PhaseHandler(Protocol):
         - NOT write state to disk (router handles this)
 
         Args:
-            event: The workflow event to process
+            event: The workflow event to process.  For spec-based handlers,
+                   ``event.kind`` is the logical spec name and ``event.path``
+                   is the triggering file path.
             state: Current state dict (read-only, don't mutate)
             ctx: Pipeline context
 
@@ -167,8 +215,8 @@ class WorkflowEventRouter:
         if phase_name not in self._entered:
             self.enter_current_phase(state, ctx)
 
-        # Handle the event
-        updates, next_phase = handler.handle_event(event, state, ctx)
+        # Dispatch event: via specs if declared, otherwise raw
+        updates, next_phase = self._dispatch(event, handler, state, ctx)
 
         # Check for exit signal
         exit_code = updates.pop("__exit__", None)
@@ -200,6 +248,50 @@ class WorkflowEventRouter:
             write_state(ctx.files.state, state)
 
         return updates, None
+
+    def _dispatch(
+        self,
+        event: WorkflowEvent,
+        handler: Any,
+        state: dict,
+        ctx: PipelineContext,
+    ) -> tuple[dict, str | None]:
+        """Route a file event to the handler via specs or directly.
+
+        If the handler declares EventSpecs, evaluate them:
+        - Only ``file.created`` and ``file.activity`` events are considered.
+        - For each spec whose watch_paths matches the event path, call
+          ``is_ready``.  If ready, dispatch a logical WorkflowEvent with
+          ``kind=spec.name`` to ``handle_event`` and return.
+        - If no spec fires, return ``{}, None``.
+
+        Handlers without specs receive the raw WorkflowEvent unchanged.
+        """
+        get_specs = getattr(handler, "get_event_specs", None)
+        if get_specs is None:
+            # Legacy handler without specs — pass raw event through
+            return handler.handle_event(event, state, ctx)
+
+        specs = list(get_specs())
+        if not specs:
+            # Handler explicitly opts out of spec routing — raw event
+            return handler.handle_event(event, state, ctx)
+
+        if event.kind not in ("file.created", "file.activity"):
+            return {}, None
+
+        path = event.path
+        if path is None:
+            return {}, None
+
+        for spec in specs:
+            if not any(fnmatch.fnmatch(path, p) for p in spec.watch_paths):
+                continue
+            if spec.is_ready(path, ctx, state):
+                logical = WorkflowEvent(kind=spec.name, path=path)
+                return handler.handle_event(logical, state, ctx)
+
+        return {}, None
 
     @staticmethod
     def _now_iso() -> str:

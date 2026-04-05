@@ -248,7 +248,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
             (ctx.files.implementation_dir / "done_1").write_text("", encoding="utf-8")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_1",
                 payload={},
             )

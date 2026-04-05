@@ -207,7 +207,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
 
             # Create workflow event for done file creation
             event = WorkflowEvent(
-                kind="file.created",
+                kind="pm_completed",
                 path="01_product_management/done",
                 payload={},
             )
@@ -240,7 +240,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             handler = ProductManagementHandler()
             # Simulate file.created event for research request
             event = WorkflowEvent(
-                kind="file.created",
+                kind="code_research_requested",
                 path="03_research/code-market-fit/request.md",
                 payload={},
             )
@@ -264,7 +264,7 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             (feature_dir / RESEARCH_DIR / "code-market-fit" / "done").touch()
 
             done_event = WorkflowEvent(
-                kind="file.created",
+                kind="code_research_done",
                 path="03_research/code-market-fit/done",
                 payload={},
             )

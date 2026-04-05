@@ -174,7 +174,9 @@ In this example, the `coder` role receives both `[--shared-flag, shared-value, -
 
 `copilot` has `single_coder: true` set in its built-in provider config. This means the implementing phase sends **one combined prompt** to a single copilot pane instead of spawning separate panes for each sub-plan. The prompt embeds all plan and tasks content, and instructs copilot to use its own internal sub-agents to implement each plan. Copilot writes the `done_N` completion marker files as each plan finishes (or all at once at the end).
 
-This design avoids multiple premium-request invocations (one per sub-plan pane) in favour of a single invocation where copilot manages parallelism internally.
+When the coder provider is `copilot` with `single_coder: true`, the prompt is automatically prefixed with the `/fleet` slash command. This tells Copilot CLI to decompose the embedded plan into sub-agent tasks and execute them in parallel, with the main copilot instance acting as orchestrator. The `/fleet` prefix is applied transparently — no extra config flag is needed.
+
+This design avoids multiple premium-request invocations (one per sub-plan pane) in favour of a single invocation where copilot manages parallelism internally via `/fleet`.
 
 The `single_coder` flag can also be set on any custom provider definition in user or project config:
 
@@ -188,6 +190,8 @@ providers:
     role_args:
       coder: [--allow-all]
 ```
+
+Note: The automatic `/fleet` prefix is only applied when the coder's provider is `copilot`. Other providers with `single_coder: true` receive the combined prompt without the prefix.
 
 ## Strict schema
 

@@ -168,7 +168,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_1",
                 payload={},
             )
@@ -209,7 +209,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_1",
                 payload={},
             )
@@ -221,7 +221,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_2")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_2",
                 payload={},
             )
@@ -273,7 +273,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_1",
                 payload={},
             )
@@ -296,7 +296,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_2")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_2",
                 payload={},
             )
@@ -308,7 +308,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_3")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_3",
                 payload={},
             )
@@ -324,7 +324,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_4")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_4",
                 payload={},
             )
@@ -370,7 +370,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_1",
                 payload={},
             )
@@ -381,7 +381,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_2")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_2",
                 payload={},
             )
@@ -426,7 +426,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_3")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_3",
                 payload={},
             )
@@ -444,7 +444,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_4")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_4",
                 payload={},
             )
@@ -494,7 +494,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             # Complete first plan
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_1",
                 payload={},
             )
@@ -514,7 +514,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             # Complete second plan
             _touch(ctx.files.implementation_dir / "done_2")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="done_marker",
                 path="05_implementation/done_2",
                 payload={},
             )
@@ -542,7 +542,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="file.created",
+                kind="fix_done",
                 path="05_implementation/done_1",
                 payload={},
             )

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from agentmux.agent_labels import role_display_label
-from agentmux.workflow.event_router import WorkflowEvent
+from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.phase_helpers import (
-    filter_file_created_event,
     load_plan_meta,
     select_reviewer_type,
     send_to_role,
@@ -31,8 +31,49 @@ _REVIEWER_ROLE_MAP = {
 }
 
 
+def _review_has_verdict(review_path: Path) -> bool:
+    """Return True when review.md contains a final verdict on its first line."""
+    try:
+        lines = review_path.read_text(encoding="utf-8").splitlines()
+        return bool(lines) and lines[0].strip().lower() in (
+            "verdict: pass",
+            "verdict: fail",
+        )
+    except OSError:
+        return False
+
+
+def _review_ready(path: str, ctx: PipelineContext, state: dict) -> bool:
+    return (
+        not state.get("awaiting_summary")
+        and ctx.files.review.exists()
+        and _review_has_verdict(ctx.files.review)
+    )
+
+
+def _summary_ready(path: str, ctx: PipelineContext, state: dict) -> bool:
+    return bool(state.get("awaiting_summary")) and ctx.files.summary.exists()
+
+
+_SPECS = (
+    EventSpec(
+        name="review_ready",
+        watch_paths=("06_review/review.md",),
+        is_ready=_review_ready,
+    ),
+    EventSpec(
+        name="summary_ready",
+        watch_paths=("08_completion/summary.md",),
+        is_ready=_summary_ready,
+    ),
+)
+
+
 class ReviewingHandler:
     """Event-driven handler for reviewing phase."""
+
+    def get_event_specs(self) -> tuple[EventSpec, ...]:
+        return _SPECS
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering reviewing phase.
@@ -103,18 +144,10 @@ class ReviewingHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for reviewing phase."""
-        path = filter_file_created_event(event)
-        if path is None:
-            return {}, None
-
-        # Check for review written
-        if path == "06_review/review.md":
+        if event.kind == "review_ready":
             return self._handle_review_written(state, ctx)
-
-        # Check for implementation summary written by reviewer
-        if path == "08_completion/summary.md" and state.get("awaiting_summary"):
+        if event.kind == "summary_ready":
             return self._handle_summary_written(ctx)
-
         return {}, None
 
     def _handle_review_written(

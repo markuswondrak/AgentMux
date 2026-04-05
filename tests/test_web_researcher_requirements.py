@@ -197,7 +197,7 @@ class WebResearcherRequirementsTests(unittest.TestCase):
 
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="web_research_requested",
                 path="03_research/web-openai-models/request.md",
                 payload={},
             )
@@ -239,7 +239,7 @@ class WebResearcherRequirementsTests(unittest.TestCase):
 
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="web_research_done",
                 path="03_research/web-openai-models/done",
                 payload={},
             )

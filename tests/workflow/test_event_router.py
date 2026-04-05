@@ -13,6 +13,7 @@ from agentmux.shared.models import (
     WorkflowSettings,
 )
 from agentmux.workflow.event_router import (
+    EventSpec,
     PhaseHandler,
     WorkflowEvent,
     WorkflowEventRouter,
@@ -83,6 +84,10 @@ class MockHandler:
         """Record enter call and return configured updates."""
         self.enter_calls.append((state.copy(), ctx))
         return self.enter_updates
+
+    def get_event_specs(self):
+        """Return empty specs — use legacy raw-event path for these tests."""
+        return ()
 
     def handle_event(
         self, event: WorkflowEvent, state: dict, ctx: PipelineContext
@@ -466,3 +471,322 @@ class TestIntegration:
             "handle:implementing:planning/plan.md",  # Same event passed
             "handle:implementing:implementation/done_1",
         ]
+
+
+class TestEventSpecRouting:
+    """Test declarative EventSpec evaluation in the router."""
+
+    def _make_ctx(self, tmp_path):
+        """Build a minimal mock context with a real feature_dir."""
+        files = MagicMock(spec=RuntimeFiles)
+        files.feature_dir = tmp_path
+        files.state = tmp_path / "state.json"
+        runtime = MagicMock()
+        agents = {"coder": MagicMock(spec=AgentConfig)}
+        return PipelineContext(
+            files=files,
+            runtime=runtime,
+            agents=agents,
+            max_review_iterations=3,
+            prompts={},
+            github_config=GitHubConfig(),
+            workflow_settings=WorkflowSettings(),
+        )
+
+    def test_spec_fires_when_path_matches_and_ready(self, tmp_path):
+        """EventSpec with matching path and ready predicate dispatches logical event."""
+        (tmp_path / "05_implementation").mkdir()
+        marker = tmp_path / "05_implementation" / "done_1"
+        marker.touch()
+
+        received = []
+
+        class SpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="done_marker",
+                        watch_paths=("05_implementation/done_*",),
+                        is_ready=lambda p, c, s: (c.files.feature_dir / p).exists(),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": SpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert len(received) == 1
+        assert received[0].kind == "done_marker"
+        assert received[0].path == "05_implementation/done_1"
+
+    def test_spec_does_not_fire_when_not_ready(self, tmp_path):
+        """EventSpec with matching path but not-ready predicate is suppressed."""
+        received = []
+
+        class SpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="done_marker",
+                        watch_paths=("05_implementation/done_*",),
+                        is_ready=lambda p, c, s: (c.files.feature_dir / p).exists(),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": SpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        # File doesn't exist → is_ready returns False → no dispatch
+        assert received == []
+
+    def test_spec_does_not_fire_for_non_matching_path(self, tmp_path):
+        """EventSpec ignores events whose path doesn't match any watch_paths."""
+        received = []
+
+        class SpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="done_marker",
+                        watch_paths=("05_implementation/done_*",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": SpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.created", path="06_review/review.md")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert received == []
+
+    def test_spec_ignores_non_file_events(self, tmp_path):
+        """EventSpec routing only considers file.created / file.activity."""
+        received = []
+
+        class SpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="done_marker",
+                        watch_paths=("05_implementation/done_*",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": SpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(
+            kind="interruption.pane_exited",
+            payload={"pane_id": "coder.0"},
+        )
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert received == []
+
+    def test_empty_specs_falls_through_to_raw_event(self, tmp_path):
+        """Handler returning empty specs receives raw WorkflowEvent."""
+        received = []
+
+        class EmptySpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": EmptySpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert len(received) == 1
+        assert received[0].kind == "file.created"  # raw kind preserved
+        assert received[0].path == "05_implementation/done_1"
+
+    def test_no_get_event_specs_falls_through_to_raw_event(self, tmp_path):
+        """Handler without get_event_specs method receives raw WorkflowEvent."""
+        received = []
+
+        class LegacyHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": LegacyHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert len(received) == 1
+        assert received[0].kind == "file.created"
+
+    def test_multi_spec_only_matching_one_fires(self, tmp_path):
+        """When multiple specs exist, only the one whose path matches fires."""
+        received = []
+
+        class MultiSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="plan_written",
+                        watch_paths=("02_planning/plan.md",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                    EventSpec(
+                        name="done_marker",
+                        watch_paths=("05_implementation/done_*",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": MultiSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.created", path="05_implementation/done_3")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert len(received) == 1
+        assert received[0].kind == "done_marker"
+        assert received[0].path == "05_implementation/done_3"
+
+    def test_spec_with_state_dependent_ready(self, tmp_path):
+        """is_ready can inspect state to decide whether to fire."""
+        received = []
+
+        class StatefulSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="review_ready",
+                        watch_paths=("06_review/review.md",),
+                        is_ready=lambda p, c, s: not s.get("awaiting_summary"),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"reviewing": StatefulSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "reviewing", "awaiting_summary": True}
+
+        event = WorkflowEvent(kind="file.created", path="06_review/review.md")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        # awaiting_summary=True → is_ready returns False → suppressed
+        assert received == []
+
+        # Flip the flag — now it should fire
+        state["awaiting_summary"] = False
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert len(received) == 1
+        assert received[0].kind == "review_ready"
+
+    def test_spec_fires_on_file_activity_too(self, tmp_path):
+        """EventSpec routing also triggers on file.activity events."""
+        (tmp_path / "05_implementation").mkdir()
+        marker = tmp_path / "05_implementation" / "done_1"
+        marker.touch()
+
+        received = []
+
+        class SpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="done_marker",
+                        watch_paths=("05_implementation/done_*",),
+                        is_ready=lambda p, c, s: (c.files.feature_dir / p).exists(),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": SpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.activity", path="05_implementation/done_1")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert len(received) == 1
+        assert received[0].kind == "done_marker"

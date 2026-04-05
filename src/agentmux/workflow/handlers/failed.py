@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from agentmux.workflow.event_router import WorkflowEvent
+from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
@@ -14,7 +14,12 @@ class FailedHandler:
     """Event-driven handler for failed phase.
 
     This is the simplest handler - it just returns exit failure on any event.
+    No event specs — receives raw events via the legacy path so that any
+    file event triggers the exit.
     """
+
+    def get_event_specs(self) -> tuple[EventSpec, ...]:
+        return ()
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering failed phase.

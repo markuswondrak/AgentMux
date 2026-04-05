@@ -10,17 +10,41 @@ from typing import TYPE_CHECKING
 from agentmux.integrations.completion import CompletionService
 from agentmux.sessions.state_store import feature_slug_from_dir, read_json_resilient
 from agentmux.shared.models import ProjectPaths
-from agentmux.workflow.event_router import WorkflowEvent
-from agentmux.workflow.phase_helpers import (
-    apply_role_preferences,
-    filter_file_created_event,
-)
+from agentmux.workflow.event_router import EventSpec, WorkflowEvent
+from agentmux.workflow.phase_helpers import apply_role_preferences
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
 
 
 COMPLETION_SERVICE = CompletionService()
+
+
+def _approval_json_ready(path: str, ctx: PipelineContext, state: dict) -> bool:
+    """Return True when approval.json exists and contains action=approve."""
+    approval_path = ctx.files.feature_dir / path
+    if not approval_path.exists():
+        return False
+    payload = read_json_resilient(approval_path, {})
+    return bool(payload) and payload.get("action") == "approve"
+
+
+def _file_exists(path: str, ctx: PipelineContext, state: dict) -> bool:
+    return (ctx.files.feature_dir / path).exists()
+
+
+_SPECS = (
+    EventSpec(
+        name="approval_received",
+        watch_paths=("08_completion/approval.json",),
+        is_ready=_approval_json_ready,
+    ),
+    EventSpec(
+        name="changes_requested",
+        watch_paths=("08_completion/changes.md",),
+        is_ready=_file_exists,
+    ),
+)
 
 
 def _git_status_porcelain(project_dir: Path) -> str:
@@ -76,6 +100,9 @@ class CompletingHandler:
         ctx.runtime.show_completion_ui(ctx.files.feature_dir)
         return {}
 
+    def get_event_specs(self) -> tuple[EventSpec, ...]:
+        return _SPECS
+
     def handle_event(
         self,
         event: WorkflowEvent,
@@ -83,18 +110,10 @@ class CompletingHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for completing phase."""
-        path = filter_file_created_event(event)
-        if path is None:
-            return {}, None
-
-        # Check for approval
-        if path == "08_completion/approval.json":
+        if event.kind == "approval_received":
             return self._handle_approval(state, ctx)
-
-        # Check for changes requested
-        if path == "08_completion/changes.md":
+        if event.kind == "changes_requested":
             return self._handle_changes_requested(state, ctx)
-
         return {}, None
 
     def _handle_approval(

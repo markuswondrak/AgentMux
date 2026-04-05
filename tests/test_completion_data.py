@@ -73,7 +73,7 @@ class CompletionDataPersistenceTests(unittest.TestCase):
                 ),
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -122,7 +122,7 @@ class CompletionDataPersistenceTests(unittest.TestCase):
                 ),
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -161,7 +161,7 @@ class CompletionDataPersistenceTests(unittest.TestCase):
                 ),
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )

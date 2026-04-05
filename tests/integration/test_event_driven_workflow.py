@@ -144,7 +144,11 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
             state["phase"] = "product_management"
             write_state(state_path, state)
 
-            # Enter product_management - should send prompt to product-manager
+            # Write the done marker that the event represents
+            pm_dir = feature_dir / "01_product_management"
+            pm_dir.mkdir(parents=True, exist_ok=True)
+            (pm_dir / "done").touch()
+
             event = WorkflowEvent(
                 kind="file.created", path="01_product_management/done"
             )

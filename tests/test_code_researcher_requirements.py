@@ -286,7 +286,7 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
 
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="code_research_requested",
                 path="03_research/code-auth-module/request.md",
                 payload={},
             )
@@ -327,7 +327,7 @@ class CodeResearcherRequirementsTests(unittest.TestCase):
 
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="code_research_done",
                 path="03_research/code-auth-module/done",
                 payload={},
             )

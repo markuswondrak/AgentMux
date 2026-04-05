@@ -151,7 +151,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
 
             handler = ReviewingHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="review_ready",
                 path="06_review/review.md",
                 payload={},
             )
@@ -187,7 +187,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
 
             handler = ReviewingHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="review_ready",
                 path="06_review/review.md",
                 payload={},
             )
@@ -214,7 +214,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
 
             handler = ReviewingHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="review_ready",
                 path="06_review/review.md",
                 payload={},
             )

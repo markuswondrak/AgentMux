@@ -10,14 +10,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from agentmux.workflow.event_router import (
+    EventSpec,
     WorkflowEvent,
     extract_research_topic,
-    path_matches,
 )
 from agentmux.workflow.phase_helpers import (
     apply_role_preferences,
     dispatch_research_task,
-    filter_file_created_event,
     notify_research_complete,
     send_to_role,
 )
@@ -30,6 +29,39 @@ if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
 
 
+def _file_exists(path: str, ctx: PipelineContext, state: dict) -> bool:
+    return (ctx.files.feature_dir / path).exists()
+
+
+_SPECS = (
+    EventSpec(
+        name="architecture_written",
+        watch_paths=("02_planning/architecture.md",),
+        is_ready=_file_exists,
+    ),
+    EventSpec(
+        name="code_research_requested",
+        watch_paths=("03_research/code-*/request.md",),
+        is_ready=_file_exists,
+    ),
+    EventSpec(
+        name="web_research_requested",
+        watch_paths=("03_research/web-*/request.md",),
+        is_ready=_file_exists,
+    ),
+    EventSpec(
+        name="code_research_done",
+        watch_paths=("03_research/code-*/done",),
+        is_ready=_file_exists,
+    ),
+    EventSpec(
+        name="web_research_done",
+        watch_paths=("03_research/web-*/done",),
+        is_ready=_file_exists,
+    ),
+)
+
+
 class ArchitectingHandler:
     """Event-driven handler for architecting phase.
 
@@ -37,6 +69,9 @@ class ArchitectingHandler:
     Research tasks are dispatched to code-researcher and web-researcher as needed.
     When architecture.md is written, the phase transitions to 'planning'.
     """
+
+    def get_event_specs(self) -> tuple[EventSpec, ...]:
+        return _SPECS
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering architecting phase."""
@@ -55,35 +90,28 @@ class ArchitectingHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for architecting phase."""
-        path = filter_file_created_event(event)
-        if path is None:
-            return {}, None
-
-        # Check for architecture completion
-        if path == "02_planning/architecture.md":
+        if event.kind == "architecture_written":
             return self._handle_architecture_written(state, ctx)
 
-        # Check for research request
-        if path_matches("03_research/code-*/request.md", path):
-            topic = extract_research_topic(path, "code-")
+        if event.kind == "code_research_requested":
+            topic = extract_research_topic(event.path or "", "code-")
             if topic:
                 return dispatch_research_task("code-researcher", topic, state, ctx)
 
-        if path_matches("03_research/web-*/request.md", path):
-            topic = extract_research_topic(path, "web-")
+        if event.kind == "web_research_requested":
+            topic = extract_research_topic(event.path or "", "web-")
             if topic:
                 return dispatch_research_task("web-researcher", topic, state, ctx)
 
-        # Check for research done
-        if path_matches("03_research/code-*/done", path):
-            topic = extract_research_topic(path, "code-")
+        if event.kind == "code_research_done":
+            topic = extract_research_topic(event.path or "", "code-")
             if topic:
                 return notify_research_complete(
                     "code-researcher", topic, state, ctx, "architect"
                 )
 
-        if path_matches("03_research/web-*/done", path):
-            topic = extract_research_topic(path, "web-")
+        if event.kind == "web_research_done":
+            topic = extract_research_topic(event.path or "", "web-")
             if topic:
                 return notify_research_complete(
                     "web-researcher", topic, state, ctx, "architect"

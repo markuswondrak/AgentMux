@@ -1,1 +1,2 @@
 - Prefer extracting repeated prompt instructions into shared fragments/helpers instead of duplicating them across multiple prompt templates.
+- Avoid centralized if/else or switch chains for role/phase-specific behavior. Use declarative registries, dispatch tables, or per-role modules so each role/phase owns its own logic.

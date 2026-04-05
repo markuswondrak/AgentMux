@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING
 from agentmux.agent_labels import format_agent_label
 from agentmux.runtime import ParallelPromptSpec
 from agentmux.workflow.event_router import (
+    EventSpec,
     WorkflowEvent,
     extract_subplan_index,
 )
 from agentmux.workflow.execution_plan import load_execution_plan
 from agentmux.workflow.phase_helpers import (
-    filter_file_created_event,
     reset_markers,
     send_to_role,
 )
@@ -176,6 +176,17 @@ class ImplementingHandler:
 
         return updates
 
+    def get_event_specs(self) -> tuple[EventSpec, ...]:
+        return (
+            EventSpec(
+                name="done_marker",
+                watch_paths=("05_implementation/done_*",),
+                is_ready=lambda path, ctx, state: (
+                    ctx.files.feature_dir / path
+                ).exists(),
+            ),
+        )
+
     def handle_event(
         self,
         event: WorkflowEvent,
@@ -183,15 +194,10 @@ class ImplementingHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for implementing phase."""
-        path = filter_file_created_event(event)
-        if path is None:
-            return {}, None
-
-        # Check for subplan completion
-        subplan_index = extract_subplan_index(path)
-        if subplan_index is not None:
-            return self._handle_subplan_completed(subplan_index, state, ctx)
-
+        if event.kind == "done_marker":
+            subplan_index = extract_subplan_index(event.path or "")
+            if subplan_index is not None:
+                return self._handle_subplan_completed(subplan_index, state, ctx)
         return {}, None
 
     def _handle_subplan_completed(
@@ -391,7 +397,12 @@ class ImplementingHandler:
         ctx: PipelineContext,
         schedule: list[dict[str, object]],
     ) -> None:
-        """Dispatch a single combined prompt (single-coder mode)."""
+        """Dispatch a single combined prompt (single-coder mode).
+
+        When the coder uses copilot with single_coder mode, the prompt is
+        prefixed with ``/fleet`` so Copilot CLI decomposes the plan into
+        sub-agent tasks and executes them in parallel.
+        """
         all_plan_names = [
             str(name)
             for group in schedule
@@ -402,11 +413,19 @@ class ImplementingHandler:
             "coder",
             ", ".join(all_plan_names) if all_plan_names else "whole plan",
         )
+
+        prompt_content = build_coder_whole_plan_prompt(ctx.files)
+
+        # Auto-enable /fleet for copilot single-coder mode
+        coder = ctx.agents.get("coder")
+        if coder is not None and coder.single_coder and coder.provider == "copilot":
+            prompt_content = f"/fleet {prompt_content}"
+
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
             ctx.files.relative_path(
                 ctx.files.implementation_dir / "coder_prompt_whole.txt"
             ),
-            build_coder_whole_plan_prompt(ctx.files),
+            prompt_content,
         )
         send_to_role(ctx, "coder", prompt_file, display_label=display_label)

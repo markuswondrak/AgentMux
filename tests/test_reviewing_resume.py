@@ -155,7 +155,7 @@ class TestReviewArchive(unittest.TestCase):
 
         handler = ReviewingHandler()
         event = WorkflowEvent(
-            kind="file.created", path="06_review/review.md", payload={}
+            kind="review_ready", path="06_review/review.md", payload={}
         )
         return handler.handle_event(event, load_state(state_path), ctx)
 

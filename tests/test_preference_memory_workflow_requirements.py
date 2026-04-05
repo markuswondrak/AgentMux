@@ -117,7 +117,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
 
             handler = ProductManagementHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="pm_completed",
                 path="01_product_management/done",
                 payload={},
             )
@@ -148,7 +148,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
 
             handler = ProductManagementHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="pm_completed",
                 path="01_product_management/done",
                 payload={},
             )
@@ -193,7 +193,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
 
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="plan_written",
                 path="02_planning/plan_meta.json",
                 payload={},
             )
@@ -230,7 +230,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
 
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="plan_written",
                 path="02_planning/plan_meta.json",
                 payload={},
             )
@@ -300,7 +300,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 ) as finalize_mock,
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -353,7 +353,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 ) as finalize_mock,
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -410,7 +410,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 ) as finalize_mock,
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )
@@ -451,7 +451,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
             assert handler is not None
 
             event = WorkflowEvent(
-                kind="file.created",
+                kind="changes_requested",
                 path="08_completion/changes.md",
                 payload={},
             )
@@ -491,7 +491,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
 
             handler = ProductManagementHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="pm_completed",
                 path="01_product_management/done",
                 payload={},
             )
@@ -520,7 +520,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
 
             handler = ProductManagementHandler()
             event = WorkflowEvent(
-                kind="file.created",
+                kind="pm_completed",
                 path="01_product_management/done",
                 payload={},
             )
@@ -578,7 +578,7 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 ),
             ):
                 event = WorkflowEvent(
-                    kind="file.created",
+                    kind="approval_received",
                     path="08_completion/approval.json",
                     payload={},
                 )

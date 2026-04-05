@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from ..sessions.state_store import now_iso, read_json_resilient, write_state
 from .transitions import PipelineContext
-
-if TYPE_CHECKING:
-    from .event_router import WorkflowEvent
 
 
 def send_to_role(
@@ -49,26 +45,6 @@ def load_plan_meta(planning_dir: Path) -> dict[str, object]:
 # =============================================================================
 # NEW HELPER FUNCTIONS - Event-driven handler shared functionality
 # =============================================================================
-
-
-def filter_file_created_event(event: WorkflowEvent) -> str | None:
-    """Filter events to only return path for file.created events.
-
-    Args:
-        event: The workflow event to filter.
-
-    Returns:
-        The relative path if event is file.created, None otherwise.
-
-    Usage:
-        path = filter_file_created_event(event)
-        if path is None:
-            return {}, None
-        # ... handle path
-    """
-    if event.kind != "file.created":
-        return None
-    return event.path
 
 
 def dispatch_research_task(
