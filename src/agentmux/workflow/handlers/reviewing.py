@@ -12,6 +12,10 @@ from agentmux.workflow.event_catalog import (
     EVENT_REVIEW_PASSED,
 )
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
+from agentmux.workflow.handoff_artifacts import (
+    load_review_text,
+    review_yaml_has_verdict,
+)
 from agentmux.workflow.phase_helpers import (
     load_plan_meta,
     select_reviewer_type,
@@ -48,34 +52,10 @@ def _review_has_verdict(review_path: Path) -> bool:
         return False
 
 
-def _review_yaml_has_verdict(review_dir: Path) -> bool:
-    """Return True when review.yaml exists with a valid verdict."""
-    yaml_path = review_dir / "review.yaml"
-    if not yaml_path.exists():
-        return False
-    try:
-        import yaml
-
-        data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
-        return isinstance(data, dict) and data.get("verdict") in (
-            "pass",
-            "fail",
-        )
-    except Exception:
-        return False
-
-
 def _review_ready(path: str, ctx: PipelineContext, state: dict) -> bool:
-    return (
-        not state.get("awaiting_summary")
-        and ctx.files.review.exists()
-        and _review_has_verdict(ctx.files.review)
-    )
-
-
-def _review_yaml_ready(path: str, ctx: PipelineContext, state: dict) -> bool:
-    return not state.get("awaiting_summary") and _review_yaml_has_verdict(
-        ctx.files.review_dir
+    return not state.get("awaiting_summary") and (
+        (ctx.files.review.exists() and _review_has_verdict(ctx.files.review))
+        or review_yaml_has_verdict(ctx.files.review_dir)
     )
 
 
@@ -91,11 +71,6 @@ _SPECS = (
             "06_review/review.yaml",
         ),
         is_ready=_review_ready,
-    ),
-    EventSpec(
-        name="review_yaml_ready",
-        watch_paths=("06_review/review.yaml",),
-        is_ready=_review_yaml_ready,
     ),
     EventSpec(
         name="summary_ready",
@@ -116,14 +91,19 @@ class ReviewingHandler:
 
         Sends reviewer prompt based on review_strategy routing.
         """
-        # On resume, if the reviewer already wrote review.md leave it in place.
-        # seed_existing_files() will publish FILE_EVENT_CREATED for it and
-        # handle_event() will process the verdict correctly.
-        if state.get("last_event") == EVENT_RESUMED and ctx.files.review.exists():
+        # On resume, if the reviewer already wrote review output leave it in
+        # place. seed_existing_files() will publish file events and handle_event()
+        # will process the verdict correctly.
+        if state.get("last_event") == EVENT_RESUMED and (
+            ctx.files.review.exists() or review_yaml_has_verdict(ctx.files.review_dir)
+        ):
             return {}
 
         if ctx.files.review.exists():
             ctx.files.review.unlink()
+        review_yaml = ctx.files.review_dir / "review.yaml"
+        if review_yaml.exists():
+            review_yaml.unlink()
 
         # Load plan_meta and determine reviewer type
         plan_meta = load_plan_meta(ctx.files.planning_dir)
@@ -180,7 +160,7 @@ class ReviewingHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for reviewing phase."""
-        if event.kind in ("review_ready", "review_yaml_ready"):
+        if event.kind == "review_ready":
             return self._handle_review_written(state, ctx)
         if event.kind == "summary_ready":
             return self._handle_summary_written(ctx)
@@ -192,10 +172,13 @@ class ReviewingHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle review written event."""
-        if not ctx.files.review.exists():
+        review_text = load_review_text(
+            ctx.files.review_dir,
+            materialize_markdown=True,
+        )
+        if review_text is None:
             return {}, None
 
-        review_text = ctx.files.review.read_text(encoding="utf-8")
         first_line = (
             review_text.splitlines()[0].strip().lower()
             if review_text.splitlines()

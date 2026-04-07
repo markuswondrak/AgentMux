@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig
 from agentmux.workflow.event_router import WorkflowEvent
@@ -103,6 +105,41 @@ class TestResumeGuard(unittest.TestCase):
             send_calls = [c for c in ctx.runtime.calls if c[0] == "send"]
             self.assertEqual([], send_calls, "no prompt should be sent on resume")
 
+    def test_resume_with_existing_review_yaml_does_not_delete_or_prompt(self) -> None:
+        """On resume, if review.yaml exists, enter() leaves it and sends no prompt."""
+        with tempfile.TemporaryDirectory() as td:
+            ctx, state_path = _make_ctx(Path(td) / "feature")
+            ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
+            (ctx.files.review_dir / "review.yaml").write_text(
+                yaml.dump(
+                    {
+                        "verdict": "fail",
+                        "summary": "Needs fixes",
+                        "findings": [
+                            {
+                                "issue": "Missing validation",
+                                "recommendation": "Add the missing check.",
+                            }
+                        ],
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            state["last_event"] = "resumed"
+            write_state(state_path, state)
+
+            handler = ReviewingHandler()
+            result = handler.enter(load_state(state_path), ctx)
+
+            self.assertEqual({}, result)
+            self.assertTrue((ctx.files.review_dir / "review.yaml").exists())
+            send_calls = [c for c in ctx.runtime.calls if c[0] == "send"]
+            self.assertEqual([], send_calls, "no prompt should be sent on resume")
+
     def test_resume_without_review_sends_prompt(self) -> None:
         """On resume, if review.md does not exist, enter() proceeds normally."""
         with tempfile.TemporaryDirectory() as td:
@@ -140,6 +177,35 @@ class TestResumeGuard(unittest.TestCase):
 
             self.assertFalse(
                 ctx.files.review.exists(), "stale review.md must be deleted"
+            )
+
+    def test_fresh_entry_deletes_stale_review_yaml(self) -> None:
+        """On fresh entry, a stale review.yaml is also deleted."""
+        with tempfile.TemporaryDirectory() as td:
+            ctx, state_path = _make_ctx(Path(td) / "feature")
+            ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
+            (ctx.files.review_dir / "review.yaml").write_text(
+                yaml.dump(
+                    {
+                        "verdict": "pass",
+                        "summary": "Looks good",
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            state["last_event"] = "implementation_completed"
+            write_state(state_path, state)
+
+            handler = ReviewingHandler()
+            handler.enter(load_state(state_path), ctx)
+
+            self.assertFalse(
+                (ctx.files.review_dir / "review.yaml").exists(),
+                "stale review.yaml must be deleted",
             )
 
 

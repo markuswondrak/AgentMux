@@ -23,16 +23,16 @@ Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are
 - `architect_prompt.md` / `changes_prompt.txt` — architect prompts (for architecting phase)
 - `planner_prompt.md` — planner prompt for creating execution plans
 - `architecture.yaml` — canonical structured architecture document (the "What" and "With what"); written by MCP `agentmux_submit_architecture` or directly by the architect
-- `architecture.md` — human-readable companion of `architecture.yaml`
-- `plan.md` — human-readable planning overview created by planner
-- `plan_<N>.md` — executable per-unit implementation plans referenced by scheduler metadata
+- `architecture.md` — human-readable companion of `architecture.yaml`; consumed by the planner prompt, so it remains required alongside the canonical YAML
+- `plan.md` — human-readable planning overview created by planner; required alongside `execution_plan.yaml` for planning completion and later prompts
+- `plan_<N>.md` — executable per-unit implementation plans referenced by scheduler metadata and consumed by coder prompts
 - `plan_<N>.yaml` — canonical structured sub-plan data; written by MCP `agentmux_submit_subplan` or directly by the planner
 - `execution_plan.yaml` — merged machine-readable schedule and planner metadata
   - Each group has a unique `group_id` and an execution mode (`serial` or `parallel`)
   - `serial` groups execute plans one at a time in order (useful for sequential integration steps)
   - `parallel` groups execute all plans simultaneously
   - Both modes can reference one or more named `plan_<N>.md` entries
-  - Canonical plan-entry shape is `{ "file": "plan_<N>.md", "name": "Human title" }`
+  - Canonical plan-entry shape is a YAML mapping with `file` and `name` keys (for example `- file: plan_1.md` followed by `name: Core setup`)
   - Plan references must be unique across groups
   - Group ordering defines implementation wave order
 - `tasks_<N>.md` — per-plan implementation checklists; each coder receives only their assigned plan's tasks
@@ -50,7 +50,7 @@ The `execution_plan.yaml` file also contains planner workflow-intent metadata al
 Execution scheduling is strict:
 
 - `execution_plan.yaml` is required before implementation starts.
-- `groups[].plans[]` entries must use `{ "file": "plan_<N>.md", "name": "Human title" }` objects.
+- `groups[].plans[]` entries must use YAML mappings with `file` and `name` keys.
 - Implementation dispatch uses numbered prompt files (`coder_prompt_<N>.txt`) only.
 
 ## Research (`03_research/`)
@@ -76,8 +76,9 @@ Execution scheduling is strict:
 
 ## Review (`06_review/`)
 
-- `review_prompt.md` / `review.md` — legacy review prompt (backward compatibility)
+- `review_prompt.md` — legacy review prompt (backward compatibility)
 - `review.yaml` — canonical structured review verdict and findings; written by MCP `agentmux_submit_review` or directly by the reviewer
+- `review.md` — human-readable review companion used by summary generation, monitor output, and PR assembly; generated automatically from `review.yaml` when missing
 - `review_logic_prompt.md` — Logic & Alignment reviewer prompt (functional correctness vs plan)
 - `review_quality_prompt.md` — Quality & Style reviewer prompt (clean code, naming, standards)
 - `review_expert_prompt.md` — Deep-Dive Expert reviewer prompt (security, performance, edge cases)

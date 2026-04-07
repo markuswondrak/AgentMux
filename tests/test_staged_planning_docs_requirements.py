@@ -64,7 +64,9 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         self.assertIn("serial", text.lower())
         self.assertIn("parallel", text.lower())
         self.assertIn("strict", text.lower())
-        self.assertIn('{ "file": "plan_<N>.md", "name": "Human title" }', text)
+        self.assertIn("YAML mapping", text)
+        self.assertIn("`- file: plan_1.md`", text)
+        self.assertIn("`name: Core setup`", text)
 
     def test_monitor_doc_covers_staged_execution_progress(self) -> None:
         text = self._read_doc("docs/monitor.md")

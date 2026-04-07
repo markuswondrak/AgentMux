@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import yaml
+
 # ---------------------------------------------------------------------------
 # Field specification
 # ---------------------------------------------------------------------------
@@ -518,19 +520,12 @@ def render_contract_prompt(contract_name: str) -> str:
 
 def _yaml_inline(value: Any) -> str:
     """Produce a compact inline YAML representation for examples."""
-    if isinstance(value, str):
-        return f'"{value}"' if " " in value or not value else value
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, list):
-        if not value:
-            return "[]"
-        if all(isinstance(v, str) for v in value):
-            return "[" + ", ".join(v for v in value) + "]"
-        return "[ ... ]"
-    if isinstance(value, dict):
-        parts = [f"{k}: {_yaml_inline(v)}" for k, v in value.items()]
-        return "{" + ", ".join(parts) + "}"
-    return str(value)
+    rendered = yaml.safe_dump(
+        value,
+        default_flow_style=True,
+        sort_keys=False,
+        width=10_000,
+    ).strip()
+    if rendered.endswith("\n..."):
+        rendered = rendered[: -len("\n...")].rstrip()
+    return rendered

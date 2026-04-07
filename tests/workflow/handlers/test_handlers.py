@@ -742,6 +742,33 @@ class TestReviewingHandler:
         assert updates.get("awaiting_summary") is True
         assert updates.get("last_event") == EVENT_REVIEW_PASSED
 
+    def test_handle_review_yaml_pass_materializes_review_md(
+        self, mock_ctx: MagicMock, empty_state: dict
+    ) -> None:
+        handler = ReviewingHandler()
+        event = WorkflowEvent(kind="review_ready", path="06_review/review.yaml")
+
+        mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.review_dir / "review.yaml").write_text(
+            yaml.dump(
+                {
+                    "verdict": "pass",
+                    "summary": "Looks good!",
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+
+        assert next_phase is None
+        assert updates.get("awaiting_summary") is True
+        assert mock_ctx.files.review.exists()
+        assert mock_ctx.files.review.read_text(encoding="utf-8").startswith(
+            "verdict: pass"
+        )
+
     def test_handle_review_failed_under_max_iterations(
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
@@ -758,6 +785,41 @@ class TestReviewingHandler:
         assert next_phase == "fixing"
         assert updates["review_iteration"] == 1
         assert mock_ctx.files.fix_request.exists()
+
+    def test_handle_review_yaml_fail_creates_fix_request(
+        self, mock_ctx: MagicMock, empty_state: dict
+    ) -> None:
+        handler = ReviewingHandler()
+        event = WorkflowEvent(kind="review_ready", path="06_review/review.yaml")
+
+        mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.review_dir / "review.yaml").write_text(
+            yaml.dump(
+                {
+                    "verdict": "fail",
+                    "summary": "Needs fixes",
+                    "findings": [
+                        {
+                            "location": "src/example.py:10",
+                            "issue": "Missing validation",
+                            "severity": "high",
+                            "recommendation": "Add the missing check.",
+                        }
+                    ],
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+
+        assert next_phase == "fixing"
+        assert updates["review_iteration"] == 1
+        assert mock_ctx.files.fix_request.exists()
+        assert mock_ctx.files.fix_request.read_text(encoding="utf-8").startswith(
+            "verdict: fail"
+        )
 
     def test_handle_review_failed_at_max_iterations(
         self, mock_ctx: MagicMock, empty_state: dict

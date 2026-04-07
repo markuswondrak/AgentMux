@@ -36,6 +36,7 @@ from .handlers.implementing import ImplementingHandler
 from .handlers.planning import PlanningHandler
 from .handlers.product_management import ProductManagementHandler
 from .handlers.reviewing import ReviewingHandler
+from .handoff_artifacts import review_yaml_has_verdict
 from .phase_helpers import select_reviewer_type
 
 # ---------------------------------------------------------------------------
@@ -95,13 +96,13 @@ def _implementing_done(feature_dir: Path, state: dict[str, Any]) -> bool:
 def _reviewing_done(feature_dir: Path, state: dict[str, Any]) -> bool:
     """True when the reviewing phase has completed.
 
-    In a fix iteration review.md is processed and deleted before transitioning to
-    fixing.  We use fix_request.md + done_1 presence to distinguish:
+    In a fix iteration review output is processed and deleted before transitioning
+    to fixing. We use fix_request.md + done_1 presence to distinguish:
     - done_1 missing → review ran, fix needed → reviewing IS done
     - done_1 exists  → fix applied, follow-up review pending → reviewing NOT done
     """
     review_dir = feature_dir / "06_review"
-    if (review_dir / "review.md").exists():
+    if (review_dir / "review.md").exists() or review_yaml_has_verdict(review_dir):
         return True  # Reviewer wrote output; orchestrator may not have processed it yet
     fix_iteration = (review_dir / "fix_request.md").exists() and int(
         state.get("review_iteration", 0)

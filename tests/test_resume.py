@@ -283,6 +283,32 @@ class InferResumePhaseTests(unittest.TestCase):
             state = {"phase": "failed", "subplan_count": 1}
             self.assertEqual("completing", infer_resume_phase(feature_dir, state))
 
+    def test_failed_review_yaml_pass_resumes_completing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / PLANNING_DIR / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan", encoding="utf-8"
+            )
+            self._write_yaml(
+                feature_dir / PLANNING_DIR / "execution_plan.yaml",
+                "needs_design: false\nneeds_docs: false\ndoc_files: []\n",
+            )
+            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
+                "", encoding="utf-8"
+            )
+            (feature_dir / REVIEW_DIR / "review.yaml").write_text(
+                "verdict: pass\nsummary: Looks good\n",
+                encoding="utf-8",
+            )
+            state = {"phase": "failed", "subplan_count": 1}
+            self.assertEqual("completing", infer_resume_phase(feature_dir, state))
+
     def test_removes_dispatched_research_tasks_from_state(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)

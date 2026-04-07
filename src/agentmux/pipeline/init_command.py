@@ -13,7 +13,8 @@ import yaml
 
 from ..configuration import load_builtin_catalog, load_layered_config
 from ..integrations.mcp import (
-    McpServerSpec,
+    DEFAULT_RESEARCH_ROLES,
+    DEFAULT_RESEARCH_SERVERS,
     ensure_mcp_config,
 )
 from ..integrations.opencode_agents import OpenCodeAgentConfigurator
@@ -730,14 +731,8 @@ def run_init(defaults_mode: bool = False) -> int:
         loaded = load_layered_config(project_dir)
         ensure_mcp_config(
             loaded.agents,
-            [
-                McpServerSpec(
-                    name="agentmux-research",
-                    module="agentmux.integrations.mcp_research_server",
-                    env={},
-                )
-            ],
-            ("architect", "product-manager"),
+            list(DEFAULT_RESEARCH_SERVERS),
+            DEFAULT_RESEARCH_ROLES,
             project_dir,
             interactive=True,
             output=sys.stdout,
@@ -771,14 +766,8 @@ def run_init_provider(
         print("No additional setup needed for copilot")
         return 0
 
-    server = McpServerSpec(
-        name="agentmux-research",
-        module="agentmux.integrations.mcp_research_server",
-        env={},
-    )
-
     # Build minimal agents dict so _required_configurators selects the right MCP backend
-    _mcp_roles = ("architect", "product-manager")
+    _mcp_roles = DEFAULT_RESEARCH_ROLES
     _dummy = {
         r: AgentConfig(role=r, cli=provider, model="", provider=provider)
         for r in _mcp_roles
@@ -788,7 +777,7 @@ def run_init_provider(
     if provider == "opencode":
         ensure_mcp_config(
             _dummy,
-            [server],
+            list(DEFAULT_RESEARCH_SERVERS),
             _mcp_roles,
             project_dir,
             interactive=False,
@@ -798,7 +787,7 @@ def run_init_provider(
         # Non-opencode: MCP at home level
         ensure_mcp_config(
             _dummy,
-            [server],
+            list(DEFAULT_RESEARCH_SERVERS),
             _mcp_roles,
             Path.home(),
             interactive=False,

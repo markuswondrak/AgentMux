@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import unittest
 
+import yaml
+
 from agentmux.workflow.handoff_contracts import (
     ARCHITECTURE_CONTRACT,
     CONTRACTS,
@@ -264,6 +266,12 @@ class TestUnknownContract(unittest.TestCase):
 
 
 class TestRenderContractPrompt(unittest.TestCase):
+    @staticmethod
+    def _extract_yaml_block(text: str) -> str:
+        start = text.index("```yaml") + len("```yaml")
+        end = text.index("```", start)
+        return text[start:end].strip()
+
     def test_renders_all_contracts(self):
         for name in CONTRACTS:
             text = render_contract_prompt(name)
@@ -286,6 +294,26 @@ class TestRenderContractPrompt(unittest.TestCase):
     def test_review_prompt_has_verdict(self):
         text = render_contract_prompt("review")
         self.assertIn("verdict", text)
+
+    def test_architecture_prompt_examples_parse_with_component_structure(self):
+        text = render_contract_prompt("architecture")
+        parsed = yaml.safe_load(self._extract_yaml_block(text))
+
+        self.assertEqual(parsed["components"][0]["name"], "AuthService")
+        self.assertEqual(
+            parsed["components"][0]["responsibility"],
+            "Handles user authentication",
+        )
+
+    def test_subplan_prompt_examples_parse_list_values(self):
+        text = render_contract_prompt("subplan")
+        parsed = yaml.safe_load(self._extract_yaml_block(text))
+
+        self.assertEqual(
+            parsed["tasks"],
+            ["Create auth module", "Add login endpoint", "Write tests"],
+        )
+        self.assertEqual(parsed["owned_files"], ["src/auth.py", "tests/test_auth.py"])
 
 
 if __name__ == "__main__":

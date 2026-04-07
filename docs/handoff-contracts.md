@@ -1,6 +1,6 @@
 # Handoff Contracts
 
-> Related source files: `agentmux/workflow/handoff_contracts.py`, `agentmux/integrations/mcp_research_server.py`, `agentmux/prompts/shared/handoff-contract-architecture.md`, `agentmux/prompts/shared/handoff-contract-plan.md`, `agentmux/prompts/shared/handoff-contract-review.md`
+> Related source files: `agentmux/workflow/handoff_contracts.py`, `agentmux/workflow/handoff_artifacts.py`, `agentmux/integrations/mcp_research_server.py`, `agentmux/prompts/shared/handoff-contract-architecture.md`, `agentmux/prompts/shared/handoff-contract-plan.md`, `agentmux/prompts/shared/handoff-contract-review.md`
 
 Handoff contracts define the structured interface between workflow phases. Each contract specifies the fields an agent must produce, validates submissions, and writes dual output files (YAML canonical + MD human-readable).
 
@@ -9,9 +9,13 @@ Handoff contracts define the structured interface between workflow phases. Each 
 Agents submit phase outputs through either:
 
 1. **MCP submission tools** (preferred) — the `agentmux-research` MCP server exposes four `agentmux_submit_*` tools that accept structured parameters, validate them against the contract, and write both `.yaml` and `.md` files.
-2. **Direct YAML write** (fallback) — agents that cannot call MCP tools write the `.yaml` file directly. Shared prompt fragments (`[[shared:handoff-contract-*]]`) embedded in agent prompts provide the YAML schema and examples.
+2. **Direct YAML write** (fallback) — agents that cannot call MCP tools write the canonical `.yaml` file directly. Shared prompt fragments (`[[shared:handoff-contract-*]]`) embedded in agent prompts provide the YAML schema and examples.
 
-The orchestrator watches for the canonical `.yaml` files to detect phase completion.
+Completion semantics are phase-specific:
+
+- **Architecture** — `architecture.yaml` is the canonical structured artifact, but the planner prompt still consumes `architecture.md`, so the companion Markdown file remains required in practice.
+- **Execution plan + subplans** — `execution_plan.yaml` / `plan_N.yaml` are canonical structured artifacts, but `plan.md`, `plan_N.md`, and `tasks_N.md` remain required human-readable companions for downstream prompts and coder handoffs.
+- **Review** — `review.yaml` is the canonical structured review artifact. If `review.md` is missing, AgentMux materializes it from `review.yaml` before summary/completion steps so downstream prompts can continue to read the Markdown companion.
 
 ## Contracts
 
@@ -69,8 +73,10 @@ MCP tools raise a validation error with all issues listed; agents receive the er
 
 Each submission writes two files:
 
-- **`.yaml`** — the machine-readable canonical artifact. The orchestrator watches for this file to trigger phase transitions.
+- **`.yaml`** — the machine-readable canonical artifact.
 - **`.md`** — a human-readable companion generated from the same data. Useful for attaching to tmux, reviewing in PRs, and reading in subsequent agent prompts via `[[include:...]]`.
+
+For architecture, execution plans, and subplans, the `.md` companions are still required by downstream prompts. For reviews, the runtime can synthesize `review.md` from `review.yaml` when the Markdown companion is missing.
 
 ## Shared prompt fragments
 
