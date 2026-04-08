@@ -499,14 +499,6 @@ def _format_plan_summary(plan_ids: list[str]) -> str:
     return f"{len(plan_ids)} plans"
 
 
-def _summarize_group_ids(group_ids: list[str]) -> str:
-    if not group_ids:
-        return ""
-    if len(group_ids) <= 3:
-        return ", ".join(group_ids)
-    return f"{', '.join(group_ids[:2])}, +{len(group_ids) - 2}"
-
-
 def _render_implementing_progress(width: int, progress: dict[str, object]) -> list[str]:
     total = int(progress.get("total", 0))
     completed = int(progress.get("completed", 0))
@@ -517,6 +509,8 @@ def _render_implementing_progress(width: int, progress: dict[str, object]) -> li
     queued_group_ids = _extract_str_list(progress.get("queued_group_ids"))
 
     rows: list[str] = []
+
+    # Summary header
     rows.append(
         _compose_line(
             width,
@@ -527,40 +521,53 @@ def _render_implementing_progress(width: int, progress: dict[str, object]) -> li
         )
     )
 
-    active_parts = [part for part in (active_group, active_mode) if part]
-    active_text = " ".join(active_parts)
-    plan_summary = _format_plan_summary(active_plan_ids)
-    if plan_summary:
-        active_text = f"{active_text} · {plan_summary}" if active_text else plan_summary
-    if active_text:
+    # Completed groups
+    for group_id in completed_group_ids:
         rows.append(
             _compose_line(
                 width,
                 prefix_plain=" │   ",
                 prefix_rendered=f" {SECONDARY}│{RESET}   ",
-                left_plain=f"› active: {active_text}",
-                left_rendered=f"{DIM}› active: {active_text}{RESET}",
+                left_plain=f"› ✓ {group_id}",
+                left_rendered=f"{DIM}› {GREEN}✓{RESET} {DIM}{group_id}{RESET}",
             )
         )
 
-    summary_parts: list[str] = []
-    done_summary = _summarize_group_ids(completed_group_ids)
-    queued_summary = _summarize_group_ids(queued_group_ids)
-    if done_summary:
-        summary_parts.append(f"done: {done_summary}")
-    if queued_summary:
-        summary_parts.append(f"queued: {queued_summary}")
-    if summary_parts:
-        summary_text = " · ".join(summary_parts)
+    # Active group
+    if active_group:
+        active_parts = [part for part in (active_group, active_mode) if part]
+        active_text = " ".join(active_parts)
+        plan_summary = _format_plan_summary(active_plan_ids)
+        if plan_summary:
+            active_text = (
+                f"{active_text} · {plan_summary}" if active_text else plan_summary
+            )
+        if active_text:
+            rows.append(
+                _compose_line(
+                    width,
+                    prefix_plain=" │   ",
+                    prefix_rendered=f" {SECONDARY}│{RESET}   ",
+                    left_plain=f"› ▶ {active_text}",
+                    left_rendered=(
+                        f"{DIM}› {BOLD}{SECONDARY}▶{RESET} "
+                        f"{BOLD}{SECONDARY}{active_text}{RESET}"
+                    ),
+                )
+            )
+
+    # Queued groups
+    for group_id in queued_group_ids:
         rows.append(
             _compose_line(
                 width,
                 prefix_plain=" │   ",
                 prefix_rendered=f" {SECONDARY}│{RESET}   ",
-                left_plain=f"› {summary_text}",
-                left_rendered=f"{DIM}› {summary_text}{RESET}",
+                left_plain=f"› · {group_id}",
+                left_rendered=f"{DIM}› · {group_id}{RESET}",
             )
         )
+
     return rows
 
 
