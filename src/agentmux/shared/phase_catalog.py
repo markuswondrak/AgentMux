@@ -41,7 +41,7 @@ PHASE_CATALOG: tuple[PhaseEntry, ...] = (
     PhaseEntry(
         "planning",
         "02_planning",
-        monitor_file_patterns=("02_planning/plan.md", "02_planning/tasks.md"),
+        monitor_file_patterns=("02_planning/plan.yaml", "02_planning/tasks.md"),
     ),
     PhaseEntry(
         "designing",

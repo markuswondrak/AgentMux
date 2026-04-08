@@ -2,7 +2,6 @@ You are the planner agent for this feature request. Your task is to break down t
 
 Session directory: [[placeholder:feature_dir]]
 Project directory: [[placeholder:project_dir]]
-Approved preference proposal artifact: [[placeholder:planner_preference_proposal_file]]
 
 <file path="context.md">
 [[include:context.md]]
@@ -50,7 +49,6 @@ See Output & Artifacts below for file specs. Write all files to `02_planning/` a
 ## Output & Artifacts
 
 - **`02_planning/plan.yaml`** — unified machine-readable plan containing all sub-plans and execution metadata (version 2 schema; the orchestrator materializes derived files automatically).
-- **`[[placeholder:planner_preference_proposal_file]]`** — JSON, optional; only write if preference candidates are approved.
 
 [[shared:handoff-contract-plan]]
 
@@ -60,9 +58,9 @@ See Output & Artifacts below for file specs. Write all files to `02_planning/` a
 
 Planner preference proposal output:
 
-1. If one or more candidates are approved, write `[[placeholder:planner_preference_proposal_file]]` as JSON with this shape:
+1. If one or more candidates are approved, include an `approved_preferences` field in `02_planning/plan.yaml` with this shape:
    - `{{"source_role":"planner","approved":[{{"target_role":"coder","bullet":"- ..."}}]}}`
-2. If no candidates are approved, do not write the proposal artifact.
+2. If no candidates are approved, omit the `approved_preferences` field.
 
 [[placeholder:project_instructions]]
 

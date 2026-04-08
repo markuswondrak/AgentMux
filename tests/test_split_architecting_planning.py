@@ -292,8 +292,8 @@ class TestPlanningPhaseUsesPlanner(unittest.TestCase):
             # Should reference architecture.md
             self.assertIn("architecture.md", prompt)
 
-    def test_planner_preference_proposal_file_in_prompt(self) -> None:
-        """Planner prompt should reference planner_preference_proposal_file."""
+    def test_planner_preference_proposal_in_plan_yaml(self) -> None:
+        """Planner prompt instructs including approved_preferences in plan.yaml."""
         import tempfile
         from pathlib import Path
 
@@ -317,8 +317,9 @@ class TestPlanningPhaseUsesPlanner(unittest.TestCase):
             )
 
             prompt = build_planner_prompt(files)
-            # Should reference planner preference proposal placeholder
-            self.assertIn("02_planning/approved_preferences.json", prompt)
+            # Preferences are included in plan.yaml, not a separate JSON file.
+            self.assertIn("approved_preferences", prompt)
+            self.assertIn("plan.yaml", prompt)
 
 
 class TestInitialPhase(unittest.TestCase):

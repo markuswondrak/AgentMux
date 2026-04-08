@@ -676,7 +676,7 @@ class MonitorTests(unittest.TestCase):
                     [
                         "2026-03-21 11:20:06  context.md",
                         "2026-03-21 11:20:07  02_planning/architect_prompt.md",
-                        "2026-03-21 11:20:08  02_planning/plan.md",
+                        "2026-03-21 11:20:08  02_planning/plan.yaml",
                         "2026-03-21 11:20:10  03_research/code-auth/request.md",
                         "2026-03-21 11:20:11  03_research/code-auth/summary.md",
                     ]
@@ -699,7 +699,7 @@ class MonitorTests(unittest.TestCase):
                 )
 
             self.assertIn("11:20 > planning", output)
-            self.assertIn("11:20 + 02_planning/plan.md", output)
+            self.assertIn("11:20 + 02_planning/plan.yaml", output)
             self.assertIn("11:20 + 03_research/code-auth/summary.md", output)
             self.assertIn("11:20 > implementing", output)
             self.assertNotIn("context.md", output)
@@ -707,10 +707,10 @@ class MonitorTests(unittest.TestCase):
             self.assertNotIn("code-auth/request.md", output)
             self.assertLess(
                 output.index("11:20 > planning"),
-                output.index("11:20 + 02_planning/plan.md"),
+                output.index("11:20 + 02_planning/plan.yaml"),
             )
             self.assertLess(
-                output.index("11:20 + 02_planning/plan.md"),
+                output.index("11:20 + 02_planning/plan.yaml"),
                 output.index("11:20 > implementing"),
             )
 
@@ -809,7 +809,7 @@ class MonitorTests(unittest.TestCase):
             files.state.write_text('{"phase": "planning"}', encoding="utf-8")
             files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
             files.created_files_log.write_text(
-                "2026-03-21 11:20:08  02_planning/plan.md\n",
+                "2026-03-21 11:20:08  02_planning/plan.yaml\n",
                 encoding="utf-8",
             )
 
@@ -826,8 +826,8 @@ class MonitorTests(unittest.TestCase):
 
             # Raw output should contain OSC 8 hyperlink sequences
             self.assertIn("\033]8;;file://", output)
-            # Should contain the absolute path to the file
-            self.assertIn("02_planning/plan.md", output)
+            # Should contain the path to the file
+            self.assertIn("02_planning/plan.yaml", output)
 
     def test_render_phase_log_entries_do_not_contain_osc8_hyperlinks(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -840,7 +840,7 @@ class MonitorTests(unittest.TestCase):
                 "2026-03-21 11:20:05  planning\n", encoding="utf-8"
             )
             files.created_files_log.write_text(
-                "2026-03-21 11:20:08  02_planning/plan.md\n",
+                "2026-03-21 11:20:08  02_planning/plan.yaml\n",
                 encoding="utf-8",
             )
 
@@ -864,7 +864,7 @@ class MonitorTests(unittest.TestCase):
                     phase_line = line
                 # Look for file entry line by checking for the relative path in the line
                 # (accounting for OSC 8 escape sequences that may wrap it)
-                if "02_planning/plan.md" in line and "+ " in line:
+                if "02_planning/plan.yaml" in line and "+ " in line:
                     file_line = line
 
             # Phase events should NOT contain OSC 8
@@ -881,7 +881,7 @@ class MonitorTests(unittest.TestCase):
             files.state.write_text('{"phase": "planning"}', encoding="utf-8")
             files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
             files.created_files_log.write_text(
-                "2026-03-21 11:20:08  02_planning/plan.md\n",
+                "2026-03-21 11:20:08  02_planning/plan.yaml\n",
                 encoding="utf-8",
             )
 
@@ -902,7 +902,7 @@ class MonitorTests(unittest.TestCase):
             self.assertNotIn("\033]8;;", stripped)
             self.assertNotIn("\033\\", stripped)
             # But should still contain the visible path text
-            self.assertIn("02_planning/plan.md", stripped)
+            self.assertIn("02_planning/plan.yaml", stripped)
 
     def test_render_shows_session_name_in_footer(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -1016,7 +1016,7 @@ class MonitorTests(unittest.TestCase):
         expected = {
             "requirements.md",
             "01_product_management/analysis.md",
-            "02_planning/plan.md",
+            "02_planning/plan.yaml",
             "02_planning/tasks.md",
             "03_research/code-*/summary.md",
             "03_research/code-*/detail.md",

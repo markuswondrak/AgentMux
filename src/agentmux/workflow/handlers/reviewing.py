@@ -15,7 +15,6 @@ from agentmux.workflow.event_catalog import (
 )
 from agentmux.workflow.event_router import EventSpec, ToolSpec, WorkflowEvent
 from agentmux.workflow.handoff_artifacts import (
-    _write_approved_preferences,
     load_review_text,
     review_yaml_has_verdict,
 )
@@ -158,13 +157,6 @@ class ReviewingHandler:
         yaml_path = ctx.files.review_dir / "review.yaml"
         data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
         verdict = data.get("verdict", "").lower()
-
-        # Write approved_preferences.json if included in the YAML.
-        _write_approved_preferences(
-            ctx.files.feature_dir,
-            data.get("approved_preferences"),
-            expected_source_role="reviewer",
-        )
 
         review_iteration = int(state.get("review_iteration", 0))
 

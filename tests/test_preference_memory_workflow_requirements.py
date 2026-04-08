@@ -366,11 +366,6 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
 
             self.assertEqual("implementing", next_phase)
             self.assertEqual("plan_written", updates.get("last_event"))
-            self.assertTrue(ctx.files.architect_preference_proposal.is_file())
-            self.assertIn(
-                '"source_role": "planner"',
-                ctx.files.architect_preference_proposal.read_text(encoding="utf-8"),
-            )
             target = (
                 ctx.files.project_dir / ".agentmux" / "prompts" / "agents" / "coder.md"
             )
@@ -379,6 +374,8 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 "- Validate each task before marking done",
                 target.read_text(encoding="utf-8"),
             )
+            # No intermediate JSON file is written for planner preferences.
+            self.assertFalse(ctx.files.architect_preference_proposal.is_file())
 
     def test_approval_received_applies_reviewer_preferences_before_changed_file_scan(
         self,
@@ -457,9 +454,11 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
                 finalize_mock.call_args.kwargs["changed_paths"],
             )
 
-    def test_review_submission_materializes_reviewer_preferences_to_completion_dir(
+    def test_review_submission_does_not_materialize_reviewer_preferences(
         self,
     ) -> None:
+        """Reviewer preferences in review.yaml are applied only by the reviewer agent
+        during the summary step — the reviewing handler no longer materializes them."""
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
             ctx, state_path = _make_ctx(feature_dir)
@@ -495,11 +494,9 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
 
             self.assertEqual("fixing", next_phase)
             self.assertEqual("review_failed", updates.get("last_event"))
-            self.assertTrue(ctx.files.reviewer_preference_proposal.is_file())
-            self.assertIn(
-                '"source_role": "reviewer"',
-                ctx.files.reviewer_preference_proposal.read_text(encoding="utf-8"),
-            )
+            # No intermediate JSON file is materialized — the reviewer agent writes it
+            # directly during the summary step.
+            self.assertFalse(ctx.files.reviewer_preference_proposal.is_file())
 
     def test_approval_received_without_proposal_file_is_prompt_extension_noop(
         self,

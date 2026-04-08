@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from ..shared.models import SESSION_DIR_NAMES, PreferenceProposal
 from .handoff_contracts import validate_submission
 
 _VALID_REVIEW_VERDICTS = {"pass", "fail"}
@@ -34,36 +32,6 @@ def _validate_or_raise(contract_name: str, data: dict[str, Any]) -> None:
         raise ValueError(
             f"Validation failed for '{contract_name}': " + "; ".join(errors)
         )
-
-
-def _write_approved_preferences(
-    feature_dir: Path,
-    proposal_data: dict[str, Any] | None,
-    *,
-    expected_source_role: str,
-) -> None:
-    if proposal_data is None:
-        return
-    proposal = PreferenceProposal.from_dict(proposal_data)
-    if proposal.source_role != expected_source_role:
-        raise ValueError(
-            "approved_preferences.source_role must be "
-            f"'{expected_source_role}' (got '{proposal.source_role}')."
-        )
-
-    if proposal.source_role in {"architect", "planner"}:
-        path = feature_dir / SESSION_DIR_NAMES["planning"] / "approved_preferences.json"
-    elif proposal.source_role == "reviewer":
-        path = (
-            feature_dir / SESSION_DIR_NAMES["completion"] / "approved_preferences.json"
-        )
-    else:  # pragma: no cover - guarded by PreferenceProposal.from_dict
-        raise ValueError(
-            f"Unsupported preference proposal source: {proposal.source_role}"
-        )
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(proposal.to_dict(), indent=2) + "\n", encoding="utf-8")
 
 
 def generate_plan_md(data: dict[str, Any]) -> str:

@@ -49,9 +49,11 @@ Curly braces in project content stay literal; only `[[placeholder:...]]` markers
 
 Preference memory uses session-scoped proposal artifacts so agents never mutate project extensions directly:
 
-- `01_product_management/approved_preferences.json` (product-manager approvals)
-- `02_planning/approved_preferences.json` (architect and planner approvals)
-- `08_completion/approved_preferences.json` (reviewer approvals)
+- `01_product_management/approved_preferences.json` — written by the product-manager agent directly
+- `02_planning/approved_preferences.json` — written by the architect agent directly
+- `08_completion/approved_preferences.json` — written by the reviewer agent during the summary step
+
+Planner approvals are included as an `approved_preferences` field in `02_planning/plan.yaml` and applied directly by the orchestrator — no separate JSON file is written.
 
 Each proposal uses this shape:
 
@@ -64,13 +66,13 @@ Each proposal uses this shape:
 }
 ```
 
-MCP handoff tools can now carry the same structure as optional `approved_preferences` metadata on:
+MCP handoff tools can carry the same structure as optional `approved_preferences` metadata on:
 
 - `submit_architecture`
 - `submit_execution_plan`
 - `submit_review`
 
-When provided, AgentMux materializes that metadata back into the phase-scoped `approved_preferences.json` artifact before the existing preference-application logic runs.
+For `submit_architecture` and `submit_review`, AgentMux materializes the metadata into the phase-scoped `approved_preferences.json` artifact before applying preferences. For `submit_execution_plan` (planner), preferences are applied directly from `plan.yaml` — no intermediate JSON file is created.
 
 Application flow:
 

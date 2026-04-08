@@ -12,7 +12,7 @@ class McpServerSpec:
     env: dict[str, str]
 
 
-DEFAULT_RESEARCH_ROLES = (
+DEFAULT_MCP_ROLES = (
     "architect",
     "product-manager",
     "planner",
@@ -23,10 +23,14 @@ DEFAULT_RESEARCH_ROLES = (
     "reviewer_quality",
     "reviewer_expert",
 )
-DEFAULT_RESEARCH_SERVERS = (
+DEFAULT_MCP_SERVERS = (
     McpServerSpec(
         name="agentmux-research",
-        module="agentmux.integrations.mcp_research_server",
+        module="agentmux.integrations.mcp_server",
         env={},
     ),
 )
+
+# Backward-compat aliases
+DEFAULT_RESEARCH_ROLES = DEFAULT_MCP_ROLES
+DEFAULT_RESEARCH_SERVERS = DEFAULT_MCP_SERVERS

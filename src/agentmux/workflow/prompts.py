@@ -569,9 +569,6 @@ def build_planner_prompt(files: RuntimeFiles, agent: AgentConfig | None = None) 
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "planner_preference_proposal_file": files.relative_path(
-                files.planning_dir / "approved_preferences.json"
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )

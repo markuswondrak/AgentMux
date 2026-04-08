@@ -37,7 +37,7 @@ When the review passes, the workflow kills all `coder` panes and sends the revie
    - In manual confirmation mode, reviewer-provided `commit_message` in `approval.json` takes precedence.
    - In auto-approval mode, the generated approval artifact usually omits `commit_message`, so completion uses the same deterministic draft fallback path.
 
-9. **Branch + PR creation (best effort)** — If startup state indicates GitHub is available (`gh_available: true`), `CompletionService` creates a branch (`<github.branch_prefix><feature-slug>`), pushes it, and runs `gh pr create` against `github.base_branch`. PRs default to draft (`github.draft: true`). The PR body is assembled from `requirements.md`, `02_planning/plan.md`, and `06_review/review.md`, and includes `Closes #<N>` when the run started with `--issue`.
+9. **Branch + PR creation (best effort)** — If startup state indicates GitHub is available (`gh_available: true`), `CompletionService` creates a branch (`<github.branch_prefix><feature-slug>`), pushes it, and runs `gh pr create` against `github.base_branch`. PRs default to draft (`github.draft: true`). The PR body is assembled from `requirements.md`, `02_planning/plan.yaml` (`plan_overview` field, falling back to `plan.md`), and `06_review/review.md`, and includes `Closes #<N>` when the run started with `--issue`.
 
 10. **Completion summary artifact is written before cleanup** — On successful completion (when a commit hash exists), completion writes `<project_dir>/.agentmux/.last_completion.json` before removing the feature directory. The pipeline reads this artifact after tmux exits to render the final goodbye screen in the original terminal.
     - JSON schema:

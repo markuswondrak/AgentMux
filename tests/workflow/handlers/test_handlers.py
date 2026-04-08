@@ -359,8 +359,9 @@ class TestPlanningHandler:
         with (
             patch("agentmux.workflow.handlers.planning.load_execution_plan"),
             patch("agentmux.workflow.handlers.planning.load_plan_meta") as mock_meta,
+            patch("agentmux.workflow.handlers.planning.apply_role_preferences"),
             patch(
-                "agentmux.workflow.handlers.planning.apply_role_preferences"
+                "agentmux.workflow.handlers.planning.apply_preference_proposal"
             ) as mock_apply,
         ):
             mock_meta.return_value = {"needs_design": False}
@@ -369,7 +370,7 @@ class TestPlanningHandler:
 
             assert next_phase == "implementing"
             mock_ctx.runtime.kill_primary("planner")
-            mock_apply.assert_called_once_with(mock_ctx, "planner")
+            mock_apply.assert_not_called()
 
     def test_handle_plan_written_needs_design(
         self, mock_ctx: MagicMock, empty_state: dict

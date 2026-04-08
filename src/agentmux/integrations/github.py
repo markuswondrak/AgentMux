@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import yaml
+
 from ..shared.models import GitHubConfig
 
 
@@ -229,13 +231,23 @@ def _extract_review_verdict(review_text: str) -> str:
     return review_text.strip().splitlines()[0] if review_text.strip() else ""
 
 
+def _read_plan_overview(feature_dir: Path) -> str:
+    """Read plan overview from plan.yaml (source of truth), falling back to plan.md."""
+    plan_yaml_path = feature_dir / "02_planning" / "plan.yaml"
+    if plan_yaml_path.exists():
+        try:
+            data = yaml.safe_load(plan_yaml_path.read_text(encoding="utf-8")) or {}
+            overview = data.get("plan_overview", "")
+            if overview:
+                return str(overview)
+        except Exception:
+            pass
+    return _read_text(feature_dir / "02_planning" / "plan.md")
+
+
 def assemble_pr_body(feature_dir: Path, issue_number: str | None) -> str:
     requirements_text = _read_text(feature_dir / "requirements.md")
-    plan_text = _read_first_available(
-        [
-            feature_dir / "02_planning" / "plan.md",
-        ]
-    )
+    plan_text = _read_plan_overview(feature_dir)
     review_text = _read_first_available(
         [
             feature_dir / "06_review" / "review.md",

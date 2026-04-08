@@ -26,6 +26,8 @@ from .configurators import (
 
 # Models
 from .models import (
+    DEFAULT_MCP_ROLES,
+    DEFAULT_MCP_SERVERS,
     DEFAULT_RESEARCH_ROLES,
     DEFAULT_RESEARCH_SERVERS,
     McpServerSpec,
@@ -39,6 +41,8 @@ from .runtime import cleanup_mcp, create_runtime_mcp_config, setup_mcp
 
 __all__ = [
     # Models
+    "DEFAULT_MCP_ROLES",
+    "DEFAULT_MCP_SERVERS",
     "DEFAULT_RESEARCH_ROLES",
     "DEFAULT_RESEARCH_SERVERS",
     "McpServerSpec",

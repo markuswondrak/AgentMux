@@ -39,7 +39,7 @@ subplans:
       - Second task
     isolation_rationale: |  # optional
       Why this sub-plan is safe for parallel execution.
-approved_preferences:  # optional — same shape as approved_preferences.json
+approved_preferences:  # optional — applied directly from this field; no separate JSON file written
   source_role: planner
   approved:
     - target_role: coder

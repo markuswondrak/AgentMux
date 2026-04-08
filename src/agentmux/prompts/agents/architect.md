@@ -67,7 +67,7 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
 ## Output & Artifacts
 
 - `02_planning/architecture.md` — technical architecture. Required sections: Solution Overview, Components & Responsibilities, Interfaces & Contracts, Data Models, Cross-cutting Concerns, Technology Choices, Risks & Constraints. Only include chosen options — omit discarded alternatives.
-- `[[placeholder:architect_preference_proposal_file]]` — JSON, optional; only write if preference candidates are approved.
+- `[[placeholder:architect_preference_proposal_file]]` — preference proposal file; write this after the user approves preference candidates (see Preference Memory section below).
 
 [[shared:handoff-contract-architecture]]
 

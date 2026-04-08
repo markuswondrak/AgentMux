@@ -1,6 +1,6 @@
 # Handoff Contracts
 
-> Related source files: `agentmux/workflow/handoff_contracts.py`, `agentmux/workflow/handoff_artifacts.py`, `agentmux/integrations/mcp_research_server.py`, `agentmux/prompts/shared/handoff-contract-architecture.md`, `agentmux/prompts/shared/handoff-contract-plan.md`, `agentmux/prompts/shared/handoff-contract-review.md`
+> Related source files: `agentmux/workflow/handoff_contracts.py`, `agentmux/workflow/handoff_artifacts.py`, `agentmux/integrations/mcp_server.py`, `agentmux/prompts/shared/handoff-contract-architecture.md`, `agentmux/prompts/shared/handoff-contract-plan.md`, `agentmux/prompts/shared/handoff-contract-review.md`
 
 Handoff contracts define the structured interface between workflow phases. Each contract specifies the fields an agent must produce, validates submissions, and drives the orchestrator to materialize derived artifacts.
 
@@ -37,9 +37,8 @@ Completion semantics are phase-specific:
   - `02_planning/tasks_N.md` — per-subplan task checklist (one per subplan index)
   - `02_planning/execution_plan.yaml` — version 1 scheduling file for backward compatibility with `load_execution_plan()`
   - `02_planning/plan.md` — human-readable plan overview from `plan_overview`
-  - `02_planning/approved_preferences.json` — if `approved_preferences` is present in the YAML
 - **Required fields:** `version` (must be `2`), `plan_overview`, `groups`, `subplans`, `review_strategy`, `needs_design`, `needs_docs`, `doc_files`
-- **Optional fields:** `approved_preferences` (same shape as `approved_preferences.json`)
+- **Optional fields:** `approved_preferences` — applied directly from `plan.yaml`; no separate `approved_preferences.json` is written
 
 `plan.yaml` schema (version 2):
 ```yaml
@@ -88,7 +87,7 @@ Groups reference sub-plans by `index`. Indices must start at 1 and be contiguous
 - **Companion file:** `06_review/review.md`
 - **Required fields:** `verdict` (`"pass"` or `"fail"`), `summary`
 - **Conditional fields:** `findings` (required on `fail` — list of `{location, issue, severity, recommendation}`), `commit_message` (optional on `pass`)
-- **Optional fields:** `approved_preferences` (same shape as `approved_preferences.json`; materialized to `08_completion/approved_preferences.json`)
+- **Optional fields:** `approved_preferences` (written by the reviewer during the summary step to `08_completion/approved_preferences.json`)
 
 ## Validation
 

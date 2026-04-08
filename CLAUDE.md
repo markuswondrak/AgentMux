@@ -167,7 +167,7 @@ src/agentmux/terminal_ui/layout.py      — shared terminal layout constants
 
 src/agentmux/integrations/github.py     — GitHub issue bootstrap and PR creation
 src/agentmux/integrations/mcp.py        — provider-native MCP setup plus runtime env wiring
-src/agentmux/integrations/mcp_research_server.py — shared MCP research server (research dispatch + structured submission tools)
+src/agentmux/integrations/mcp_server.py        — shared MCP server (research dispatch + structured submission tools)
 src/agentmux/integrations/completion.py — completion-time commit / PR / cleanup side effects
 src/agentmux/integrations/compression.py — headroom proxy lifecycle and agent env injection
 

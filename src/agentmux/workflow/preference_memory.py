@@ -30,12 +30,12 @@ def format_preference_bullet(text: str) -> str:
 def proposal_artifact_for_source(files: RuntimeFiles, source_role: str) -> Path:
     if source_role == "product-manager":
         return files.pm_preference_proposal
-    if source_role in ("architect", "planner"):
+    if source_role == "architect":
         return files.architect_preference_proposal
     if source_role == "reviewer":
         return files.reviewer_preference_proposal
     raise ValueError(
-        "source_role must be one of: product-manager, architect, planner, reviewer."
+        "source_role must be one of: product-manager, architect, reviewer."
     )
 
 

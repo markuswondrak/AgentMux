@@ -317,7 +317,7 @@ At pipeline startup, a runtime MCP config file is generated at `.agentmux/mcp_se
     "agentmux-research": {
       "type": "stdio",
       "command": "/path/to/python",
-      "args": ["-m", "agentmux.integrations.mcp_research_server"],
+      "args": ["-m", "agentmux.integrations.mcp_server"],
       "env": {
         "PYTHONPATH": "/absolute/path/to/project"
       }
