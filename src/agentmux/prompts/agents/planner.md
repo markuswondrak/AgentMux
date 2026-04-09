@@ -48,7 +48,7 @@ See Output & Artifacts below for file specs. Write all files to `02_planning/` a
 
 ## Output & Artifacts
 
-- **`02_planning/plan.yaml`** — unified machine-readable plan containing all sub-plans and execution metadata (version 2 schema; the orchestrator materializes derived files automatically).
+- **`02_planning/plan.yaml`** — unified machine-readable plan containing all sub-plans and execution metadata.
 
 [[shared:handoff-contract-plan]]
 
