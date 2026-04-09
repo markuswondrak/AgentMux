@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ...shared.models import AgentConfig, ProjectPaths
 from .configurators import _python_command
-from .models import McpServerSpec
+from .models import ROLE_TOOLS, McpServerSpec
 
 
 def _compose_pythonpath(project_dir: Path, current: str | None) -> str:
@@ -37,46 +37,74 @@ def _runtime_env(
     return env
 
 
-def create_runtime_mcp_config(servers: list[McpServerSpec], project_dir: Path) -> Path:
-    """Generate .agentmux/mcp_servers.json with runtime MCP server definitions.
+def _role_servers(servers: list[McpServerSpec], role: str) -> list[McpServerSpec]:
+    """Return server specs filtered to only the tools the given role needs.
 
-    This creates a runtime config file containing absolute paths specific to the
-    current environment. The file is written only if content differs from existing.
+    Adds AGENTMUX_ALLOWED_TOOLS to each server's env so the spawned MCP
+    process registers only the relevant subset of tools.
+    """
+    allowed = ROLE_TOOLS.get(role)
+    if allowed is None:
+        return servers
+    allowed_csv = ",".join(sorted(allowed))
+    return [
+        McpServerSpec(
+            name=s.name,
+            module=s.module,
+            env={**s.env, "AGENTMUX_ALLOWED_TOOLS": allowed_csv},
+        )
+        for s in servers
+    ]
+
+
+def create_runtime_mcp_config(
+    servers: list[McpServerSpec],
+    project_dir: Path,
+    role: str | None = None,
+) -> Path:
+    """Generate a runtime MCP server config JSON under .agentmux/.
+
+    When *role* is given the file is named ``mcp_servers_<role>.json`` so that
+    each agent gets its own config with a role-specific ``AGENTMUX_ALLOWED_TOOLS``
+    env var.  Without *role* the shared ``mcp_servers.json`` is written instead.
+
+    The file is only rewritten when its content would change.
 
     Args:
-        servers: List of MCP server specifications to include
-        project_dir: Project root directory where .agentmux/ will be created
+        servers: MCP server specifications (may carry role-specific env).
+        project_dir: Project root directory where .agentmux/ lives.
+        role: Optional role name used to derive the config file name.
 
     Returns:
-        Absolute path to the generated config file
+        Absolute path to the generated config file.
     """
     paths = ProjectPaths.from_project(project_dir)
     paths.root.mkdir(parents=True, exist_ok=True)
-    config_path = paths.mcp_servers
+    filename = f"mcp_servers_{role}.json" if role else "mcp_servers.json"
+    config_path = paths.root / filename
 
-    # Build the config structure with env.PYTHONPATH
     mcp_servers: dict[str, object] = {}
     for server in servers:
+        server_env: dict[str, str] = {"PYTHONPATH": str(project_dir)}
+        server_env.update(server.env)
         mcp_servers[server.name] = {
             "type": "stdio",
             "command": _python_command(),
             "args": ["-m", server.module],
-            "env": {"PYTHONPATH": str(project_dir)},
+            "env": server_env,
         }
 
     config = {"mcpServers": mcp_servers}
 
-    # Compare with existing content to avoid unnecessary writes
+    # Skip write when content is unchanged (avoid spurious mtime bumps)
     if config_path.exists():
         try:
-            existing_content = config_path.read_text(encoding="utf-8")
-            existing_config = json.loads(existing_content)
+            existing_config = json.loads(config_path.read_text(encoding="utf-8"))
             if existing_config == config:
                 return config_path
         except (OSError, json.JSONDecodeError):
-            pass  # File exists but is invalid, proceed to overwrite
+            pass
 
-    # Write the config file
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     return config_path
 
@@ -88,13 +116,15 @@ def setup_mcp(
     feature_dir: Path,
     project_dir: Path,
 ) -> dict[str, AgentConfig]:
-    """Inject runtime env for MCP-aware roles without mutating
-    user auth/config state."""
+    """Inject runtime env for MCP-aware roles without mutating user auth/config state.
 
+    Each role receives only the MCP tools it actually needs (see ROLE_TOOLS).
+    For Claude agents a per-role ``mcp_servers_<role>.json`` config is generated
+    so the MCP server process is started with the correct AGENTMUX_ALLOWED_TOOLS.
+    For all other CLI providers AGENTMUX_ALLOWED_TOOLS is injected into the agent
+    process env, where it is inherited by any MCP server sub-process.
+    """
     _ = feature_dir
-
-    # Create runtime MCP config file
-    runtime_config_path = create_runtime_mcp_config(servers, project_dir)
 
     updated_agents = dict(agents)
     for role in roles:
@@ -102,15 +132,20 @@ def setup_mcp(
         if agent is None:
             continue
 
-        # Inject runtime env vars
+        role_specific_servers = _role_servers(servers, role)
+
+        # Inject runtime env vars (includes AGENTMUX_ALLOWED_TOOLS for non-Claude)
         env = dict(agent.env or {})
-        for server in servers:
+        for server in role_specific_servers:
             env.update(_runtime_env(server, project_dir, env))
 
-        # For Claude agents, append --mcp-config flag
+        # For Claude agents, generate a per-role config and pass it via --mcp-config
         args = list(agent.args or [])
         if agent.cli == "claude" and "--mcp-config" not in args:
-            args.extend(["--mcp-config", str(runtime_config_path)])
+            role_config_path = create_runtime_mcp_config(
+                role_specific_servers, project_dir, role=role
+            )
+            args.extend(["--mcp-config", str(role_config_path)])
 
         updated_agents[role] = replace(agent, env=env, args=args)
     return updated_agents

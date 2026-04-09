@@ -346,12 +346,14 @@ class McpConfigRequirementsTests(unittest.TestCase):
             config_path_arch = updated["architect"].args[
                 updated["architect"].args.index("--mcp-config") + 1
             ]
-            self.assertTrue(Path(config_path_arch).name == "mcp_servers.json")
+            self.assertEqual("mcp_servers_architect.json", Path(config_path_arch).name)
             self.assertIn("--mcp-config", updated["product-manager"].args)
             config_path_pm = updated["product-manager"].args[
                 updated["product-manager"].args.index("--mcp-config") + 1
             ]
-            self.assertTrue(Path(config_path_pm).name == "mcp_servers.json")
+            self.assertEqual(
+                "mcp_servers_product-manager.json", Path(config_path_pm).name
+            )
 
     def test_setup_mcp_skips_mcp_config_for_non_claude_agents(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -595,6 +597,115 @@ class OpenCodeAgentConfiguratorTests(unittest.TestCase):
             data = json.loads(nested_config_path.read_text(encoding="utf-8"))
             self.assertIn("agent", data)
             self.assertIn("agentmux-coder", data["agent"])
+
+
+class RoleToolFilteringTests(unittest.TestCase):
+    """Tests for per-role MCP tool filtering via AGENTMUX_ALLOWED_TOOLS."""
+
+    def _server(self) -> McpServerSpec:
+        return McpServerSpec(
+            name="agentmux-research",
+            module="agentmux.integrations.mcp_server",
+            env={},
+        )
+
+    def test_per_role_config_contains_allowed_tools_env(self) -> None:
+        """Per-role mcp_servers_<role>.json must carry AGENTMUX_ALLOWED_TOOLS in env."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            agents = {
+                "architect": AgentConfig(
+                    role="architect", cli="claude", model="opus", args=[]
+                ),
+            }
+
+            updated = setup_mcp(
+                agents,
+                [self._server()],
+                ["architect"],
+                project_dir / "feature",
+                project_dir,
+            )
+
+            config_path_str = updated["architect"].args[
+                updated["architect"].args.index("--mcp-config") + 1
+            ]
+            config = json.loads(Path(config_path_str).read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux-research"]["env"]
+            self.assertIn("AGENTMUX_ALLOWED_TOOLS", server_env)
+            allowed = set(server_env["AGENTMUX_ALLOWED_TOOLS"].split(","))
+            self.assertIn("submit_architecture", allowed)
+            self.assertIn("research_dispatch_code", allowed)
+            self.assertIn("research_dispatch_web", allowed)
+            # Tools for other roles must NOT appear
+            self.assertNotIn("submit_plan", allowed)
+            self.assertNotIn("submit_done", allowed)
+
+    def test_different_roles_get_different_config_files(self) -> None:
+        """Each Claude role gets its own mcp_servers_<role>.json with distinct tools."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            agents = {
+                "architect": AgentConfig(
+                    role="architect", cli="claude", model="opus", args=[]
+                ),
+                "coder": AgentConfig(
+                    role="coder", cli="claude", model="sonnet", args=[]
+                ),
+            }
+
+            updated = setup_mcp(
+                agents,
+                [self._server()],
+                ["architect", "coder"],
+                project_dir / "feature",
+                project_dir,
+            )
+
+            arch_path = updated["architect"].args[
+                updated["architect"].args.index("--mcp-config") + 1
+            ]
+            coder_path = updated["coder"].args[
+                updated["coder"].args.index("--mcp-config") + 1
+            ]
+            self.assertEqual("mcp_servers_architect.json", Path(arch_path).name)
+            self.assertEqual("mcp_servers_coder.json", Path(coder_path).name)
+            self.assertNotEqual(arch_path, coder_path)
+
+            arch_env = json.loads(Path(arch_path).read_text())["mcpServers"][
+                "agentmux-research"
+            ]["env"]["AGENTMUX_ALLOWED_TOOLS"]
+            coder_env = json.loads(Path(coder_path).read_text())["mcpServers"][
+                "agentmux-research"
+            ]["env"]["AGENTMUX_ALLOWED_TOOLS"]
+            self.assertIn("submit_architecture", arch_env)
+            self.assertNotIn("submit_architecture", coder_env)
+            self.assertIn("submit_done", coder_env)
+            self.assertNotIn("submit_done", arch_env)
+
+    def test_non_claude_agents_get_allowed_tools_in_process_env(self) -> None:
+        """Non-Claude agents receive AGENTMUX_ALLOWED_TOOLS in their process env."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            agents = {
+                "coder": AgentConfig(
+                    role="coder", cli="codex", model="gpt-5.3-codex", args=[]
+                ),
+            }
+
+            updated = setup_mcp(
+                agents,
+                [self._server()],
+                ["coder"],
+                project_dir / "feature",
+                project_dir,
+            )
+
+            self.assertIn("AGENTMUX_ALLOWED_TOOLS", updated["coder"].env)
+            self.assertEqual(
+                "submit_done", updated["coder"].env["AGENTMUX_ALLOWED_TOOLS"]
+            )
+            self.assertNotIn("--mcp-config", updated["coder"].args)
 
 
 if __name__ == "__main__":

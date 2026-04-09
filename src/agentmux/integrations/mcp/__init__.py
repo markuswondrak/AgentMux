@@ -30,6 +30,7 @@ from .models import (
     DEFAULT_MCP_SERVERS,
     DEFAULT_RESEARCH_ROLES,
     DEFAULT_RESEARCH_SERVERS,
+    ROLE_TOOLS,
     McpServerSpec,
 )
 
@@ -45,6 +46,7 @@ __all__ = [
     "DEFAULT_MCP_SERVERS",
     "DEFAULT_RESEARCH_ROLES",
     "DEFAULT_RESEARCH_SERVERS",
+    "ROLE_TOOLS",
     "McpServerSpec",
     # Configurators
     "ClaudeConfigurator",

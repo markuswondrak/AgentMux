@@ -20,7 +20,27 @@ TOPIC_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 mcp = FastMCP("agentmux-research") if FastMCP is not None else None
 
 
-def _tool():
+def _get_allowed_tools() -> frozenset[str] | None:
+    """Return the set of allowed tool names, or None if all tools are allowed.
+
+    Reads AGENTMUX_ALLOWED_TOOLS from the environment (comma-separated list).
+    When the var is absent or empty, all tools are registered (dev/fallback mode).
+    """
+    raw = os.environ.get("AGENTMUX_ALLOWED_TOOLS", "").strip()
+    if not raw:
+        return None
+    return frozenset(t.strip() for t in raw.split(",") if t.strip())
+
+
+def _tool(name: str):
+    """Return an MCP tool decorator, or a no-op if not in the allowed set."""
+    allowed = _get_allowed_tools()
+    if allowed is not None and name not in allowed:
+
+        def no_op(func):
+            return func
+
+        return no_op
     if mcp is None:
 
         def decorate(func):
@@ -93,7 +113,7 @@ def _validate_or_raise(contract_name: str, data: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-@_tool()
+@_tool("research_dispatch_code")
 def research_dispatch_code(
     topic: str,
     context: str,
@@ -116,7 +136,7 @@ def research_dispatch_code(
     return f"Code research on '{normalized_topic}' dispatched."
 
 
-@_tool()
+@_tool("research_dispatch_web")
 def research_dispatch_web(
     topic: str,
     context: str,
@@ -164,7 +184,7 @@ def _read_yaml_for_signal(yaml_path: Path, contract_name: str) -> dict[str, Any]
     return data
 
 
-@_tool()
+@_tool("submit_architecture")
 def submit_architecture(
     feature_dir: str | None = None,
 ) -> str:
@@ -186,7 +206,7 @@ def submit_architecture(
     return "Architecture submitted."
 
 
-@_tool()
+@_tool("submit_plan")
 def submit_plan(
     feature_dir: str | None = None,
 ) -> str:
@@ -203,7 +223,7 @@ def submit_plan(
     return "Plan submitted."
 
 
-@_tool()
+@_tool("submit_review")
 def submit_review(
     feature_dir: str | None = None,
 ) -> str:
@@ -226,7 +246,7 @@ def submit_review(
 # ---------------------------------------------------------------------------
 
 
-@_tool()
+@_tool("submit_done")
 def submit_done(
     subplan_index: int,
     feature_dir: str | None = None,
@@ -240,7 +260,7 @@ def submit_done(
     return f"Sub-plan {subplan_index} marked done."
 
 
-@_tool()
+@_tool("submit_research_done")
 def submit_research_done(
     topic: str,
     type: str,
@@ -258,7 +278,7 @@ def submit_research_done(
     return f"Research on '{normalized}' ({type}) marked done."
 
 
-@_tool()
+@_tool("submit_pm_done")
 def submit_pm_done(
     feature_dir: str | None = None,
 ) -> str:

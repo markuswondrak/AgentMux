@@ -367,8 +367,19 @@ class McpPipelineRequirementsTests(unittest.TestCase):
         )
 
         role_args = config["providers"]["claude"]["role_args"]
-        self.assertIn("mcp__agentmux-research__*", role_args["architect"][-1])
-        self.assertIn("mcp__agentmux-research__*", role_args["product-manager"][-1])
+        # Each role must list only the specific MCP tools it actually needs —
+        # no wildcard is allowed; this is the per-role filtering contract.
+        arch_tools = role_args["architect"][-1]
+        self.assertIn("mcp__agentmux-research__research_dispatch_code", arch_tools)
+        self.assertIn("mcp__agentmux-research__research_dispatch_web", arch_tools)
+        self.assertIn("mcp__agentmux-research__submit_architecture", arch_tools)
+        self.assertNotIn("mcp__agentmux-research__*", arch_tools)
+
+        pm_tools = role_args["product-manager"][-1]
+        self.assertIn("mcp__agentmux-research__research_dispatch_code", pm_tools)
+        self.assertIn("mcp__agentmux-research__research_dispatch_web", pm_tools)
+        self.assertIn("mcp__agentmux-research__submit_pm_done", pm_tools)
+        self.assertNotIn("mcp__agentmux-research__*", pm_tools)
 
     def test_architect_and_product_manager_prompts_reference_mcp_tools(
         self,
