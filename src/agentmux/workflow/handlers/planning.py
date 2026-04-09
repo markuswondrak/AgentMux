@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from agentmux.shared.models import PreferenceProposal
 from agentmux.workflow.event_catalog import EVENT_CHANGES_REQUESTED, EVENT_PLAN_WRITTEN
 from agentmux.workflow.event_router import (
     EventSpec,
@@ -27,14 +26,12 @@ from agentmux.workflow.handoff_artifacts import (
     generate_tasks_md,
 )
 from agentmux.workflow.phase_helpers import (
-    apply_role_preferences,
     dispatch_research_task,
     load_plan_meta,
     notify_research_complete,
     research_role_from_payload,
     send_to_role,
 )
-from agentmux.workflow.preference_memory import apply_preference_proposal
 from agentmux.workflow.prompts import (
     build_change_prompt,
     build_planner_prompt,
@@ -154,16 +151,6 @@ class PlanningHandler:
         if data.get("plan_overview"):
             plan_md_path.parent.mkdir(parents=True, exist_ok=True)
             plan_md_path.write_text(generate_plan_md(data), encoding="utf-8")
-
-        # Apply architect preferences from their JSON file (belt-and-suspenders: also
-        # applied at architecture_written, but re-applied here for resume robustness).
-        apply_role_preferences(ctx, "architect")
-
-        # Apply planner preferences directly from plan.yaml (no intermediate JSON file).
-        pref_data = data.get("approved_preferences")
-        if pref_data:
-            proposal = PreferenceProposal.from_dict(pref_data)
-            apply_preference_proposal(ctx.files.project_dir, proposal)
 
         load_execution_plan(ctx.files.planning_dir)
         meta = load_plan_meta(ctx.files.planning_dir)

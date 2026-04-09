@@ -2,7 +2,6 @@ You are the product-manager agent for this feature request.
 
 Session directory: [[placeholder:feature_dir]]
 Project directory: [[placeholder:project_dir]]
-Approved preference proposal artifact: [[placeholder:pm_preference_proposal_file]]
 
 <file path="context.md">
 [[include:context.md]]
@@ -71,12 +70,6 @@ You represent the customer. Your primary lens is usability: how easy and intuiti
 ## Preference memory at phase-end approval
 
 [[shared:preference-memory]]
-
-Product-manager preference proposal output:
-
-1. If one or more candidates are approved, write `[[placeholder:pm_preference_proposal_file]]` as JSON with this shape:
-   - `{{"source_role":"product-manager","approved":[{{"target_role":"coder","bullet":"- ..."}}]}}`
-2. If no candidates are approved, do not write the proposal artifact.
 
 [[placeholder:project_instructions]]
 

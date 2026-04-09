@@ -45,40 +45,27 @@ Curly braces in project content stay literal; only `[[placeholder:...]]` markers
 
 `agentmux/prompts/context.md` is pipeline-controlled and is not project-extendable.
 
-## Preference memory artifacts
+## Preference memory
 
-Preference memory uses session-scoped proposal artifacts so agents never mutate project extensions directly:
+Preference memory lets agents carry approved style/quality preferences forward to later roles. Preferences are written directly to `.agentmux/prompts/agents/<role>.md` under a `## Approved Preferences` section — no intermediate JSON artifacts.
 
-- `01_product_management/approved_preferences.json` — written by the product-manager agent directly
-- `02_planning/approved_preferences.json` — written by the architect agent directly
-- `08_completion/approved_preferences.json` — written by the reviewer agent during the summary step
+Agents pass approved preferences as an optional `preferences` parameter on the relevant submit tool call:
 
-Planner approvals are included as an `approved_preferences` field in `02_planning/plan.yaml` and applied directly by the orchestrator.
-
-Each proposal uses this shape:
-
-```json
-{
-  "source_role": "product-manager|architect|planner|reviewer",
-  "approved": [
-    {"target_role": "coder", "bullet": "- ..."}
-  ]
-}
+```python
+submit_review(
+    preferences=[
+        {"target_role": "coder", "bullet": "- Keep regression tests"}
+    ]
+)
 ```
 
-MCP handoff tools can carry the same structure as optional `approved_preferences` metadata on:
-
-- `submit_architecture`
-- `submit_execution_plan`
-- `submit_review`
-
-For `submit_architecture` and `submit_review`, AgentMux materializes the metadata into the phase-scoped `approved_preferences.json` artifact before applying preferences. For `submit_execution_plan` (planner), preferences are applied directly from `plan.yaml`.
+The `preferences` parameter is supported on `submit_architecture`, `submit_pm_done`, `submit_plan`, and `submit_review`. The MCP server calls `apply_preference_entries(project_dir, preferences)` which appends bullets to `.agentmux/prompts/agents/<role>.md` (creating the file if absent) under `## Approved Preferences`. Deduplication is applied on a normalized casefold basis across all bullet lines in the file.
 
 Application flow:
-
-- Agents write proposal artifacts only after explicit user approval.
-- The orchestrator applies proposals during phase transitions (`pm_completed`, `plan_written`, `approval_received`).
-- Applied preferences are appended to `.agentmux/prompts/agents/<role>.md`.
+- Agents collect preference candidates during their work phase.
+- Candidates are proposed to the user via the approval dialog (`[[shared:preference-memory]]` fragment).
+- Approved entries are passed as `preferences=[...]` in the existing submit tool call.
+- `apply_preference_entries` writes bullets immediately to project prompt files.
 - Prompt builds are lazy, so newly persisted preferences are visible in subsequent prompt renders in later phases.
 
 Deduplication rules (high level):

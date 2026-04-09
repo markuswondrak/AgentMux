@@ -60,15 +60,6 @@ def mock_ctx(tmp_path: Path) -> MagicMock:
     ctx.files.requirements = tmp_path / "requirements.md"
     ctx.files.context = tmp_path / "context.md"
     ctx.files.architecture = tmp_path / "02_planning" / "architecture.md"
-    ctx.files.pm_preference_proposal = (
-        tmp_path / "01_product_management" / "preference_proposal.json"
-    )
-    ctx.files.architect_preference_proposal = (
-        tmp_path / "02_planning" / "preference_proposal.json"
-    )
-    ctx.files.reviewer_preference_proposal = (
-        tmp_path / "06_review" / "preference_proposal.json"
-    )
     ctx.files.project_dir = tmp_path.parent
     ctx.files.relative_path = lambda p: str(p.relative_to(tmp_path))
     ctx.files.state = tmp_path / "state.json"
@@ -129,15 +120,11 @@ class TestProductManagementHandler:
         handler = ProductManagementHandler()
         event = WorkflowEvent(kind="pm_done", payload={"payload": {}})
 
-        with patch(
-            "agentmux.workflow.handlers.product_management.apply_role_preferences"
-        ) as mock_apply:
-            updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
-            mock_ctx.runtime.kill_primary.assert_called_once_with("product-manager")
-            mock_apply.assert_called_once_with(mock_ctx, "product-manager")
-            assert updates == {"last_event": EVENT_PM_COMPLETED}
-            assert next_phase == "architecting"
+        mock_ctx.runtime.kill_primary.assert_called_once_with("product-manager")
+        assert updates == {"last_event": EVENT_PM_COMPLETED}
+        assert next_phase == "architecting"
 
     def test_handle_code_research_request(
         self, mock_ctx: MagicMock, empty_state: dict
@@ -359,10 +346,6 @@ class TestPlanningHandler:
         with (
             patch("agentmux.workflow.handlers.planning.load_execution_plan"),
             patch("agentmux.workflow.handlers.planning.load_plan_meta") as mock_meta,
-            patch("agentmux.workflow.handlers.planning.apply_role_preferences"),
-            patch(
-                "agentmux.workflow.handlers.planning.apply_preference_proposal"
-            ) as mock_apply,
         ):
             mock_meta.return_value = {"needs_design": False}
 
@@ -370,7 +353,6 @@ class TestPlanningHandler:
 
             assert next_phase == "implementing"
             mock_ctx.runtime.kill_primary("planner")
-            mock_apply.assert_not_called()
 
     def test_handle_plan_written_needs_design(
         self, mock_ctx: MagicMock, empty_state: dict
@@ -418,7 +400,6 @@ class TestPlanningHandler:
         with (
             patch("agentmux.workflow.handlers.planning.load_execution_plan"),
             patch("agentmux.workflow.handlers.planning.load_plan_meta") as mock_meta,
-            patch("agentmux.workflow.handlers.planning.apply_role_preferences"),
         ):
             mock_meta.return_value = {"needs_design": True}
 
@@ -470,7 +451,6 @@ class TestPlanningHandler:
         with (
             patch("agentmux.workflow.handlers.planning.load_execution_plan"),
             patch("agentmux.workflow.handlers.planning.load_plan_meta") as mock_meta,
-            patch("agentmux.workflow.handlers.planning.apply_role_preferences"),
         ):
             mock_meta.return_value = {}
 
@@ -1080,9 +1060,6 @@ class TestCompletingHandler:
             patch(
                 "agentmux.workflow.handlers.completing._parse_changed_paths"
             ) as mock_parse,
-            patch(
-                "agentmux.workflow.handlers.completing.apply_role_preferences"
-            ) as mock_apply,
         ):
             mock_instance = MagicMock()
             mock_instance.resolve_commit_message.return_value = "feat: test commit"
@@ -1099,7 +1076,6 @@ class TestCompletingHandler:
 
             assert updates == {"__exit__": 0, "cleanup_feature_dir": False}
             assert next_phase is None
-            mock_apply.assert_called_once_with(mock_ctx, "reviewer")
 
     def test_handle_changes_requested(
         self, mock_ctx: MagicMock, empty_state: dict
@@ -1274,27 +1250,3 @@ class TestPhaseHelpers:
         assert next_phase is None
         mock_ctx.runtime.finish_task.assert_called_once_with("code-researcher", "auth")
         mock_ctx.runtime.notify.assert_called_once()
-
-    def test_apply_role_preferences_calls_helpers(self, mock_ctx: MagicMock) -> None:
-        """Test that apply_role_preferences calls the correct helpers."""
-        from agentmux.workflow.phase_helpers import apply_role_preferences
-
-        with (
-            patch(
-                "agentmux.workflow.preference_memory.proposal_artifact_for_source"
-            ) as mock_proposal,
-            patch(
-                "agentmux.workflow.preference_memory.load_preference_proposal"
-            ) as mock_load,
-            patch(
-                "agentmux.workflow.preference_memory.apply_preference_proposal"
-            ) as mock_apply,
-        ):
-            mock_proposal.return_value = mock_ctx.files.pm_preference_proposal
-            mock_load.return_value = None  # No proposal to apply
-
-            apply_role_preferences(mock_ctx, "product-manager")
-
-            mock_proposal.assert_called_once_with(mock_ctx.files, "product-manager")
-            mock_load.assert_called_once_with(mock_ctx.files.pm_preference_proposal)
-            mock_apply.assert_not_called()  # No proposal loaded, so no apply

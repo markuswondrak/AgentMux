@@ -32,7 +32,6 @@ Completion semantics are phase-specific:
 - **MCP tool:** `submit_plan`
 - **Artifacts:** see [phases/planning.md § Planning](phases/planning.md#planning)
 - **Required fields:** `version` (must be `2`), `plan_overview`, `groups`, `subplans`, `review_strategy`, `needs_design`, `needs_docs`, `doc_files`
-- **Optional fields:** `approved_preferences` — applied directly from `plan.yaml`; no separate `approved_preferences.json` is written
 
 `plan.yaml` schema (version 2):
 ```yaml
@@ -65,11 +64,6 @@ subplans:
       - First task
     isolation_rationale: |   # optional
       Why safe for parallel execution.
-approved_preferences:         # optional
-  source_role: planner
-  approved:
-    - target_role: coder
-      bullet: "- Validate each task before done"
 ```
 
 Groups reference sub-plans by `index`. Indices must start at 1 and be contiguous (1, 2, 3, …). The orchestrator converts `{index: N, name: "..."}` → `{file: plan_N.md, name: "..."}` when materializing `execution_plan.yaml`.
@@ -80,9 +74,20 @@ Groups reference sub-plans by `index`. Indices must start at 1 and be contiguous
 - **Artifacts:** see [phases/review.md](phases/review.md)
 - **Required fields:** `verdict` (`"pass"` or `"fail"`), `summary`
 - **Conditional fields:** `findings` (required on `fail` — list of `{location, issue, severity, recommendation}`), `commit_message` (optional on `pass`)
-- **Optional fields:** `approved_preferences` (written by the reviewer during the summary step to `08_completion/approved_preferences.json`)
 
-## Validation
+## Preference persistence via submit tool parameter
+
+All four submit tools (`submit_architecture`, `submit_pm_done`, `submit_plan`, `submit_review`) accept an optional `preferences` parameter:
+
+```python
+submit_review(
+    preferences=[
+        {"target_role": "coder", "bullet": "- Keep regression tests"}
+    ]
+)
+```
+
+When provided, the MCP server calls `apply_preference_entries(project_dir, preferences)` which appends bullets to `.agentmux/prompts/agents/<role>.md` under `## Approved Preferences` — creating the section and file if absent. Deduplication is applied on a normalized casefold basis. The `preferences` parameter is independent of the YAML artifacts; it is a direct tool call argument, not a YAML field.
 
 `validate_submission(contract_name, data)` in `handoff_contracts.py` performs:
 

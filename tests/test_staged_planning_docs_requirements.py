@@ -58,7 +58,7 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
     def test_file_protocol_doc_covers_execution_groups_and_strict_scheduling(
         self,
     ) -> None:
-        text = self._read_doc("docs/file-protocol.md")
+        text = self._read_doc("docs/phases/planning.md")
         self.assertIn("execution_plan.yaml", text)
         self.assertIn("execution groups", text.lower())
         self.assertIn("serial", text.lower())

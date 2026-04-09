@@ -31,10 +31,6 @@ Your job:
 
    <Any gaps or intentional scope changes; write "None" if everything was delivered as planned>
    ```
-2. Optionally write `[[placeholder:reviewer_preference_proposal_file]]` if you have approved
-   reusable preferences to record for future sessions:
-   `{{"source_role":"reviewer","approved":[{{"target_role":"coder","bullet":"- ..."}}]}}`
-   Skip this file entirely if you have no approved preferences.
 
 FINAL STEP ONLY — once `08_completion/summary.md` is fully written, stop.
 Do not update `state.json` or any other workflow file.

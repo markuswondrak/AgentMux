@@ -12,7 +12,6 @@ from pathlib import Path
 
 from agentmux.sessions.state_store import _make_runtime_files
 from agentmux.shared.models import (
-    PREFERENCE_PROPOSAL_SOURCES,
     PROMPT_AGENT_ROLES,
     SESSION_DIR_NAMES,
     RuntimeFiles,
@@ -29,10 +28,6 @@ class TestPlannerRole(unittest.TestCase):
         architect_idx = PROMPT_AGENT_ROLES.index("architect")
         planner_idx = PROMPT_AGENT_ROLES.index("planner")
         self.assertGreater(planner_idx, architect_idx)
-
-    def test_planner_in_preference_proposal_sources(self) -> None:
-        """Planner should be able to propose preferences."""
-        self.assertIn("planner", PREFERENCE_PROPOSAL_SOURCES)
 
 
 class TestArchitectingPhase(unittest.TestCase):
@@ -292,8 +287,8 @@ class TestPlanningPhaseUsesPlanner(unittest.TestCase):
             # Should reference architecture.md
             self.assertIn("architecture.md", prompt)
 
-    def test_planner_preference_proposal_in_plan_yaml(self) -> None:
-        """Planner prompt instructs including approved_preferences in plan.yaml."""
+    def test_planner_preference_proposal_via_submit_param(self) -> None:
+        """Planner prompt instructs passing preferences via submit_plan param."""
         import tempfile
         from pathlib import Path
 
@@ -317,9 +312,9 @@ class TestPlanningPhaseUsesPlanner(unittest.TestCase):
             )
 
             prompt = build_planner_prompt(files)
-            # Preferences are included in plan.yaml, not a separate JSON file.
-            self.assertIn("approved_preferences", prompt)
-            self.assertIn("plan.yaml", prompt)
+            # Preferences are passed via the `preferences` parameter on submit_plan
+            self.assertIn("preferences", prompt)
+            self.assertIn("submit_plan", prompt)
 
 
 class TestInitialPhase(unittest.TestCase):
@@ -434,9 +429,9 @@ class TestDocumentationUpdates(unittest.TestCase):
         self.assertIn("planner", content)
 
     def test_file_protocol_includes_planner_prompt(self) -> None:
-        """docs/file-protocol.md should document planner prompt files."""
-        file_protocol = self.project_root / "docs" / "file-protocol.md"
-        content = file_protocol.read_text(encoding="utf-8")
+        """docs/phases/planning.md should document planner prompt files."""
+        planning_doc = self.project_root / "docs" / "phases" / "planning.md"
+        content = planning_doc.read_text(encoding="utf-8")
         # Should mention planner prompt
         self.assertIn("planner", content.lower())
 

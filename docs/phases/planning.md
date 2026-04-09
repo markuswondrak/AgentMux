@@ -16,7 +16,6 @@ The architect produces a technical architecture document describing *what* will 
 | `architect_prompt.md` | orchestrator | architect agent | Markdown prompt |
 | `changes_prompt.txt` | orchestrator | architect agent (on replanning) | plain text |
 | `architecture.md` | architect agent (via `submit_architecture`) | planner (via prompt injection) | Markdown |
-| `approved_preferences.json` | architect agent (optional) | orchestrator → planner prompt | JSON |
 
 ### Planning
 
@@ -33,6 +32,16 @@ The planner converts the architecture into an execution plan with sub-plans, sch
 | `tasks.md` | orchestrator (from `plan.yaml`, optional) | humans | Markdown |
 
 See [Handoff Contracts](../handoff-contracts.md#plan) for the full `plan.yaml` v2 schema.
+
+## Execution scheduling (`execution_plan.yaml`)
+
+The orchestrator materializes `execution_plan.yaml` from `plan.yaml` execution groups. This file drives the coder's task ordering.
+
+- Execution scheduling is strict: `execution_plan.yaml` must exist before implementation starts.
+- Each group has a unique `group_id` and an execution mode (`serial` or `parallel`).
+- `serial` groups execute plans one at a time in order.
+- `parallel` groups execute all plans simultaneously.
+- Plan entries use a YAML mapping with `file` and `name` keys (for example `- file: plan_1.md` followed by `name: Core setup`)
 
 ## Research (`03_research/`)
 

@@ -12,7 +12,6 @@ from agentmux.sessions.state_store import feature_slug_from_dir, read_json_resil
 from agentmux.shared.models import ProjectPaths
 from agentmux.workflow.event_catalog import EVENT_CHANGES_REQUESTED
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
-from agentmux.workflow.phase_helpers import apply_role_preferences
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
@@ -133,9 +132,6 @@ class CompletingHandler:
 
         if payload.get("action") != "approve":
             return {}, None
-
-        # Apply reviewer-approved preferences (written during summary step)
-        apply_role_preferences(ctx, "reviewer")
 
         # Get changed paths
         changed_paths = _parse_changed_paths(

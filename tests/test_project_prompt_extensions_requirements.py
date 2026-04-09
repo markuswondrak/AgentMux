@@ -661,17 +661,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertIn(str(project_dir), architect_prompt)
             self.assertIn(str(project_dir), reviewer_prompt)
 
-            self.assertIn(
-                files.relative_path(files.pm_preference_proposal), product_prompt
-            )
-            self.assertIn(
-                files.relative_path(files.architect_preference_proposal),
-                architect_prompt,
-            )
-            self.assertIn(
-                files.relative_path(files.reviewer_preference_proposal), reviewer_prompt
-            )
-
     def test_agent_preference_prompts_include_shared_block_and_role_specific_guidance(
         self,
     ) -> None:
@@ -701,25 +690,18 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertIn(shared_line, architect_prompt)
             self.assertIn(shared_line, reviewer_prompt)
 
-            self.assertIn('"source_role":"product-manager"', product_prompt)
-            self.assertIn(
-                files.relative_path(files.pm_preference_proposal), product_prompt
+            preferences_param_text = (
+                "pass them via the `preferences` parameter "
+                "when calling your submit tool"
             )
-
-            self.assertIn('"source_role":"architect"', architect_prompt)
-            self.assertIn(
-                files.relative_path(files.architect_preference_proposal),
-                architect_prompt,
-            )
+            self.assertIn(preferences_param_text, product_prompt)
+            self.assertIn(preferences_param_text, architect_prompt)
+            self.assertIn(preferences_param_text, reviewer_prompt)
 
             self.assertIn(
                 "Implementation review (`06_review/review.md`): "
                 "focus strictly on correctness",
                 reviewer_prompt,
-            )
-            self.assertIn("Persist approved candidates only via", reviewer_prompt)
-            self.assertIn(
-                files.relative_path(files.reviewer_preference_proposal), reviewer_prompt
             )
 
     def test_affected_prompt_templates_use_shared_preference_fragment(self) -> None:
@@ -766,17 +748,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                         "do not persist anything without explicit user approval",
                         prompt.lower(),
                     )
-
-            self.assertIn(
-                files.relative_path(files.pm_preference_proposal), product_prompt
-            )
-            self.assertIn(
-                files.relative_path(files.architect_preference_proposal),
-                architect_prompt,
-            )
-            self.assertIn(
-                files.relative_path(files.reviewer_preference_proposal), reviewer_prompt
-            )
 
 
 if __name__ == "__main__":

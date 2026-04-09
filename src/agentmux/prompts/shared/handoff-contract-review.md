@@ -8,11 +8,6 @@ verdict: pass
 summary: |
   All checks passed. Implementation matches the plan.
 commit_message: "feat: implement feature X"  # optional
-approved_preferences:  # optional — same shape as approved_preferences.json
-  source_role: reviewer
-  approved:
-    - target_role: coder
-      bullet: "- Keep regression tests"
 ```
 
 On fail:

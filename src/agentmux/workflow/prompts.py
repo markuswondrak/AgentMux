@@ -158,9 +158,6 @@ def build_architect_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "architect_preference_proposal_file": files.relative_path(
-                files.architect_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -179,9 +176,6 @@ def build_product_manager_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "pm_preference_proposal_file": files.relative_path(
-                files.pm_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -210,9 +204,6 @@ def build_reviewer_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -232,9 +223,6 @@ def build_reviewer_logic_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -254,9 +242,6 @@ def build_reviewer_quality_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -276,9 +261,6 @@ def build_reviewer_expert_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -298,9 +280,6 @@ def build_reviewer_summary_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)

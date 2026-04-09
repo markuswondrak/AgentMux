@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
+from typing import Any
 
-from ..shared.models import PreferenceProposal, ProjectPaths, RuntimeFiles
+from ..shared.models import ProjectPaths
 
 _BULLET_PREFIX = re.compile(r"^[-*+]\s*")
 _BULLET_LINE = re.compile(r"^\s*[-*+]\s+(.+?)\s*$")
 _WHITESPACE = re.compile(r"\s+")
+_SECTION_HEADER = "## Approved Preferences"
 
 
 def _strip_bullet_prefix(text: str) -> str:
@@ -27,28 +28,6 @@ def format_preference_bullet(text: str) -> str:
     return f"- {content}"
 
 
-def proposal_artifact_for_source(files: RuntimeFiles, source_role: str) -> Path:
-    if source_role == "product-manager":
-        return files.pm_preference_proposal
-    if source_role == "architect":
-        return files.architect_preference_proposal
-    if source_role == "reviewer":
-        return files.reviewer_preference_proposal
-    raise ValueError(
-        "source_role must be one of: product-manager, architect, reviewer."
-    )
-
-
-def load_preference_proposal(path: Path) -> PreferenceProposal | None:
-    if not path.is_file():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Preference proposal file is not valid JSON: {path}") from exc
-    return PreferenceProposal.from_dict(payload)
-
-
 def _load_existing_normalized_bullets(path: Path) -> set[str]:
     if not path.is_file():
         return set()
@@ -64,37 +43,55 @@ def _load_existing_normalized_bullets(path: Path) -> set[str]:
     return normalized
 
 
-def _append_markdown_bullets(path: Path, bullets: list[str]) -> None:
+def _append_to_preference_section(path: Path, bullets: list[str]) -> None:
+    """Append bullets under the '## Approved Preferences' section.
+
+    Creates the section at the end of the file if it does not exist yet.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    existing_text = path.read_text(encoding="utf-8") if path.is_file() else ""
-    text = existing_text
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
     if text and not text.endswith("\n"):
         text += "\n"
-    if text.strip():
-        text += "\n"
-    text += "\n".join(bullets) + "\n"
 
+    if _SECTION_HEADER not in text:
+        if text.strip():
+            text += "\n"
+        text += f"{_SECTION_HEADER}\n\n"
+
+    text += "\n".join(bullets) + "\n"
     path.write_text(text, encoding="utf-8")
 
 
-def apply_preference_proposal(
-    project_dir: Path, proposal: PreferenceProposal
+def apply_preference_entries(
+    project_dir: Path,
+    entries: list[dict[str, Any]],
 ) -> dict[str, list[str]]:
+    """Write approved preference bullets directly to project-level custom prompt files.
+
+    Each entry must have ``target_role`` (str) and ``bullet`` (str) keys.
+    Bullets are deduplicated against existing content (case-insensitive).
+
+    Returns a mapping of role -> list of newly appended formatted bullets.
+    """
     paths = ProjectPaths.from_project(project_dir)
     prompts_root = paths.agent_prompts_dir
 
     deduped_by_role: dict[str, list[str]] = {}
     seen_in_batch: dict[str, set[str]] = {}
-    for entry in proposal.approved:
-        normalized = normalize_preference_bullet(entry.bullet)
+    for entry in entries:
+        target_role = entry.get("target_role", "")
+        bullet = entry.get("bullet", "")
+        if not target_role or not bullet:
+            continue
+        normalized = normalize_preference_bullet(bullet)
         if not normalized:
             continue
-        role_seen = seen_in_batch.setdefault(entry.target_role, set())
+        role_seen = seen_in_batch.setdefault(target_role, set())
         if normalized in role_seen:
             continue
         role_seen.add(normalized)
-        deduped_by_role.setdefault(entry.target_role, []).append(entry.bullet)
+        deduped_by_role.setdefault(target_role, []).append(bullet)
 
     appended_by_role: dict[str, list[str]] = {}
     for role, bullets in deduped_by_role.items():
@@ -111,7 +108,7 @@ def apply_preference_proposal(
 
         if not append_block:
             continue
-        _append_markdown_bullets(path, append_block)
+        _append_to_preference_section(path, append_block)
         appended_by_role[role] = append_block
 
     return appended_by_role

@@ -48,15 +48,6 @@ def mock_ctx(tmp_path: Path) -> MagicMock:
     ctx.files.requirements = tmp_path / "requirements.md"
     ctx.files.context = tmp_path / "context.md"
     ctx.files.architecture = tmp_path / "02_planning" / "architecture.md"
-    ctx.files.pm_preference_proposal = (
-        tmp_path / "01_product_management" / "preference_proposal.json"
-    )
-    ctx.files.architect_preference_proposal = (
-        tmp_path / "02_planning" / "preference_proposal.json"
-    )
-    ctx.files.reviewer_preference_proposal = (
-        tmp_path / "06_review" / "preference_proposal.json"
-    )
     ctx.files.project_dir = tmp_path.parent
     ctx.files.relative_path = lambda p: str(p.relative_to(tmp_path))
     ctx.files.state = tmp_path / "state.json"
@@ -123,15 +114,11 @@ class TestProductManagementHandlerToolEvents:
             payload={"payload": {}},
         )
 
-        with patch(
-            "agentmux.workflow.handlers.product_management.apply_role_preferences"
-        ) as mock_apply:
-            updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
-            mock_ctx.runtime.kill_primary.assert_called_once_with("product-manager")
-            mock_apply.assert_called_once_with(mock_ctx, "product-manager")
-            assert updates == {"last_event": EVENT_PM_COMPLETED}
-            assert next_phase == "architecting"
+        mock_ctx.runtime.kill_primary.assert_called_once_with("product-manager")
+        assert updates == {"last_event": EVENT_PM_COMPLETED}
+        assert next_phase == "architecting"
 
     def test_handle_research_code_req_writes_request_then_dispatch(
         self, mock_ctx: MagicMock, empty_state: dict
@@ -390,10 +377,10 @@ class TestArchitectingHandlerToolEvents:
         # MD content should not change
         assert md_path.read_text(encoding="utf-8") == first_content
 
-    def test_handle_architecture_applies_preferences_and_kills_architect(
+    def test_handle_architecture_kills_architect(
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
-        """architecture event applies preferences and kills architect."""
+        """architecture event deactivates and kills the architect pane."""
         handler = ArchitectingHandler()
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
         (mock_ctx.files.planning_dir / "architecture.md").write_text(
@@ -402,14 +389,10 @@ class TestArchitectingHandlerToolEvents:
 
         event = WorkflowEvent(kind="architecture", payload={"payload": {}})
 
-        with patch(
-            "agentmux.workflow.handlers.architecting.apply_role_preferences"
-        ) as mock_apply:
-            handler.handle_event(event, empty_state, mock_ctx)
+        handler.handle_event(event, empty_state, mock_ctx)
 
-            mock_apply.assert_called_once_with(mock_ctx, "architect")
-            mock_ctx.runtime.deactivate.assert_called_once_with("architect")
-            mock_ctx.runtime.kill_primary.assert_called_once_with("architect")
+        mock_ctx.runtime.deactivate.assert_called_once_with("architect")
+        mock_ctx.runtime.kill_primary.assert_called_once_with("architect")
 
     def test_handle_architecture_deletes_changes_md(
         self, mock_ctx: MagicMock, empty_state: dict

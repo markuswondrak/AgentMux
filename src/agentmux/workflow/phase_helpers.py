@@ -200,25 +200,6 @@ def research_role_from_payload(payload: dict) -> str | None:
     return None
 
 
-def apply_role_preferences(ctx: PipelineContext, role: str) -> None:
-    """Apply approved preferences for a role if they exist.
-
-    Args:
-        ctx: Pipeline context with files
-        role: Role name (e.g., "architect", "product-manager", "reviewer")
-    """
-    from .preference_memory import (
-        apply_preference_proposal,
-        load_preference_proposal,
-        proposal_artifact_for_source,
-    )
-
-    proposal_path = proposal_artifact_for_source(ctx.files, role)
-    proposal = load_preference_proposal(proposal_path)
-    if proposal:
-        apply_preference_proposal(ctx.files.project_dir, proposal)
-
-
 def select_reviewer_type(plan_meta: dict) -> str:
     """Select the appropriate reviewer type based on plan_meta review_strategy.
 

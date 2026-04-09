@@ -12,7 +12,6 @@ from agentmux.workflow.event_router import (
     WorkflowEvent,
 )
 from agentmux.workflow.phase_helpers import (
-    apply_role_preferences,
     dispatch_research_task,
     notify_research_complete,
     research_role_from_payload,
@@ -90,9 +89,6 @@ class ProductManagementHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle product management completion via tool event."""
-        # Apply approved preferences
-        apply_role_preferences(ctx, "product-manager")
-
         # Kill product-manager pane
         ctx.runtime.kill_primary("product-manager")
 

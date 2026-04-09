@@ -56,12 +56,6 @@ See Output & Artifacts below for file specs. Write all files to `02_planning/` a
 
 [[shared:preference-memory]]
 
-Planner preference proposal output:
-
-1. If one or more candidates are approved, include an `approved_preferences` field in `02_planning/plan.yaml` with this shape:
-   - `{{"source_role":"planner","approved":[{{"target_role":"coder","bullet":"- ..."}}]}}`
-2. If no candidates are approved, omit the `approved_preferences` field.
-
 [[placeholder:project_instructions]]
 
 ## Constraints

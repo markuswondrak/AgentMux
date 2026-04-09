@@ -44,15 +44,6 @@ def _make_test_files(feature_dir: Path) -> RuntimeFiles:
         fix_request=feature_dir / SESSION_DIR_NAMES["review"] / "fix_request.md",
         changes=feature_dir / SESSION_DIR_NAMES["completion"] / "changes.md",
         summary=feature_dir / SESSION_DIR_NAMES["completion"] / "summary.md",
-        pm_preference_proposal=feature_dir
-        / SESSION_DIR_NAMES["product_management"]
-        / "approved_preferences.json",
-        architect_preference_proposal=feature_dir
-        / SESSION_DIR_NAMES["planning"]
-        / "approved_preferences.json",
-        reviewer_preference_proposal=feature_dir
-        / SESSION_DIR_NAMES["completion"]
-        / "approved_preferences.json",
         state=feature_dir / "state.json",
         runtime_state=feature_dir / "runtime_state.json",
         orchestrator_log=feature_dir / "orchestrator.log",

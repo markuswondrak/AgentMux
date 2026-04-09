@@ -13,8 +13,6 @@ from typing import Any
 
 import yaml
 
-from ..shared.models import PreferenceProposal
-
 # ---------------------------------------------------------------------------
 # Field specification
 # ---------------------------------------------------------------------------
@@ -32,16 +30,6 @@ _VALID_FOCUS_AREAS = {
     "maintainability",
 }
 _VALID_FINDING_SEVERITIES = {"critical", "high", "medium", "low", "info"}
-_PLANNER_PREFERENCES_EXAMPLE = {
-    "source_role": "planner",
-    "approved": [
-        {"target_role": "coder", "bullet": "- Validate each task before done"}
-    ],
-}
-_REVIEWER_PREFERENCES_EXAMPLE = {
-    "source_role": "reviewer",
-    "approved": [{"target_role": "coder", "bullet": "- Keep regression notes concise"}],
-}
 
 
 @dataclass(frozen=True)
@@ -165,16 +153,6 @@ PLAN_CONTRACT = HandoffContract(
                 }
             ],
         ),
-        FieldSpec(
-            name="approved_preferences",
-            type="dict",
-            required=False,
-            description=(
-                "Optional approved reusable preferences. Shape matches "
-                "approved_preferences.json."
-            ),
-            example=_PLANNER_PREFERENCES_EXAMPLE,
-        ),
     ),
 )
 
@@ -222,16 +200,6 @@ REVIEW_CONTRACT = HandoffContract(
             type="str",
             required=False,
             description="Suggested commit message (on pass).",
-        ),
-        FieldSpec(
-            name="approved_preferences",
-            type="dict",
-            required=False,
-            description=(
-                "Optional approved reusable preferences. Shape matches "
-                "approved_preferences.json."
-            ),
-            example=_REVIEWER_PREFERENCES_EXAMPLE,
         ),
     ),
 )
@@ -451,7 +419,6 @@ def _validate_plan(data: dict[str, Any], errors: list[str]) -> None:
                 f"review_strategy.severity must be one of: "
                 f"{', '.join(sorted(_VALID_SEVERITIES))} (got '{sev}')."
             )
-    _validate_approved_preferences(data, "planner", errors)
 
 
 def _validate_review(data: dict[str, Any], errors: list[str]) -> None:
@@ -470,26 +437,6 @@ def _validate_review(data: dict[str, Any], errors: list[str]) -> None:
                     errors.append(f"findings[{i}] missing 'issue'.")
                 if not finding.get("recommendation"):
                     errors.append(f"findings[{i}] missing 'recommendation'.")
-    _validate_approved_preferences(data, "reviewer", errors)
-
-
-def _validate_approved_preferences(
-    data: dict[str, Any], expected_source_role: str, errors: list[str]
-) -> None:
-    raw = data.get("approved_preferences")
-    if raw is None or not isinstance(raw, dict):
-        return
-    try:
-        proposal = PreferenceProposal.from_dict(raw)
-    except ValueError as exc:
-        errors.append(f"approved_preferences invalid: {exc}")
-        return
-    if proposal.source_role != expected_source_role:
-        errors.append(
-            "approved_preferences.source_role must be "
-            f"'{expected_source_role}' for this submission "
-            f"(got '{proposal.source_role}')."
-        )
 
 
 # ---------------------------------------------------------------------------

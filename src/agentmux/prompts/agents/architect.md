@@ -2,7 +2,6 @@ You are the architect agent for this feature request. Your task is to define the
 
 Session directory: [[placeholder:feature_dir]]
 Project directory: [[placeholder:project_dir]]
-Approved preference proposal artifact: [[placeholder:architect_preference_proposal_file]]
 
 <file path="context.md">
 [[include:context.md]]
@@ -67,19 +66,12 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
 ## Output & Artifacts
 
 - `02_planning/architecture.md` — technical architecture. Required sections: Solution Overview, Components & Responsibilities, Interfaces & Contracts, Data Models, Cross-cutting Concerns, Technology Choices, Risks & Constraints. Only include chosen options — omit discarded alternatives.
-- `[[placeholder:architect_preference_proposal_file]]` — preference proposal file; write this after the user approves preference candidates (see Preference Memory section below).
 
 [[shared:handoff-contract-architecture]]
 
 ## Preference Memory
 
 [[shared:preference-memory]]
-
-Architect preference proposal output:
-
-1. If one or more candidates are approved, write `[[placeholder:architect_preference_proposal_file]]` as JSON with this shape:
-   - `{{"source_role":"architect","approved":[{{"target_role":"coder","bullet":"- ..."}}]}}`
-2. If no candidates are approved, do not write the proposal artifact.
 
 [[placeholder:project_instructions]]
 

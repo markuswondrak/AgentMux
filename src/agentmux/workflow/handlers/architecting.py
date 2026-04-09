@@ -17,7 +17,6 @@ from agentmux.workflow.event_router import (
     WorkflowEvent,
 )
 from agentmux.workflow.phase_helpers import (
-    apply_role_preferences,
     dispatch_research_task,
     notify_research_complete,
     research_role_from_payload,
@@ -98,10 +97,6 @@ class ArchitectingHandler:
         """Handle architecture submission via tool event."""
         # architecture.md is agent-written and already validated by submit_architecture.
         md_path = ctx.files.planning_dir / "architecture.md"
-
-        # Apply approved preferences from architect (reads approved_preferences.json
-        # written directly by the architect agent per the architect prompt).
-        apply_role_preferences(ctx, "architect")
 
         # Delete changes.md if exists (we're moving forward)
         if ctx.files.changes.exists():

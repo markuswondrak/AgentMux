@@ -182,19 +182,43 @@ class TestSubmitPlan(SubmitToolTestBase):
     def test_accepts_optional_approved_preferences(self):
         data = {
             **_VALID_PLAN,
-            "approved_preferences": {
-                "source_role": "planner",
-                "approved": [
-                    {
-                        "target_role": "coder",
-                        "bullet": "- Validate each task before done",
-                    }
-                ],
-            },
         }
         self._write_yaml("02_planning/plan.yaml", data)
         result = self._submit()
         self.assertIn("Plan submitted", result)
+
+    def test_preferences_param_writes_bullets_to_agent_prompt(self):
+        import os
+        import tempfile as tmpmod
+
+        with tmpmod.TemporaryDirectory() as project_td:
+            os.environ["PROJECT_DIR"] = project_td
+            try:
+                from pathlib import Path as _Path
+
+                self._write_yaml("02_planning/plan.yaml", _VALID_PLAN)
+                from agentmux.integrations.mcp_research_server import submit_plan
+
+                result = submit_plan(
+                    feature_dir=str(self.feature_dir),
+                    preferences=[
+                        {
+                            "target_role": "coder",
+                            "bullet": "- Validate each task before done",
+                        }
+                    ],
+                )
+                self.assertIn("Plan submitted", result)
+                coder_prompt = (
+                    _Path(project_td) / ".agentmux" / "prompts" / "agents" / "coder.md"
+                )
+                self.assertTrue(coder_prompt.exists())
+                self.assertIn(
+                    "- Validate each task before done",
+                    coder_prompt.read_text(encoding="utf-8"),
+                )
+            finally:
+                os.environ.pop("PROJECT_DIR", None)
 
 
 class TestSubmitReview(SubmitToolTestBase):
@@ -268,19 +292,35 @@ class TestSubmitReview(SubmitToolTestBase):
         result = self._submit()
         self.assertIn("verdict: pass", result)
 
-    def test_accepts_optional_approved_preferences(self):
-        data = {
-            **_VALID_REVIEW_PASS,
-            "approved_preferences": {
-                "source_role": "reviewer",
-                "approved": [
-                    {"target_role": "coder", "bullet": "- Keep regression tests"}
-                ],
-            },
-        }
-        self._write_yaml("06_review/review.yaml", data)
-        result = self._submit()
-        self.assertIn("verdict: pass", result)
+    def test_preferences_param_writes_bullets_to_agent_prompt(self):
+        import os
+        import tempfile as tmpmod
+
+        with tmpmod.TemporaryDirectory() as project_td:
+            os.environ["PROJECT_DIR"] = project_td
+            try:
+                from pathlib import Path as _Path
+
+                self._write_yaml("06_review/review.yaml", _VALID_REVIEW_PASS)
+                from agentmux.integrations.mcp_research_server import submit_review
+
+                result = submit_review(
+                    feature_dir=str(self.feature_dir),
+                    preferences=[
+                        {"target_role": "coder", "bullet": "- Keep regression tests"}
+                    ],
+                )
+                self.assertIn("verdict: pass", result)
+                coder_prompt = (
+                    _Path(project_td) / ".agentmux" / "prompts" / "agents" / "coder.md"
+                )
+                self.assertTrue(coder_prompt.exists())
+                self.assertIn(
+                    "- Keep regression tests",
+                    coder_prompt.read_text(encoding="utf-8"),
+                )
+            finally:
+                os.environ.pop("PROJECT_DIR", None)
 
 
 if __name__ == "__main__":

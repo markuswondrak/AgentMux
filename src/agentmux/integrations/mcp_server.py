@@ -9,6 +9,7 @@ import yaml
 
 from ..runtime.tool_events import append_tool_event
 from ..shared.models import SESSION_DIR_NAMES
+from ..workflow.preference_memory import apply_preference_entries
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -58,6 +59,16 @@ def _feature_dir(feature_dir: str | None = None) -> Path:
     path = (Path.cwd() / path).resolve() if not path.is_absolute() else path.resolve()
     if not path.exists():
         raise RuntimeError(f"feature_dir does not exist: {path}")
+    return path
+
+
+def _project_dir() -> Path:
+    raw = os.environ.get("PROJECT_DIR", "").strip()
+    if not raw:
+        raise RuntimeError("PROJECT_DIR environment variable is not set.")
+    path = Path(raw).expanduser().resolve()
+    if not path.exists():
+        raise RuntimeError(f"PROJECT_DIR does not exist: {path}")
     return path
 
 
@@ -187,12 +198,16 @@ def _read_yaml_for_signal(yaml_path: Path, contract_name: str) -> dict[str, Any]
 @_tool("submit_architecture")
 def submit_architecture(
     feature_dir: str | None = None,
+    preferences: list[dict[str, str]] | None = None,
 ) -> str:
     """Signal architecture completion.
 
     Checks that the agent-written 02_planning/architecture.md exists and has
     content, then appends a completion signal to tool_events.jsonl.
     Write the Markdown file before calling this tool.
+
+    Optional: pass preferences=[{target_role, bullet}, ...] to persist approved
+    style/quality preferences directly to .agentmux/prompts/agents/<role>.md.
     """
     feature = _feature_dir(feature_dir)
     md_path = feature / SESSION_DIR_NAMES["planning"] / "architecture.md"
@@ -202,6 +217,8 @@ def submit_architecture(
         )
     if not md_path.read_text(encoding="utf-8").strip():
         raise ValueError("architecture.md is empty.")
+    if preferences:
+        apply_preference_entries(_project_dir(), preferences)
     append_tool_event(_log_path(feature_dir), "submit_architecture", {})
     return "Architecture submitted."
 
@@ -209,16 +226,22 @@ def submit_architecture(
 @_tool("submit_plan")
 def submit_plan(
     feature_dir: str | None = None,
+    preferences: list[dict[str, str]] | None = None,
 ) -> str:
     """Signal execution plan completion.
 
     Reads and validates the agent-written 02_planning/plan.yaml (version: 2),
     then appends a completion signal to tool_events.jsonl.
     Write plan.yaml before calling this tool.
+
+    Optional: pass preferences=[{target_role, bullet}, ...] to persist approved
+    style/quality preferences directly to .agentmux/prompts/agents/<role>.md.
     """
     feature = _feature_dir(feature_dir)
     yaml_path = feature / SESSION_DIR_NAMES["planning"] / "plan.yaml"
     _read_yaml_for_signal(yaml_path, "plan")
+    if preferences:
+        apply_preference_entries(_project_dir(), preferences)
     append_tool_event(_log_path(feature_dir), "submit_plan", {})
     return "Plan submitted."
 
@@ -226,17 +249,23 @@ def submit_plan(
 @_tool("submit_review")
 def submit_review(
     feature_dir: str | None = None,
+    preferences: list[dict[str, str]] | None = None,
 ) -> str:
     """Signal review completion.
 
     Reads and validates the agent-written 06_review/review.yaml,
     then appends a completion signal to tool_events.jsonl.
     Write the YAML file before calling this tool.
+
+    Optional: pass preferences=[{target_role, bullet}, ...] to persist approved
+    style/quality preferences directly to .agentmux/prompts/agents/<role>.md.
     """
     feature = _feature_dir(feature_dir)
     yaml_path = feature / SESSION_DIR_NAMES["review"] / "review.yaml"
     data = _read_yaml_for_signal(yaml_path, "review")
     verdict = data.get("verdict", "unknown")
+    if preferences:
+        apply_preference_entries(_project_dir(), preferences)
     append_tool_event(_log_path(feature_dir), "submit_review", {})
     return f"Review submitted (verdict: {verdict})."
 
@@ -281,8 +310,15 @@ def submit_research_done(
 @_tool("submit_pm_done")
 def submit_pm_done(
     feature_dir: str | None = None,
+    preferences: list[dict[str, str]] | None = None,
 ) -> str:
-    """Mark the product management phase as done."""
+    """Mark the product management phase as done.
+
+    Optional: pass preferences=[{target_role, bullet}, ...] to persist approved
+    style/quality preferences directly to .agentmux/prompts/agents/<role>.md.
+    """
+    if preferences:
+        apply_preference_entries(_project_dir(), preferences)
     append_tool_event(_log_path(feature_dir), "submit_pm_done", {})
     return "Product management phase done."
 

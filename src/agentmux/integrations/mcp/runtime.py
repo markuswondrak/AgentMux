@@ -85,7 +85,10 @@ def create_runtime_mcp_config(
 
     mcp_servers: dict[str, object] = {}
     for server in servers:
-        server_env: dict[str, str] = {"PYTHONPATH": str(project_dir)}
+        server_env: dict[str, str] = {
+            "PYTHONPATH": str(project_dir),
+            "PROJECT_DIR": str(project_dir),
+        }
         server_env.update(server.env)
         mcp_servers[server.name] = {
             "type": "stdio",

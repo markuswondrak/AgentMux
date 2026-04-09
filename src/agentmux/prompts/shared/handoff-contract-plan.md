@@ -39,11 +39,6 @@ subplans:
       - Second task
     isolation_rationale: |  # optional
       Why this sub-plan is safe for parallel execution.
-approved_preferences:  # optional — applied directly from this field; no separate JSON file written
-  source_role: planner
-  approved:
-    - target_role: coder
-      bullet: "- Validate each task before done"
 ```
 
 After writing the file, call `submit_plan()` (no arguments needed). The tool validates your YAML and signals the orchestrator to advance the workflow. If validation fails, it returns an error so you can correct the file.

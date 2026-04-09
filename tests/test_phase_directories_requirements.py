@@ -104,18 +104,6 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
             self.assertEqual(
                 feature_dir / "08_completion" / "changes.md", files.changes
             )
-            self.assertEqual(
-                feature_dir / "01_product_management" / "approved_preferences.json",
-                files.pm_preference_proposal,
-            )
-            self.assertEqual(
-                feature_dir / "02_planning" / "approved_preferences.json",
-                files.architect_preference_proposal,
-            )
-            self.assertEqual(
-                feature_dir / "08_completion" / "approved_preferences.json",
-                files.reviewer_preference_proposal,
-            )
 
     def test_create_feature_files_initializes_staged_execution_state_fields(
         self,
