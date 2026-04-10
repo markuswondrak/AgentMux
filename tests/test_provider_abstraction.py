@@ -546,6 +546,58 @@ roles:
         prompt_positions = [i for i, p in enumerate(parts) if "/tmp/prompt.md" in p]
         self.assertEqual(len(prompt_positions), 1)
 
+    def test_gemini_batch_command_uses_prompt_flag(self) -> None:
+        """Gemini batch command should use -p flag for prompt file."""
+        cmd = build_agent_command(
+            AgentConfig(
+                role="web-researcher",
+                cli="gemini",
+                model="gemini-2.5-flash",
+                model_flag="--model",
+                batch_subcommand="-p",
+                args=["--approval-mode", "yolo"],
+            ),
+            prompt_file="/tmp/prompt.md",
+        )
+        # gemini -p /tmp/prompt.md --model gemini-2.5-flash ...
+        self.assertIn("gemini", cmd)
+        self.assertIn("-p", cmd)
+        self.assertIn("/tmp/prompt.md", cmd)
+        self.assertIn("--model", cmd)
+        self.assertIn("gemini-2.5-flash", cmd)
+        self.assertIn("-p /tmp/prompt.md", cmd)
+        # Ensure prompt is not duplicated at the end
+        parts = cmd.split()
+        prompt_positions = [i for i, p in enumerate(parts) if "/tmp/prompt.md" in p]
+        self.assertEqual(len(prompt_positions), 1)
+
+    def test_codex_batch_command_uses_stdin_redirect(self) -> None:
+        """Codex exec batch command should use stdin redirect for prompt file."""
+        cmd = build_agent_command(
+            AgentConfig(
+                role="code-researcher",
+                cli="codex",
+                model="o4-mini",
+                model_flag="--model",
+                batch_subcommand="exec",
+                args=["-s", "workspace-write", "-a", "never"],
+            ),
+            prompt_file="/tmp/prompt.md",
+        )
+        # codex exec --model o4-mini ... < /tmp/prompt.md
+        self.assertIn("codex", cmd)
+        self.assertIn("exec", cmd)
+        self.assertIn("--model", cmd)
+        self.assertIn("o4-mini", cmd)
+        self.assertIn("/tmp/prompt.md", cmd)
+        # Must use stdin redirect, not a positional arg
+        self.assertIn("<", cmd)
+        self.assertIn("< /tmp/prompt.md", cmd)
+        # Ensure prompt appears only once (not as positional and not duplicated)
+        parts = cmd.split()
+        prompt_positions = [i for i, p in enumerate(parts) if "/tmp/prompt.md" in p]
+        self.assertEqual(len(prompt_positions), 1)
+
     def test_accept_trust_prompt_accepts_when_snippet_is_present(self) -> None:
         commands: list[list[str]] = []
 

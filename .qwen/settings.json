@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git reset *)",
+      "Bash(git commit *)",
+      "Bash(copilot *)",
+      "WebSearch"
+    ]
+  },
+  "$version": 3
+}

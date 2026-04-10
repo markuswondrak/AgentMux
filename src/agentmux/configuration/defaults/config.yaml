@@ -87,6 +87,7 @@ providers:
     command: codex
     model_flag: --model
     trust_snippet: null
+    batch_subcommand: exec
     role_args:
       architect:
       - -s
@@ -147,6 +148,7 @@ providers:
     command: gemini
     model_flag: --model
     trust_snippet: Trust this folder?
+    batch_subcommand: -p
     role_args:
       architect:
       - --approval-mode

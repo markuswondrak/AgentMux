@@ -40,6 +40,10 @@ def build_agent_command(agent: AgentConfig, prompt_file: str | None = None) -> s
     takes the prompt file as its value (e.g. copilot's ``-p``).  In this
     case the prompt file path is appended directly after the flag, not at
     the end of the command.
+
+    If ``batch_subcommand`` is ``exec`` and ``cli`` is ``codex``, the prompt
+    file is passed via stdin redirect (``codex exec ... < prompt.md``)
+    because Codex does not accept a file path as a positional argument.
     """
     env_prefix = ""
     if agent.env:
@@ -54,12 +58,24 @@ def build_agent_command(agent: AgentConfig, prompt_file: str | None = None) -> s
         agent.batch_subcommand is not None and agent.batch_subcommand.startswith("-")
     )
 
+    # Codex special case: 'codex exec' reads prompt from stdin, not as file path arg
+    codex_needs_stdin = (
+        agent.batch_subcommand == "exec"
+        and agent.cli == "codex"
+        and prompt_file is not None
+    )
+
     if agent.batch_subcommand and prompt_file is not None:
         if batch_sub_is_flag:
             # Flag-style subcommand: prompt file goes right after the flag
             cli_segment = (
                 f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)} "
                 f"{shlex.quote(prompt_file)}"
+            )
+        elif codex_needs_stdin:
+            # Codex exec: prompt via stdin redirect
+            cli_segment = (
+                f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)}"
             )
         else:
             # Subcommand verb (e.g. "run"): appended normally
@@ -85,7 +101,11 @@ def build_agent_command(agent: AgentConfig, prompt_file: str | None = None) -> s
 
     # For non-flag batch_subcommand, append prompt file at the end
     if prompt_file is not None and not batch_sub_is_flag:
-        cmd += f" {shlex.quote(prompt_file)}"
+        if codex_needs_stdin:
+            # Codex needs stdin redirect: codex exec ... < prompt.md
+            cmd += f" < {shlex.quote(prompt_file)}"
+        else:
+            cmd += f" {shlex.quote(prompt_file)}"
 
     return cmd
 
