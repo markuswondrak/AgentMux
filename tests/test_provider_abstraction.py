@@ -520,6 +520,32 @@ roles:
         self.assertIn("/tmp/prompt.md", cmd)
         self.assertNotIn(" run ", f" {cmd} ")
 
+    def test_batch_subcommand_flag_style_places_prompt_right_after(self) -> None:
+        """Flag-style batch_subcommand (e.g. -p) puts prompt file right after it."""
+        cmd = build_agent_command(
+            AgentConfig(
+                role="code-researcher",
+                cli="copilot",
+                model="claude-haiku",
+                model_flag="--model",
+                batch_subcommand="-p",
+                args=["--allow-all", "--reasoning-effort", "high"],
+            ),
+            prompt_file="/tmp/prompt.md",
+        )
+        # Should be: copilot -p /tmp/prompt.md --model claude-haiku --allow-all ...
+        self.assertIn("copilot", cmd)
+        self.assertIn("-p", cmd)
+        self.assertIn("/tmp/prompt.md", cmd)
+        self.assertIn("--model", cmd)
+        self.assertIn("claude-haiku", cmd)
+        # Prompt must come right after -p, not at the end
+        self.assertIn("-p /tmp/prompt.md", cmd)
+        # Ensure prompt is not duplicated at the end
+        parts = cmd.split()
+        prompt_positions = [i for i, p in enumerate(parts) if "/tmp/prompt.md" in p]
+        self.assertEqual(len(prompt_positions), 1)
+
     def test_accept_trust_prompt_accepts_when_snippet_is_present(self) -> None:
         commands: list[list[str]] = []
 

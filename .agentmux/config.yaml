@@ -7,4 +7,8 @@ defaults:
 
 roles:
   coder:
-    provider: claude
+    model: gpt-5.4-high
+  web-researcher:
+    model: claude-haiku
+  code-researcher:
+    model: claude-haiku

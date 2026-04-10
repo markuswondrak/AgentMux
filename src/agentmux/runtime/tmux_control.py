@@ -35,6 +35,11 @@ def build_agent_command(agent: AgentConfig, prompt_file: str | None = None) -> s
     The ``--model`` flag is only included when ``agent.model_flag`` is not
     ``None``.  Providers like opencode that ignore model settings should set
     ``model_flag=None`` in their provider config.
+
+    If ``batch_subcommand`` starts with ``-``, it is treated as a flag that
+    takes the prompt file as its value (e.g. copilot's ``-p``).  In this
+    case the prompt file path is appended directly after the flag, not at
+    the end of the command.
     """
     env_prefix = ""
     if agent.env:
@@ -44,8 +49,23 @@ def build_agent_command(agent: AgentConfig, prompt_file: str | None = None) -> s
         ]
         env_prefix = f"env {' '.join(env_items)} "
 
+    # Determine whether batch_subcommand is a flag taking a value
+    batch_sub_is_flag = (
+        agent.batch_subcommand is not None and agent.batch_subcommand.startswith("-")
+    )
+
     if agent.batch_subcommand and prompt_file is not None:
-        cli_segment = f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)}"
+        if batch_sub_is_flag:
+            # Flag-style subcommand: prompt file goes right after the flag
+            cli_segment = (
+                f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)} "
+                f"{shlex.quote(prompt_file)}"
+            )
+        else:
+            # Subcommand verb (e.g. "run"): appended normally
+            cli_segment = (
+                f"{shlex.quote(agent.cli)} {shlex.quote(agent.batch_subcommand)}"
+            )
     else:
         cli_segment = shlex.quote(agent.cli)
 
@@ -63,7 +83,8 @@ def build_agent_command(agent: AgentConfig, prompt_file: str | None = None) -> s
         + (f" {extra_args}" if extra_args else "")
     )
 
-    if prompt_file is not None:
+    # For non-flag batch_subcommand, append prompt file at the end
+    if prompt_file is not None and not batch_sub_is_flag:
         cmd += f" {shlex.quote(prompt_file)}"
 
     return cmd
