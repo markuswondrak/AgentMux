@@ -170,7 +170,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             updated.update(updates)
 
             self.assertTrue(
-                (ctx.files.implementation_dir / "coder_prompt_1.txt").exists()
+                (ctx.files.implementation_dir / "coder_prompt_1.md").exists()
             )
             self.assertEqual(
                 [
@@ -178,7 +178,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
                     (
                         "send",
                         "coder",
-                        "coder_prompt_1.txt",
+                        "coder_prompt_1.md",
                         "[coder] implementation",
                         None,
                     ),
@@ -215,7 +215,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
                     (
                         "send_many",
                         "coder",
-                        ["coder_prompt_1.txt", "coder_prompt_2.txt"],
+                        ["coder_prompt_1.md", "coder_prompt_2.md"],
                     ),
                 ],
                 ctx.runtime.calls,
@@ -223,8 +223,8 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             self.assertEqual(
                 [
                     [
-                        (1, "coder_prompt_1.txt", "[coder] A"),
-                        (2, "coder_prompt_2.txt", "[coder] B"),
+                        (1, "coder_prompt_1.md", "[coder] A"),
+                        (2, "coder_prompt_2.md", "[coder] B"),
                     ]
                 ],
                 ctx.runtime.parallel_specs,
@@ -274,7 +274,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
                     (
                         "send_many",
                         "coder",
-                        ["coder_prompt_1.txt", "coder_prompt_2.txt"],
+                        ["coder_prompt_1.md", "coder_prompt_2.md"],
                     ),
                     ("hide_task", "coder", 1),
                 ],
@@ -318,11 +318,11 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             handler = FixingHandler()
             handler.enter(load_state(state_path), ctx)
 
-            self.assertTrue((ctx.files.review_dir / "fix_prompt.txt").exists())
+            self.assertTrue((ctx.files.review_dir / "fix_prompt.md").exists())
             self.assertEqual(
                 [
                     ("kill_primary", "coder"),
-                    ("send", "coder", "fix_prompt.txt", "[coder] fix 1", None),
+                    ("send", "coder", "fix_prompt.md", "[coder] fix 1", None),
                 ],
                 ctx.runtime.calls,
             )

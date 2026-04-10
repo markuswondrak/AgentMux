@@ -118,7 +118,7 @@ After review passes, AgentMux asks for approval (unless approval skipping is con
 - Commits changes locally
 - Optionally opens a pull request if `gh` is available and configured
 
-For the full phase catalog with artifacts and transitions, see [Workflow Phases](phases/index.md). For file event protocol details, see [File Protocol](file-protocol.md). For approval/commit flow, see [Completing Phase](completing-phase.md).
+For the full phase catalog with artifacts and transitions, see [Workflow Phases](phases/index.md). For file event protocol details, see [File Protocol](file-protocol.md). For approval/commit flow, see [Completion Phase](phases/08_completion.md).
 
 ## Tmux Essentials
 

@@ -181,8 +181,8 @@ class RuntimeTests(unittest.TestCase):
     def test_send_many_tracks_parallel_workers_and_finish_many_cleans_up(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            prompt_a = feature_dir / "coder_prompt_1.txt"
-            prompt_b = feature_dir / "coder_prompt_2.txt"
+            prompt_a = feature_dir / "coder_prompt_1.md"
+            prompt_b = feature_dir / "coder_prompt_2.md"
             prompt_a.write_text("a", encoding="utf-8")
             prompt_b.write_text("b", encoding="utf-8")
             planning_dir = feature_dir / "02_planning"
@@ -237,7 +237,7 @@ class RuntimeTests(unittest.TestCase):
                 runtime.finish_many("coder")
 
             self.assertEqual([["%2", "%99"]], zone.parallel_shows)
-            self.assertEqual(["%2:coder_prompt_1.txt", "%99:coder_prompt_2.txt"], sent)
+            self.assertEqual(["%2:coder_prompt_1.md", "%99:coder_prompt_2.md"], sent)
             self.assertEqual(["%99"], zone.removed)
             snapshot = json.loads(
                 (feature_dir / "runtime_state.json").read_text(encoding="utf-8")

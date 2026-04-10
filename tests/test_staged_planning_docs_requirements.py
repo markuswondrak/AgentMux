@@ -58,7 +58,7 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
     def test_file_protocol_doc_covers_execution_groups_and_strict_scheduling(
         self,
     ) -> None:
-        text = self._read_doc("docs/phases/planning.md")
+        text = self._read_doc("docs/phases/02_planning.md")
         self.assertIn("execution_plan.yaml", text)
         self.assertIn("execution groups", text.lower())
         self.assertIn("serial", text.lower())
@@ -86,7 +86,7 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
     def test_workflow_docs_no_longer_reference_removed_docs_phase_markers(self) -> None:
         for relative_path in [
             "docs/file-protocol.md",
-            "docs/completing-phase.md",
+            "docs/phases/08_completion.md",
             "docs/session-resumption.md",
             "docs/monitor.md",
         ]:

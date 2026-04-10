@@ -216,7 +216,7 @@ Rules:
 - **Config schema or provider change**: Update `docs/configuration.md`
 - **Tmux pane logic**: Update `docs/tmux-layout.md`
 - **Research dispatch**: Update `docs/research-dispatch.md`
-- **Completion/commit flow**: Update `docs/completing-phase.md`
+- **Completion/commit flow**: Update `docs/phases/08_completion.md`
 - **Monitor constants or sections**: Update `docs/monitor.md`
 - **Prompt templates or rendering**: Update `docs/prompts.md`
 - **Handoff contracts or MCP submit tools**: Update `docs/handoff-contracts.md`
@@ -232,7 +232,7 @@ Deeper context on specific subsystems:
 - `docs/configuration.md` — layered config schema, providers/model selection (v2)
 - `docs/tmux-layout.md` — Tmux session layout, pane lifecycle, zone approach
 - `docs/research-dispatch.md` — Code-researcher and web-researcher task dispatch
-- `docs/completing-phase.md` — Approval flow, commit selection, cleanup
+- `docs/phases/08_completion.md` — Approval flow, commit selection, cleanup
 - `docs/monitor.md` — Control pane display sections, constants, rendering
 - `docs/prompts.md` — Prompt templates, placeholders, rendering pipeline, and coder research handoff injection
 - `docs/handoff-contracts.md` — Structured handoff contracts, MCP submission tools, validation, dual-file output

@@ -160,7 +160,7 @@ Current prompt builders:
   - new plans must write `groups[].plans[]` entries as `{ file: plan_<N>.md, name: "<sub-plan title>" }`
   - `execution_plan.yaml` is required before implementation scheduling starts
 - `build_product_manager_prompt()` renders the PM analysis prompt
-- `build_coder_subplan_prompt()` renders implementing prompts for numbered `coder_prompt_<N>.txt` dispatch, including completion marker instructions and optional research handoff references
+- `build_coder_subplan_prompt()` renders implementing prompts for numbered `coder_prompt_<N>.md` dispatch, including completion marker instructions and optional research handoff references
 - `build_coder_whole_plan_prompt()` renders a single combined prompt for single-coder mode, embedding all plan and tasks content inline. When the coder provider is `copilot` with `single_coder: true`, the dispatch sends a `/fleet` prefix command as keystrokes before the prompt file reference, so Copilot CLI decomposes the plan into parallel sub-agent tasks. The prompt instructs copilot to create `done_N` completion markers as each plan finishes.
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
 - `build_reviewer_summary_prompt()` renders the reviewer summary prompt (writes `08_completion/summary.md` after VERDICT:PASS)

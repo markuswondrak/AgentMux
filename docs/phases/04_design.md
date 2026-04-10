@@ -9,7 +9,7 @@ The designer produces a detailed design document before implementation begins, u
 | File | Writer | Reader | Format |
 |------|--------|--------|--------|
 | `designer_prompt.md` | orchestrator | designer agent | Markdown prompt |
-| `design.md` | designer agent (via `submit_design`) | coder agents (via prompt injection) | Markdown |
+| `design.md` | designer agent | coder agents (via prompt injection) | Markdown |
 
 ## Transitions
 
@@ -22,3 +22,4 @@ The designer produces a detailed design document before implementation begins, u
 
 - Skipped when `needs_design: false` in `plan.yaml`; the pipeline moves directly from `planning` to `implementing`.
 - The monitor shows this phase only when it is active (optional phase).
+- The need for a design phase is typically flagged by the product-manager or architect during their respective phases. The planner then captures this signal as `needs_design: true` in `plan.yaml`, which drives the `planning → designing` transition.

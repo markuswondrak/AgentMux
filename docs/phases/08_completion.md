@@ -1,8 +1,26 @@
-# Completing Phase
+# Phase: Completion
 
+> Directory: `08_completion/` | Optional: no
 > Related source files: `agentmux/workflow/phases.py`, `agentmux/workflow/handlers/reviewing.py`, `agentmux/workflow/handlers/completing.py`, `agentmux/integrations/completion.py`, `agentmux/workflow/prompts.py`, `agentmux/sessions/state_store.py`, `agentmux/terminal_ui/completion_ui.py`
 
-When the review passes, the workflow kills all `coder` panes and sends the reviewer a follow-up prompt to write an implementation summary. Once the summary is written, the reviewer is killed and the workflow transitions into `completing`.
+The reviewer writes a human-readable summary of the implementation. The pipeline then awaits user approval or a change request via the native completion UI.
+
+## Artifacts
+
+| File | Writer | Reader | Format |
+|------|--------|--------|--------|
+| `summary_prompt.md` | orchestrator | reviewer agent | Markdown prompt |
+| `summary.md` | reviewer agent | PR description, humans | Markdown |
+| `approval.json` | completion UI (user approves) | orchestrator | JSON |
+| `changes.md` | completion UI (user requests changes) | orchestrator | Markdown |
+
+## Transitions
+
+| From | Event | To |
+|------|-------|----|
+| `reviewing` (pass or loop cap) | `review_passed` / `review_failed` | `completing` |
+| `completing` | `approval_received` (on `approval.json`) | `done` (pipeline ends) |
+| `completing` | `changes_requested` (on `changes.md`) | `architecting` (re-planning) |
 
 ## Flow
 
@@ -17,7 +35,7 @@ When the review passes, the workflow kills all `coder` panes and sends the revie
 
 4. **Native confirmation UI** — The TUI displays the agentmux logo, the reviewer summary rendered as Markdown (headings, bold, lists, code blocks), the count of changed files, and a `[Y] / [N]` confirmation panel. The `[N]` option includes a visual affordance (`❯ describe what to change`) indicating that a text prompt follows. If the user presses `Y`, it writes `08_completion/approval.json`. If the user presses `N`, it prompts for feedback text and writes `08_completion/changes.md`. Typing `/cancel` or pressing `Ctrl+C` during the feedback prompt cancels and returns to the `[Y] / [N]` screen.
 
-5. **Reviewer-stage preference capture** — The reviewer may pass approved preferences via the `preferences` parameter on `submit_review`. These are written directly to `.agentmux/prompts/agents/<role>.md` under `## Approved Preferences` — no intermediate JSON file is used.
+5. **Reviewer-stage preference capture** — The reviewer may pass approved preferences via the `preferences` parameter on `submit_review`. These are written directly to `.agentmux/prompts/agents/<role>.md` under `## Approved Preferences`.
 
 6. **`08_completion/approval.json` schema**:
    ```json
@@ -55,3 +73,8 @@ When the review passes, the workflow kills all `coder` panes and sends the revie
 ## Changes requested
 
 If the user enters `N` in the confirmation UI and provides feedback, the TUI writes `08_completion/changes.md` and the workflow transitions back to `planning` for replanning.
+
+## Notes
+
+- When the user approves, the pipeline commits changes locally and optionally opens a PR if `gh` is available and configured.
+- When the user requests changes, the architect receives a re-planning prompt with the change description from `changes.md`.

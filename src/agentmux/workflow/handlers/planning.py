@@ -81,7 +81,7 @@ class PlanningHandler:
             ctx.files.feature_dir,
             ctx.files.relative_path(
                 ctx.files.planning_dir
-                / ("changes_prompt.txt" if is_replan else "planner_prompt.md")
+                / ("changes_prompt.md" if is_replan else "planner_prompt.md")
             ),
             build_change_prompt(ctx.files, ctx.agents.get("planner"))
             if is_replan

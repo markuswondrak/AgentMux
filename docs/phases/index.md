@@ -8,15 +8,15 @@ This is the canonical reference for AgentMux's workflow phases. Each phase has i
 
 | # | Phase | Directory | Optional | Detail |
 |---|-------|-----------|----------|--------|
-| 1 | `product_management` | `01_product_management/` | yes (`--product-manager` flag) | [product-management.md](product-management.md) |
-| 2a | `architecting` | `02_planning/` | no | [planning.md](planning.md) |
-| 2b | `planning` | `02_planning/` | no | [planning.md](planning.md) |
-| 3 | *(research)* | `03_research/` | on-demand | [planning.md § Research](planning.md#research-03_research) |
-| 4 | `designing` | `04_design/` | yes (`needs_design: true` in plan.yaml) | [design.md](design.md) |
-| 5a | `implementing` | `05_implementation/` | no | [implementation.md](implementation.md) |
-| 6 | `reviewing` | `06_review/` | no | [review.md](review.md) |
-| 5b | `fixing` | `05_implementation/` | yes (after review fail) | [implementation.md § Fixing](implementation.md#fixing) |
-| 8 | `completing` | `08_completion/` | no | [completion.md](completion.md) |
+| 1 | `product_management` | `01_product_management/` | yes (`--product-manager` flag) | [01_product-management.md](01_product-management.md) |
+| 2a | `architecting` | `02_planning/` | no | [02_planning.md](02_planning.md) |
+| 2b | `planning` | `02_planning/` | no | [02_planning.md](02_planning.md) |
+| 3 | *(research)* | `03_research/` | on-demand | [02_planning.md § Research](02_planning.md#research-03_research) |
+| 4 | `designing` | `04_design/` | yes (`needs_design: true` in plan.yaml) | [04_design.md](04_design.md) |
+| 5a | `implementing` | `05_implementation/` | no | [05_implementation.md](05_implementation.md) |
+| 6 | `reviewing` | `06_review/` | no | [06_review.md](06_review.md) |
+| 5b | `fixing` | `05_implementation/` | yes (after review fail) | [05_implementation.md § Fixing](05_implementation.md#fixing) |
+| 8 | `completing` | `08_completion/` | no | [08_completion.md](08_completion.md) |
 
 `architecting` and `planning` share the `02_planning/` directory. `implementing` and `fixing` share `05_implementation/`. Research is a cross-cutting concern triggered during architecting.
 

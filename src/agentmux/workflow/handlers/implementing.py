@@ -346,7 +346,7 @@ class ImplementingHandler:
                         ctx.files.feature_dir,
                         ctx.files.relative_path(
                             ctx.files.implementation_dir
-                            / f"coder_prompt_{marker_index}.txt"
+                            / f"coder_prompt_{marker_index}.md"
                         ),
                         build_coder_subplan_prompt(
                             ctx.files,
@@ -432,7 +432,7 @@ class ImplementingHandler:
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
             ctx.files.relative_path(
-                ctx.files.implementation_dir / "coder_prompt_whole.txt"
+                ctx.files.implementation_dir / "coder_prompt_whole.md"
             ),
             prompt_content,
         )

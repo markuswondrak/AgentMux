@@ -14,7 +14,7 @@ The architect produces a technical architecture document describing *what* will 
 | File | Writer | Reader | Format |
 |------|--------|--------|--------|
 | `architect_prompt.md` | orchestrator | architect agent | Markdown prompt |
-| `changes_prompt.txt` | orchestrator | architect agent (on replanning) | plain text |
+| `changes_prompt.md` | orchestrator | architect agent (on replanning) | Markdown |
 | `architecture.md` | architect agent (via `submit_architecture`) | planner (via prompt injection) | Markdown |
 
 ### Planning

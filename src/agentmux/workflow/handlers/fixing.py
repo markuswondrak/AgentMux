@@ -34,7 +34,7 @@ class FixingHandler:
         ctx.runtime.kill_primary("coder")
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
-            ctx.files.relative_path(ctx.files.review_dir / "fix_prompt.txt"),
+            ctx.files.relative_path(ctx.files.review_dir / "fix_prompt.md"),
             build_fix_prompt(ctx.files),
         )
         send_to_role(

@@ -8,7 +8,7 @@ Implementation executes the execution plan produced by planning. Coders receive 
 
 | File | Writer | Reader | Format |
 |------|--------|--------|--------|
-| `coder_prompt_<N>.txt` | orchestrator | coder agent N | plain text |
+| `coder_prompt_<N>.md` | orchestrator | coder agent N | Markdown |
 | `done_<N>` | coder agent N (via `submit_done`) | orchestrator | empty marker |
 | `done_1` | coder agent (fixing phase) | orchestrator | empty marker |
 

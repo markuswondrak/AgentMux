@@ -429,8 +429,8 @@ class TestDocumentationUpdates(unittest.TestCase):
         self.assertIn("planner", content)
 
     def test_file_protocol_includes_planner_prompt(self) -> None:
-        """docs/phases/planning.md should document planner prompt files."""
-        planning_doc = self.project_root / "docs" / "phases" / "planning.md"
+        """docs/phases/02_planning.md should document planner prompt files."""
+        planning_doc = self.project_root / "docs" / "phases" / "02_planning.md"
         content = planning_doc.read_text(encoding="utf-8")
         # Should mention planner prompt
         self.assertIn("planner", content.lower())

@@ -14,7 +14,7 @@ The reviewer evaluates the implementation against the plan, producing a structur
 | `review_expert_prompt.md` | orchestrator | Deep-Dive Expert reviewer | Markdown prompt |
 | `review.yaml` | reviewer agent (via `submit_review`) | orchestrator | YAML |
 | `review.md` | reviewer agent or orchestrator (auto-generated from `review.yaml`) | summary, monitor, PR | Markdown |
-| `fix_prompt.txt` | orchestrator | coder agent (fixing phase) | plain text |
+| `fix_prompt.md` | orchestrator | coder agent (fixing phase) | Markdown |
 | `fix_request.md` | orchestrator | coder agent (fixing phase) | Markdown |
 
 ## Reviewer selection
@@ -34,7 +34,7 @@ The reviewer evaluates the implementation against the plan, producing a structur
 | `summary` | yes | string |
 | `findings` | on `fail` | list of `{location, issue, severity, recommendation}` |
 | `commit_message` | optional on `pass` | string |
-| `approved_preferences` | optional | applied to `08_completion/approved_preferences.json` |
+| `preferences` | optional | preferences written to agent prompt file under `## Approved Preferences` |
 
 See [Handoff Contracts](../handoff-contracts.md#review) for full validation rules.
 
