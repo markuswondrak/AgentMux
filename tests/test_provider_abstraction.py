@@ -735,18 +735,21 @@ roles:
             self.assertEqual("opencode", loaded.agents["coder"].provider)
 
     def test_copilot_provider_has_default_model_and_role_args(self) -> None:
-        """Copilot provider should have default_model and default_role_args."""
+        """Copilot provider has default_model, default_role_args, model_args."""
         copilot = get_provider("copilot")
         self.assertEqual("claude-sonnet-4.6", copilot.default_model)
+        self.assertEqual(["--allow-all"], copilot.default_role_args)
+        self.assertIsNotNone(copilot.model_args)
         self.assertEqual(
-            ["--allow-all", "--reasoning-effort", "high"], copilot.default_role_args
+            ["--reasoning-effort", "high"],
+            copilot.model_args.get("claude-sonnet-4.6"),
         )
 
     def test_copilot_roles_inherit_default_role_args(self) -> None:
-        """All copilot roles should inherit default_role_args."""
+        """Copilot roles inherit default_role_args plus model_args."""
         copilot = get_provider("copilot")
 
-        # Test various roles
+        # Test with default model (claude-sonnet-4.6) – gets model_args appended
         for role in ["architect", "coder", "reviewer", "product-manager", "designer"]:
             agent = resolve_agent(
                 global_provider=copilot,
@@ -756,7 +759,7 @@ roles:
             self.assertEqual(
                 ["--allow-all", "--reasoning-effort", "high"],
                 agent.args,
-                f"Role {role} should inherit default_role_args",
+                f"Role {role} with sonnet model should include reasoning-effort",
             )
             self.assertEqual("claude-sonnet-4.6", agent.model)
 
@@ -815,6 +818,33 @@ roles:
             role_config={},  # No model specified
         )
         self.assertEqual("claude-sonnet-4.6", agent.model)
+
+    def test_model_args_appended_for_matching_model(self) -> None:
+        """model_args should be appended when model matches."""
+        copilot = get_provider("copilot")
+        agent = resolve_agent(
+            global_provider=copilot,
+            role="web-researcher",
+            role_config={"model": "claude-sonnet-4.6"},
+        )
+        self.assertEqual(
+            ["--allow-all", "--reasoning-effort", "high"],
+            agent.args,
+        )
+
+    def test_model_args_not_appended_for_non_matching_model(self) -> None:
+        """model_args should NOT be appended when model has no entry."""
+        copilot = get_provider("copilot")
+        agent = resolve_agent(
+            global_provider=copilot,
+            role="web-researcher",
+            role_config={"model": "claude-haiku-4.5"},
+        )
+        # Haiku has no model_args entry, so only default_role_args should be present
+        self.assertEqual(
+            ["--allow-all"],
+            agent.args,
+        )
 
     def test_role_model_overrides_provider_default_model(self) -> None:
         """Role-specific model should override provider default_model."""

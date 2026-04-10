@@ -230,6 +230,11 @@ providers:
     default_model: claude-sonnet-4.6
     default_role_args:
     - --allow-all
-    - --reasoning-effort
-    - high
+    model_args:
+      claude-sonnet-4.6:
+      - --reasoning-effort
+      - high
+      claude-opus-4.6:
+      - --reasoning-effort
+      - high
     role_args: {}

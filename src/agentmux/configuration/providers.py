@@ -17,6 +17,7 @@ class Provider:
     single_coder: bool = False
     default_model: str | None = None
     default_role_args: list[str] | None = None
+    model_args: dict[str, list[str]] | None = None
 
 
 def _build_builtin_providers() -> dict[str, Provider]:
@@ -29,6 +30,12 @@ def _build_builtin_providers() -> dict[str, Provider]:
 
         # Parse default_model for the provider
         default_model = provider.get("default_model")
+
+        # Parse model_args (model-specific additional arguments)
+        raw_model_args = provider.get("model_args", {})
+        model_args: dict[str, list[str]] = {}
+        for model_id, args in raw_model_args.items():
+            model_args[str(model_id)] = [str(a) for a in args]
 
         # Build role_args by merging default_role_args with role-specific args
         role_args: dict[str, list[str]] = {}
@@ -47,6 +54,7 @@ def _build_builtin_providers() -> dict[str, Provider]:
             single_coder=bool(provider.get("single_coder", False)),
             default_model=default_model,
             default_role_args=default_role_args if default_role_args else None,
+            model_args=model_args if model_args else None,
         )
     return result
 
@@ -79,6 +87,11 @@ def resolve_agent(
         # Use role-specific args if defined, otherwise fall back to provider's
         # default_role_args
         args = provider.default_args.get(role, provider.default_role_args or [])
+
+    # Append model-specific args if defined for this model
+    model_extra = provider.model_args.get(model, []) if provider.model_args else []
+    if model_extra:
+        args = list(args) + model_extra
 
     return AgentConfig(
         role=role,
