@@ -154,11 +154,9 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("TDD protocol", coder_prompt)
             self.assertIn("fail before implementation (Red)", coder_prompt)
             self.assertIn("until the tests pass (Green)", coder_prompt)
+            self.assertIn("Follow the plan's phase order strictly", coder_prompt)
             self.assertIn(
-                "Follow the phase order from the active plan strictly", coder_prompt
-            )
-            self.assertIn(
-                "Work atomically from your assigned task checklist: "
+                "Work atomically through the task checklist: "
                 "Complete one task at a time",
                 coder_prompt,
             )
@@ -187,11 +185,9 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("TDD protocol", prompt)
             self.assertIn("fail before implementation (Red)", prompt)
             self.assertIn("until the tests pass (Green)", prompt)
+            self.assertIn("Follow the plan's phase order strictly", prompt)
             self.assertIn(
-                "Follow the phase order from the active plan strictly", prompt
-            )
-            self.assertIn(
-                "Work atomically from your assigned task checklist: "
+                "Work atomically through the task checklist: "
                 "Complete one task at a time",
                 prompt,
             )
@@ -216,8 +212,8 @@ class TasksRequirementsTests(unittest.TestCase):
             reviewer_review_prompt = build_reviewer_prompt(files, is_review=True)
 
             self.assertIn(
-                "When your assigned task checklist includes documentation tasks, "
-                "complete them as part of implementation in this coder step.",
+                "When the task checklist includes documentation tasks, "
+                "complete them as part of implementation.",
                 coder_prompt,
             )
             self.assertIn(

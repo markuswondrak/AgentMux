@@ -14,11 +14,11 @@ Session directory: [[placeholder:feature_dir]]
 
 Your job:
 1. TDD protocol: create tests first for the planned change, run them, and confirm they fail before implementation (Red). Only then implement code until the tests pass (Green).
-2. Implement [[placeholder:implement_scope]] in the project directory [[placeholder:project_dir]].
-3. [[placeholder:alignment_instruction]]
-4. Follow the phase order from [[placeholder:plan_ref]] strictly. If the active phase/sub-plan is interface or contract work, implement only that phase scope and validate only what is appropriate for that phase before moving on.
-5. Work atomically [[placeholder:task_scope]]: Complete one task at a time, run validation for that task, and check off that task before moving to the next one.
-[[placeholder:doc_task_instruction]]
+2. Implement the assigned plans in the project directory [[placeholder:project_dir]].
+3. Keep the implementation aligned with `requirements.md` and the plan's task checklist.
+4. Follow the plan's phase order strictly. If the active phase/sub-plan is interface or contract work, implement only that phase scope and validate only what is appropriate for that phase before moving on.
+5. Work atomically through the task checklist: Complete one task at a time, run validation for that task, and check off that task before moving to the next one.
+6. When the task checklist includes documentation tasks, complete them as part of implementation. Do not defer documentation to a separate docs agent or post-review docs phase.
 [[shared:coder-discipline]]
 [[placeholder:post_discipline_items]]
 

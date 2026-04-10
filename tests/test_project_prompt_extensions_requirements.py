@@ -540,8 +540,8 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
             self.assertIn(change_docs_line, change_prompt)
             self.assertIn(
-                "When your assigned task checklist includes documentation tasks, "
-                "complete them as part of implementation in this coder step.",
+                "When the task checklist includes documentation tasks, "
+                "complete them as part of implementation.",
                 coder_prompt,
             )
             self.assertIn(

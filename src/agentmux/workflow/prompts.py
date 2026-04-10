@@ -378,19 +378,6 @@ def build_coder_subplan_prompt(
             "project_dir": files.project_dir,
             "plans_section": plans_section,
             "research_handoff": _build_research_handoff(files),
-            "implement_scope": "the active plan",
-            "alignment_instruction": (
-                f"Keep the implementation aligned with `requirements.md`, "
-                f"`{plan_file_rel}`, and your assigned task checklist."
-            ),
-            "plan_ref": "the active plan",
-            "task_scope": "from your assigned task checklist",
-            "doc_task_instruction": (
-                "When your assigned task checklist includes documentation tasks, "
-                "complete them as part of implementation in this coder step.\n"
-                "Do not defer documentation to a separate docs agent or "
-                "post-review docs phase."
-            ),
             "post_discipline_items": post_discipline_items,
             "completion_constraints": completion_constraints,
         },
@@ -501,19 +488,6 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
             "project_dir": files.project_dir,
             "plans_section": plans_content,
             "research_handoff": _build_research_handoff(files),
-            "implement_scope": "all plans",
-            "alignment_instruction": (
-                "Keep each plan's implementation aligned with `requirements.md` "
-                "and its embedded task checklist."
-            ),
-            "plan_ref": "each plan",
-            "task_scope": "through each plan's task checklist",
-            "doc_task_instruction": (
-                "When a plan's task checklist includes documentation tasks, "
-                "complete them as part of implementation for that plan.\n"
-                "Do not defer documentation to a separate docs agent or "
-                "post-review docs phase."
-            ),
             "post_discipline_items": post_discipline_items,
             "completion_constraints": completion_constraints,
         },
