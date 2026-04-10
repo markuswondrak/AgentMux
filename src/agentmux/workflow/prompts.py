@@ -22,6 +22,7 @@ _USER_ASK_FALLBACK = "your native ask / question tool"
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _SHARED_FRAGMENT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
+_SHARED_FRAGMENT_VARIANT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
 _VALUE_PLACEHOLDER_PATTERN = re.compile(r"\[\[placeholder:([a-z0-9][a-z0-9_-]*)\]\]")
 _SESSION_INCLUDE_PATTERN = re.compile(r"\[\[include:([^\]]+)\]\]")
 _SESSION_INCLUDE_OPTIONAL_PATTERN = re.compile(r"\[\[include-optional:([^\]]+)\]\]")
@@ -343,6 +344,29 @@ def build_coder_subplan_prompt(
         )
     tasks_file_relative = files.relative_path(tasks_path)
 
+    plan_file_rel = files.relative_path(subplan_path)
+    tasks_file_rel = tasks_file_relative
+
+    plans_section = (
+        f'<file path="{plan_file_rel}">\n'
+        f"[[include:{plan_file_rel}]]\n"
+        "</file>\n\n"
+        f'<file path="{tasks_file_rel}">\n'
+        f"[[include:{tasks_file_rel}]]\n"
+        "</file>"
+    )
+    post_discipline_items = (
+        f"12. When your sub-plan implementation is complete, "
+        f"call `submit_done(subplan_index={subplan_index})` "
+        "to signal completion to the orchestrator.\n"
+        "13. If implementation reveals that requirements or the plan need adjustment "
+        "(e.g. a requirement turns out to be infeasible as written, or a task needs "
+        "to be split or reordered), "
+        f"update `requirements.md` and `{plan_file_rel}` / `{tasks_file_rel}` "
+        "accordingly so they stay in sync with reality.\n"
+        f"14. {completion_instruction}"
+    )
+
     rendered = _render_template(
         _load_template(
             "agents",
@@ -352,10 +376,22 @@ def build_coder_subplan_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "plan_file": files.relative_path(subplan_path),
-            "tasks_file": tasks_file_relative,
+            "plans_section": plans_section,
             "research_handoff": _build_research_handoff(files),
-            "completion_instruction": completion_instruction,
+            "implement_scope": "the active plan",
+            "alignment_instruction": (
+                f"Keep the implementation aligned with `requirements.md`, "
+                f"`{plan_file_rel}`, and your assigned task checklist."
+            ),
+            "plan_ref": "the active plan",
+            "task_scope": "from your assigned task checklist",
+            "doc_task_instruction": (
+                "When your assigned task checklist includes documentation tasks, "
+                "complete them as part of implementation in this coder step.\n"
+                "Do not defer documentation to a separate docs agent or "
+                "post-review docs phase."
+            ),
+            "post_discipline_items": post_discipline_items,
             "completion_constraints": completion_constraints,
         },
     )
@@ -399,7 +435,6 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
 
             plan_rel = files.relative_path(plan_path)
             tasks_rel = files.relative_path(tasks_path)
-            done_rel = files.relative_path(files.implementation_dir / f"done_{index}")
 
             block = "\n".join(
                 [
@@ -411,8 +446,8 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
                     "",
                     tasks_path.read_text(encoding="utf-8").strip(),
                     "",
-                    f"**Completion marker for plan {index}**: "
-                    f"create empty file `{done_rel}` when this plan is "
+                    f"**Signal completion for plan {index}**: "
+                    f"call `submit_done(subplan_index={index})` when this plan is "
                     f"fully implemented and validated.",
                     "",
                 ]
@@ -422,39 +457,64 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
     plans_content = "\n".join(plans_blocks)
 
     all_marker_indexes_sorted = sorted(all_marker_indexes)
-    all_markers = [
-        f"`{files.relative_path(files.implementation_dir / f'done_{i}')}`"
-        for i in all_marker_indexes_sorted
+    done_calls = [
+        f"`submit_done(subplan_index={i})`" for i in all_marker_indexes_sorted
     ]
-    markers_str = ", ".join(all_markers)
+    done_calls_str = ", ".join(done_calls)
 
     completion_instruction = (
         "FINAL STEP — once all code is written and all validations pass "
-        "for every plan above, ensure these completion marker files exist "
-        f"(each as an empty file): {markers_str}. "
-        "You may create each marker as you finish each individual plan, "
+        "for every plan above, call the completion tool for each plan: "
+        f"{done_calls_str}. "
+        "You may call submit_done as you finish each individual plan, "
         "or all at once at the end. "
-        "Do not write anything to the marker files — they must be empty."
+        "Each call signals to the orchestrator that the corresponding plan is complete."
     )
     completion_constraints = "\n".join(
         [
             "- Do not update state.json.",
-            "- Do not write anything to the marker files; create them as empty files.",
         ]
+    )
+
+    post_discipline_items = (
+        "12. If implementation reveals that requirements or a plan need adjustment "
+        "(e.g. a requirement turns out to be infeasible as written, or tasks need "
+        "reordering), update `requirements.md` and the embedded plan's task list "
+        "accordingly so they stay in sync with reality.\n"
+        f"13. {completion_instruction}\n"
+        "14. Sub-agent delegation: For each plan, spawn a dedicated sub-agent and "
+        "delegate that plan's full implementation to it. The sub-agent works through "
+        "the plan's task checklist end-to-end "
+        "(TDD → implement → validate → check off). "
+        "Only move to the next plan once the sub-agent for the current plan has "
+        "completed and its tasks are checked off."
     )
 
     rendered = _render_template(
         _load_template(
             "agents",
-            "coder_whole_plan",
+            "coder",
             project_dir=files.project_dir,
         ),
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "plans_content": plans_content,
+            "plans_section": plans_content,
             "research_handoff": _build_research_handoff(files),
-            "completion_instruction": completion_instruction,
+            "implement_scope": "all plans",
+            "alignment_instruction": (
+                "Keep each plan's implementation aligned with `requirements.md` "
+                "and its embedded task checklist."
+            ),
+            "plan_ref": "each plan",
+            "task_scope": "through each plan's task checklist",
+            "doc_task_instruction": (
+                "When a plan's task checklist includes documentation tasks, "
+                "complete them as part of implementation for that plan.\n"
+                "Do not defer documentation to a separate docs agent or "
+                "post-review docs phase."
+            ),
+            "post_discipline_items": post_discipline_items,
             "completion_constraints": completion_constraints,
         },
     )

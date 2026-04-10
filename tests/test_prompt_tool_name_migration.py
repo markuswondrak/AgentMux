@@ -113,10 +113,13 @@ class PromptToolNameMigrationTests(unittest.TestCase):
         self.assertIn("submit_research_done", content)
 
     def test_coder_prompt_mentions_submit_done(self) -> None:
-        """coder.md should document submit_done."""
-        path = PROMPTS_DIR / "agents" / "coder.md"
-        content = path.read_text(encoding="utf-8")
-        self.assertIn("submit_done", content)
+        """coder.md or its shared discipline fragment should document submit_done."""
+        coder = PROMPTS_DIR / "agents" / "coder.md"
+        discipline = PROMPTS_DIR / "shared" / "coder-discipline.md"
+        combined = coder.read_text(encoding="utf-8") + discipline.read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("submit_done", combined)
 
     def test_product_manager_prompt_uses_unprefixed_research_tools(self) -> None:
         """product-manager.md should reference unprefixed research dispatch tools."""

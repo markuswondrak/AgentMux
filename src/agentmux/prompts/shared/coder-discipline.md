@@ -1,7 +1,6 @@
-6. If `05_design/design.md` is present, follow it for UI-related work.
-7. Change only task-relevant files and avoid drive-by cleanup or formatting outside the requested work.
-8. Run at least the relevant validation steps for the change. This includes tests and any other appropriate checks such as lint, build, or typecheck when they are relevant to the changed code.
-9. Do not write the review.
-10. If you hit an ambiguity or blocker that prevents correct implementation, record it clearly in the shared feature directory instead of guessing.
-11. You are only finished when the required validation passes.
-12. Record any notable risks, follow-ups, or breaking changes in the shared feature directory if they remain after implementation.
+6. Operate only within the scope of your assigned tasks — do not modify files or modules that are not mentioned in your plan or task checklist.
+7. Match existing code style, naming conventions, and architectural patterns in the project. Do not introduce new libraries or frameworks unless they are explicitly listed in the plan.
+8. Validate after each individual task before moving on: run the relevant tests or linter for what you just changed. Do not defer all validation to the end.
+9. When validation fails, fix the root cause in production code. Do not modify tests to force them to pass unless updating the test was an explicit task.
+10. Keep changes minimal and focused. Do not fix unrelated issues or refactor out-of-scope code, even if you identify improvements.
+11. After all tasks are complete, run the full project test suite to confirm no regressions, then call `submit_done` to signal completion to the orchestrator.
