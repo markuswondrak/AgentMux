@@ -223,6 +223,7 @@ providers:
     command: copilot
     model_flag: --model
     trust_snippet: trust the files
+    batch_subcommand: -p
     single_coder: true
     default_model: claude-sonnet-4.6
     default_role_args:
