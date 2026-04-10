@@ -35,7 +35,6 @@ PHASE_CATALOG: tuple[PhaseEntry, ...] = (
     PhaseEntry(
         "product_management",
         "01_product_management",
-        monitor_file_patterns=("01_product_management/analysis.md",),
     ),
     PhaseEntry("architecting", "02_architecting"),  # architecture.md not in monitor log
     PhaseEntry(

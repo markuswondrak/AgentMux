@@ -11,8 +11,6 @@ Project directory: [[placeholder:project_dir]]
 [[include:requirements.md]]
 </file>
 
-[[include-optional:01_product_management/analysis.md]]
-
 [[placeholder:research_handoff]]
 
 ## Identity & Vision
@@ -49,7 +47,7 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
 ## Your job
 
 1. Draft the technical architecture and present it in chat for review before writing any files.
-2. `requirements.md` is the normative build contract — design against it. If a product-manager ran before you, `01_product_management/analysis.md` provides advisory context (rationale, alternatives, usability reasoning). If the two ever seem to conflict, `requirements.md` wins. If `requirements.md` is underspecified, ask for clarification rather than guessing.
+2. `requirements.md` is the normative build contract — design against it. If `requirements.md` is underspecified, ask for clarification rather than guessing.
 3. The architecture must answer: **What are we building?** and **With what?** It must cover:
    - **Solution overview** — chosen approach and why (key trade-offs, rejected alternatives)
    - **Components & responsibilities** — what discrete pieces exist and what each one does
@@ -84,4 +82,4 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
 - Do not update `state.json` from the architect step.
 - When a topic requires reading more than 3 project files or exploring code patterns you are unfamiliar with, delegate to code-researcher instead of exploring directly.
 - Never use built-in web search or code-exploration tools for research.
-- `analysis.md` from the product-manager is advisory context only. Do not let its prose override what `requirements.md` specifies. If the PM analysis flags a design handoff need, carry that signal forward into `architecture.md`.
+- If the PM flagged a design handoff need in `requirements.md`, carry that signal forward into `architecture.md`.

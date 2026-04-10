@@ -1009,7 +1009,6 @@ class MonitorTests(unittest.TestCase):
 
         expected = {
             "requirements.md",
-            "01_product_management/analysis.md",
             "04_planning/plan.yaml",
             "04_planning/tasks.md",
             "03_research/code-*/summary.md",

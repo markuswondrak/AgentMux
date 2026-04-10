@@ -35,7 +35,7 @@ Phase-specific artifacts live in numbered subdirectories. For full artifact tabl
 
 | Phase directory | Key artifacts |
 |-----------------|---------------|
-| `01_product_management/` | `analysis.md`, `done` |
+| `01_product_management/` | `done` |
 | `02_architecting/` | `architecture.md` |
 | `03_research/` | `code-<topic>/summary.md`, `web-<topic>/summary.md` |
 | `04_planning/` | `plan.yaml` (→ [plan-yaml.md](plan-yaml.md)), `execution_plan.yaml`, `plan_<N>.md` |

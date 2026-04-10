@@ -183,12 +183,11 @@ class ProductManagerRequirementsTests(unittest.TestCase):
 
             self.assertIn(str(feature_dir), prompt)
             self.assertIn(str(project_dir), prompt)
-            self.assertIn("01_product_management/analysis.md", prompt)
             self.assertIn("01_product_management/done", prompt)
             self.assertNotIn("04_design/design.md", prompt)
             self.assertNotIn("/frontend-design", prompt)
             self.assertIn("Design handoff needed", prompt)
-            self.assertIn("must not create design artifacts", prompt)
+            self.assertIn("requirements.md", prompt)
 
     def test_product_management_phase_entry_and_completion_transition(self) -> None:
         with tempfile.TemporaryDirectory() as td:
