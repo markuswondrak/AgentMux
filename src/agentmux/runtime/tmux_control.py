@@ -4,6 +4,7 @@ import shlex
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from ..shared.models import AgentConfig
@@ -100,7 +101,8 @@ def list_agentmux_sessions() -> list[str]:
 
 def _log(msg: str) -> None:
     """Print debug message to stdout (captured in orchestrator log)."""
-    print(f"[TMUX DEBUG] {msg}")
+    ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    print(f"[TMUX DEBUG {ts}] {msg}")
 
 
 def _log_layout(session_name: str) -> None:

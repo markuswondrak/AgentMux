@@ -23,6 +23,9 @@ class _FakeRuntime:
     def is_expected_missing_pane(self, pane_id: str | None) -> bool:
         return pane_id in self._expected
 
+    def get_pane_output_log(self, pane_id: str | None) -> object:  # Path | None
+        return None
+
 
 class InterruptionEventSourceTests(unittest.TestCase):
     def test_poll_once_emits_event_for_missing_primary_pane(self) -> None:

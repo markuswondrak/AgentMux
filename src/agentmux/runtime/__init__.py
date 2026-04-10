@@ -102,6 +102,9 @@ class TmuxAgentRuntime:
         self._expected_missing_panes: set[str] = set()
         self._pane_tracking_lock = threading.RLock()
         self._process_pids: dict[str, int] = {}
+        self._grace_panes: dict[str, float] = {}  # pane_id -> monotonic timestamp
+        self._grace_period_seconds = 2.0
+        self._pane_output_logs: dict[str, Path] = {}  # pane_id -> output.log path
         self._normalize_primary_panes()
 
     @classmethod
@@ -341,13 +344,31 @@ class TmuxAgentRuntime:
 
     def unexpected_missing_registered_panes(self) -> list[RegisteredPaneRef]:
         with self._pane_tracking_lock:
+            now = time.monotonic()
+            # Clean up expired grace entries
+            expired = [
+                pid
+                for pid, ts in self._grace_panes.items()
+                if now - ts > self._grace_period_seconds
+            ]
+            for pid in expired:
+                del self._grace_panes[pid]
+
             panes = self._registered_panes_unlocked()
             return [
                 pane
                 for pane in panes
                 if pane.pane_id not in self._expected_missing_panes
+                and pane.pane_id not in self._grace_panes
                 and not tmux_pane_exists(pane.pane_id)
             ]
+
+    def get_pane_output_log(self, pane_id: str | None) -> Path | None:
+        """Return the output.log path for a batch-mode pane, if known."""
+        if not pane_id:
+            return None
+        with self._pane_tracking_lock:
+            return self._pane_output_logs.get(pane_id)
 
     def _rehydrate(self) -> None:
         for role, pane_id in list(self.primary_panes.items()):
@@ -559,6 +580,10 @@ class TmuxAgentRuntime:
         print(f"[ORCH] spawn_task: created pane_id={pane_id}, pid={pid}")
         self.parallel_panes.setdefault(role, {})[task_id] = pane_id
         self._track_process_pid(pane_id, pid)
+        with self._pane_tracking_lock:
+            self._grace_panes[pane_id] = time.monotonic()
+            if role in BATCH_AGENT_ROLES:
+                self._pane_output_logs[pane_id] = research_dir / "output.log"
         self._persist_snapshot()
 
     def hide_task(self, role: str, task_id: int | str) -> None:
