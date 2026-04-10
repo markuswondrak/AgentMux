@@ -20,16 +20,6 @@ import yaml
 _VALID_VERDICTS = {"pass", "fail"}
 _VALID_MODES = {"serial", "parallel"}
 _VALID_SEVERITIES = {"low", "medium", "high"}
-_VALID_FOCUS_AREAS = {
-    "security",
-    "performance",
-    "testing",
-    "error-handling",
-    "accessibility",
-    "documentation",
-    "maintainability",
-}
-_VALID_FINDING_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 
 
 @dataclass(frozen=True)
