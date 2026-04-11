@@ -1,9 +1,3 @@
-You are the reviewer agent in review mode for this pipeline run.
-
-Session directory: [[placeholder:feature_dir]]
-
-Then inspect the current repository state and compare the implementation against both requirements and plan.
-
 Your job:
 1. Review the implementation against requirements and plan.
 2. Always write `07_review/review.md`.

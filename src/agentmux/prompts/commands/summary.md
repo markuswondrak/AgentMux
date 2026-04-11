@@ -1,8 +1,6 @@
 You have just completed a successful code review (verdict: pass). Now write a concise
 implementation summary for the user.
 
-Session directory: [[placeholder:feature_dir]]
-
 <file path="requirements.md">
 [[include:requirements.md]]
 </file>

@@ -777,19 +777,19 @@ class TestReviewingHandler:
             ) as mock_write,
             patch("agentmux.workflow.handlers.reviewing.send_to_role") as mock_send,
             patch(
-                "agentmux.workflow.handlers.reviewing.build_reviewer_prompt"
-            ) as mock_build,
+                "agentmux.workflow.handlers.reviewing.build_reviewer_logic_prompt"
+            ) as mock_build_logic,
             patch(
                 "agentmux.workflow.handlers.reviewing.role_display_label"
             ) as mock_label,
         ):
             mock_write.return_value = Path("/mock/prompt.md")
-            mock_build.return_value = "reviewer prompt"
+            mock_build_logic.return_value = "reviewer logic prompt"
             mock_label.return_value = "[reviewer] iteration 1"
 
             handler.enter(empty_state, mock_ctx)
 
-            mock_build.assert_called_once_with(mock_ctx.files, is_review=True)
+            mock_build_logic.assert_called_once()
             mock_send.assert_called_once()
 
     def test_handle_review_passed(self, mock_ctx: MagicMock, empty_state: dict) -> None:

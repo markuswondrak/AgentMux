@@ -294,7 +294,9 @@ class TasksRequirementsTests(unittest.TestCase):
                 build_architect_prompt(files, is_review=True)  # type: ignore[call-arg]
 
             review_prompt = build_reviewer_prompt(files, is_review=True)
-            self.assertIn("reviewer agent in review mode", review_prompt)
+            self.assertIn(
+                "Review the implementation against requirements", review_prompt
+            )
 
 
 if __name__ == "__main__":

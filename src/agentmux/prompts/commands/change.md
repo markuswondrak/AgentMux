@@ -1,7 +1,5 @@
 You are the planner agent for this pipeline run, handling requested changes.
 
-Session directory: [[placeholder:feature_dir]]
-
 <file path="requirements.md">
 [[include:requirements.md]]
 </file>

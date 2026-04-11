@@ -114,13 +114,28 @@ class ReviewingHandler(BaseToolHandler):
 
         config = reviewer_config[reviewer_type]
 
-        # Build the command prompt (review.md) combined with agent prompt
+        # Build the prompt: specialized agent prompts are self-contained,
+        # the generic reviewer combines agent prompt + command prompt.
         reviewer_role = config["role"]
-        agent_prompt = config["prompt_builder"](
-            ctx.files, ctx.agents.get(reviewer_role)
-        )
-        command_prompt = build_reviewer_prompt(ctx.files, is_review=True)
-        full_prompt = f"{agent_prompt}\n\n{command_prompt}"
+        if reviewer_type == "logic":
+            full_prompt = build_reviewer_logic_prompt(
+                ctx.files, ctx.agents.get(reviewer_role)
+            )
+        elif reviewer_type == "quality":
+            full_prompt = build_reviewer_quality_prompt(
+                ctx.files, ctx.agents.get(reviewer_role)
+            )
+        elif reviewer_type == "expert":
+            full_prompt = build_reviewer_expert_prompt(
+                ctx.files, ctx.agents.get(reviewer_role)
+            )
+        else:
+            # Fallback: generic reviewer combines agent + command prompt
+            agent_prompt = build_reviewer_prompt(
+                ctx.files, agent=ctx.agents.get(reviewer_role)
+            )
+            command_prompt = build_reviewer_prompt(ctx.files, is_review=True)
+            full_prompt = f"{agent_prompt}\n\n{command_prompt}"
 
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,

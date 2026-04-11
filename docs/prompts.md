@@ -5,7 +5,7 @@
 ## Template directories
 
 - `agentmux/prompts/agents/` — role-level prompts (define what each agent is): `architect.md`, `planner.md`, `product-manager.md`, `reviewer.md`, `coder.md`, `code-researcher.md`, `web-researcher.md`, `designer.md`
-- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `review_logic.md`, `review_quality.md`, `review_expert.md`, `fix.md`, `summary.md`, `change.md`
+- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `fix.md`, `summary.md`, `change.md`
 - `agentmux/prompts/shared/` — reusable prompt fragments inlined via `[[shared:fragment-name]]`: `handoff-contract-architecture.md`, `handoff-contract-plan.md`, `handoff-contract-review.md`, `coder-discipline.md`, `preference-memory.md`
 
 ## Placeholder syntax
@@ -96,7 +96,7 @@ Three shared prompt fragments provide agents with MCP submission tool instructio
 
 - `handoff-contract-architecture.md` — used by `architect.md`; documents `submit_architecture` parameters and fallback `architecture.yaml` schema
 - `handoff-contract-plan.md` — used by `planner.md` and `change.md`; documents `submit_subplan` and `submit_execution_plan` parameters and fallback YAML schemas
-- `handoff-contract-review.md` — used by `review_logic.md`, `review_quality.md`, `review_expert.md`; documents `submit_review` parameters and fallback `review.yaml` schema
+- `handoff-contract-review.md` — used by reviewer agent prompts; documents `submit_review` parameters and fallback `review.yaml` schema
 
 See `docs/handoff-contracts.md` for full contract details.
 

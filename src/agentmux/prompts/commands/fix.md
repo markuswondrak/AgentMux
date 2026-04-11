@@ -1,11 +1,5 @@
 You are the coder agent for this pipeline run, fixing review findings.
 
-Session directory: [[placeholder:feature_dir]]
-
-<file path="context.md">
-[[include:context.md]]
-</file>
-
 <file path="requirements.md">
 [[include:requirements.md]]
 </file>
