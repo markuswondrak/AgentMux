@@ -8,14 +8,11 @@ separation between "What/With what" (architect) and "How/When" (planner).
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from agentmux.workflow.event_catalog import EVENT_ARCHITECTURE_WRITTEN
-from agentmux.workflow.event_router import (
-    EventSpec,
-    ToolSpec,
-    WorkflowEvent,
-)
+from agentmux.workflow.event_router import EventSpec, WorkflowEvent
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.phase_helpers import (
     handle_research_request,
     notify_research_complete,
@@ -31,7 +28,7 @@ if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
 
 
-class ArchitectingHandler:
+class ArchitectingHandler(BaseToolHandler):
     """Event-driven handler for architecting phase.
 
     The architect creates the technical architecture document (architecture.md).
@@ -39,25 +36,31 @@ class ArchitectingHandler:
     When architecture.md is written, the phase transitions to 'planning'.
     """
 
+    _TOOL_HANDLERS: ClassVar[tuple[ToolHandlerEntry, ...]] = (
+        ToolHandlerEntry(
+            name="architecture",
+            tool_names=("submit_architecture",),
+            handler=lambda s, e, st, c: s._handle_architecture(e, st, c),
+        ),
+        ToolHandlerEntry(
+            name="research_code_req",
+            tool_names=("research_dispatch_code",),
+            handler=lambda s, e, st, c: s._handle_research_code_req(e, st, c),
+        ),
+        ToolHandlerEntry(
+            name="research_web_req",
+            tool_names=("research_dispatch_web",),
+            handler=lambda s, e, st, c: s._handle_research_web_req(e, st, c),
+        ),
+        ToolHandlerEntry(
+            name="research_done",
+            tool_names=("submit_research_done",),
+            handler=lambda s, e, st, c: s._handle_research_done(e, st, c),
+        ),
+    )
+
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()
-
-    def get_tool_specs(self) -> Sequence[ToolSpec]:
-        return (
-            ToolSpec(name="architecture", tool_names=("submit_architecture",)),
-            ToolSpec(
-                name="research_code_req",
-                tool_names=("research_dispatch_code",),
-            ),
-            ToolSpec(
-                name="research_web_req",
-                tool_names=("research_dispatch_web",),
-            ),
-            ToolSpec(
-                name="research_done",
-                tool_names=("submit_research_done",),
-            ),
-        )
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering architecting phase."""
@@ -68,25 +71,6 @@ class ArchitectingHandler:
         )
         send_to_role(ctx, "architect", prompt_file)
         return {}
-
-    def handle_event(
-        self,
-        event: WorkflowEvent,
-        state: dict,
-        ctx: PipelineContext,
-    ) -> tuple[dict, str | None]:
-        """Handle events for architecting phase."""
-        match event.kind:
-            case "architecture":
-                return self._handle_architecture(event, state, ctx)
-            case "research_code_req":
-                return self._handle_research_code_req(event, state, ctx)
-            case "research_web_req":
-                return self._handle_research_web_req(event, state, ctx)
-            case "research_done":
-                return self._handle_research_done(event, state, ctx)
-            case _:
-                return {}, None
 
     def _handle_architecture(
         self,

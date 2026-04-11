@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from agentmux.agent_labels import format_agent_label
 from agentmux.runtime import ParallelPromptSpec
@@ -15,12 +15,9 @@ from agentmux.workflow.event_catalog import (
     EVENT_IMPLEMENTATION_COMPLETED,
     EVENT_PLAN_WRITTEN,
 )
-from agentmux.workflow.event_router import (
-    EventSpec,
-    ToolSpec,
-    WorkflowEvent,
-)
+from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.execution_plan import load_execution_plan
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
@@ -149,8 +146,16 @@ def _set_implementation_progress(
     ]
 
 
-class ImplementingHandler:
+class ImplementingHandler(BaseToolHandler):
     """Event-driven handler for implementing phase."""
+
+    _TOOL_HANDLERS: ClassVar[tuple[ToolHandlerEntry, ...]] = (
+        ToolHandlerEntry(
+            name="done",
+            tool_names=("submit_done",),
+            handler=lambda s, e, st, c: s._handle_done(e, st, c),
+        ),
+    )
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering implementing phase.
@@ -186,25 +191,20 @@ class ImplementingHandler:
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()
 
-    def get_tool_specs(self) -> Sequence[ToolSpec]:
-        return (ToolSpec(name="done", tool_names=("submit_done",)),)
-
-    def handle_event(
+    def _handle_done(
         self,
         event: WorkflowEvent,
         state: dict,
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
-        """Handle events for implementing phase."""
-        if event.kind == "done":
-            payload = event.payload.get("payload", {})
-            subplan_index = payload.get("subplan_index")
-            if subplan_index is not None:
-                # Write done_N marker for group-completion tracking (idempotent)
-                done_n_path = ctx.files.implementation_dir / f"done_{subplan_index}"
-                if not done_n_path.exists():
-                    done_n_path.touch()
-                return self._handle_subplan_completed(subplan_index, state, ctx)
+        payload = event.payload.get("payload", {})
+        subplan_index = payload.get("subplan_index")
+        if subplan_index is not None:
+            # Write done_N marker for group-completion tracking (idempotent)
+            done_n_path = ctx.files.implementation_dir / f"done_{subplan_index}"
+            if not done_n_path.exists():
+                done_n_path.touch()
+            return self._handle_subplan_completed(subplan_index, state, ctx)
         return {}, None
 
     def _handle_subplan_completed(

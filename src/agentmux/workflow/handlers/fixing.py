@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from agentmux.agent_labels import role_display_label
 from agentmux.workflow.event_catalog import (
@@ -11,10 +11,10 @@ from agentmux.workflow.event_catalog import (
 )
 from agentmux.workflow.event_router import (
     EventSpec,
-    ToolSpec,
     WorkflowEvent,
     extract_subplan_index,
 )
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
@@ -25,8 +25,16 @@ if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
 
 
-class FixingHandler:
+class FixingHandler(BaseToolHandler):
     """Event-driven handler for fixing phase."""
+
+    _TOOL_HANDLERS: ClassVar[tuple[ToolHandlerEntry, ...]] = (
+        ToolHandlerEntry(
+            name="done",
+            tool_names=("submit_done",),
+            handler=lambda s, e, st, c: s._handle_done(e, st, c),
+        ),
+    )
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering fixing phase.
@@ -57,27 +65,22 @@ class FixingHandler:
     def get_event_specs(self) -> tuple[EventSpec, ...]:
         return ()
 
-    def get_tool_specs(self) -> tuple[ToolSpec, ...]:
-        return (ToolSpec(name="done", tool_names=("submit_done",)),)
-
-    def handle_event(
+    def _handle_done(
         self,
         event: WorkflowEvent,
         state: dict,
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
-        """Handle events for fixing phase."""
-        if event.kind in {"done", "fix_done"}:
-            payload = event.payload.get("payload", {})
-            subplan_index = payload.get("subplan_index")
-            if subplan_index is None and event.path is not None:
-                subplan_index = extract_subplan_index(event.path)
-            if subplan_index is not None:
-                # Write done_N marker for tracking (idempotent)
-                done_n_path = ctx.files.implementation_dir / f"done_{subplan_index}"
-                if not done_n_path.exists():
-                    done_n_path.touch()
-                ctx.runtime.finish_many("coder")
-                ctx.runtime.deactivate("coder")
-                return {"last_event": EVENT_IMPLEMENTATION_COMPLETED}, "reviewing"
+        payload = event.payload.get("payload", {})
+        subplan_index = payload.get("subplan_index")
+        if subplan_index is None and event.path is not None:
+            subplan_index = extract_subplan_index(event.path)
+        if subplan_index is not None:
+            # Write done_N marker for tracking (idempotent)
+            done_n_path = ctx.files.implementation_dir / f"done_{subplan_index}"
+            if not done_n_path.exists():
+                done_n_path.touch()
+            ctx.runtime.finish_many("coder")
+            ctx.runtime.deactivate("coder")
+            return {"last_event": EVENT_IMPLEMENTATION_COMPLETED}, "reviewing"
         return {}, None

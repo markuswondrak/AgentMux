@@ -612,7 +612,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="fix_done",
+                kind="done",
                 path="06_implementation/done_1",
                 payload={},
             )

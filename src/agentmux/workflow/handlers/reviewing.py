@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import yaml
 
@@ -13,7 +13,8 @@ from agentmux.workflow.event_catalog import (
     EVENT_REVIEW_FAILED,
     EVENT_REVIEW_PASSED,
 )
-from agentmux.workflow.event_router import EventSpec, ToolSpec, WorkflowEvent
+from agentmux.workflow.event_router import EventSpec, WorkflowEvent
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.handoff_artifacts import (
     load_review_text,
     review_yaml_has_verdict,
@@ -55,14 +56,19 @@ _SPECS = (
 )
 
 
-class ReviewingHandler:
+class ReviewingHandler(BaseToolHandler):
     """Event-driven handler for reviewing phase."""
+
+    _TOOL_HANDLERS: ClassVar[tuple[ToolHandlerEntry, ...]] = (
+        ToolHandlerEntry(
+            name="review",
+            tool_names=("submit_review",),
+            handler=lambda s, e, st, c: s._handle_review(e, st, c),
+        ),
+    )
 
     def get_event_specs(self) -> Sequence[EventSpec]:
         return _SPECS
-
-    def get_tool_specs(self) -> Sequence[ToolSpec]:
-        return (ToolSpec(name="review", tool_names=("submit_review",)),)
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering reviewing phase.
@@ -137,14 +143,12 @@ class ReviewingHandler:
         state: dict,
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
-        """Handle events for reviewing phase."""
-        match event.kind:
-            case "review":
-                return self._handle_review(event, state, ctx)
-            case "summary_ready":
-                return self._handle_summary_written(ctx)
-            case _:
-                return {}, None
+        """Handle events: Tool-Events via base, File-Events via EventSpec."""
+        # File events from EventSpec
+        if event.kind == "summary_ready":
+            return self._handle_summary_written(ctx)
+        # Tool events from BaseToolHandler
+        return super().handle_event(event, state, ctx)
 
     def _handle_review(
         self,

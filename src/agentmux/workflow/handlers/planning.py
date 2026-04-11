@@ -7,17 +7,14 @@ the architecture document produced by the architect in the architecting phase.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import yaml
 
 from agentmux.workflow.event_catalog import EVENT_CHANGES_REQUESTED, EVENT_PLAN_WRITTEN
-from agentmux.workflow.event_router import (
-    EventSpec,
-    ToolSpec,
-    WorkflowEvent,
-)
+from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.execution_plan import load_execution_plan
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.handoff_artifacts import (
     _write_yaml,
     generate_execution_plan_yaml,
@@ -42,31 +39,37 @@ if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
 
 
-class PlanningHandler:
+class PlanningHandler(BaseToolHandler):
     """Event-driven handler for planning phase.
 
     The planner receives the architecture document and creates execution plans.
     """
 
+    _TOOL_HANDLERS: ClassVar[tuple[ToolHandlerEntry, ...]] = (
+        ToolHandlerEntry(
+            name="plan",
+            tool_names=("submit_plan",),
+            handler=lambda s, e, st, c: s._handle_plan(e, st, c),
+        ),
+        ToolHandlerEntry(
+            name="research_code_req",
+            tool_names=("research_dispatch_code",),
+            handler=lambda s, e, st, c: s._handle_research_code_req(e, st, c),
+        ),
+        ToolHandlerEntry(
+            name="research_web_req",
+            tool_names=("research_dispatch_web",),
+            handler=lambda s, e, st, c: s._handle_research_web_req(e, st, c),
+        ),
+        ToolHandlerEntry(
+            name="research_done",
+            tool_names=("submit_research_done",),
+            handler=lambda s, e, st, c: s._handle_research_done(e, st, c),
+        ),
+    )
+
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()
-
-    def get_tool_specs(self) -> Sequence[ToolSpec]:
-        return (
-            ToolSpec(name="plan", tool_names=("submit_plan",)),
-            ToolSpec(
-                name="research_code_req",
-                tool_names=("research_dispatch_code",),
-            ),
-            ToolSpec(
-                name="research_web_req",
-                tool_names=("research_dispatch_web",),
-            ),
-            ToolSpec(
-                name="research_done",
-                tool_names=("submit_research_done",),
-            ),
-        )
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering planning phase.
@@ -89,25 +92,6 @@ class PlanningHandler:
         )
         send_to_role(ctx, "planner", prompt_file)
         return {}
-
-    def handle_event(
-        self,
-        event: WorkflowEvent,
-        state: dict,
-        ctx: PipelineContext,
-    ) -> tuple[dict, str | None]:
-        """Handle events for planning phase."""
-        match event.kind:
-            case "plan":
-                return self._handle_plan(event, state, ctx)
-            case "research_code_req":
-                return self._handle_research_code_req(event, state, ctx)
-            case "research_web_req":
-                return self._handle_research_web_req(event, state, ctx)
-            case "research_done":
-                return self._handle_research_done(event, state, ctx)
-            case _:
-                return {}, None
 
     def _handle_plan(
         self,

@@ -988,7 +988,7 @@ class TestFixingHandler:
     ) -> None:
         """Test transition on done_1 marker."""
         handler = FixingHandler()
-        event = WorkflowEvent(kind="fix_done", path="06_implementation/done_1")
+        event = WorkflowEvent(kind="done", path="06_implementation/done_1")
 
         # Create the done marker so is_ready predicate passes
         mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
