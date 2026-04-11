@@ -62,6 +62,11 @@ def _build_builtin_providers() -> dict[str, Provider]:
 PROVIDERS: dict[str, Provider] = _build_builtin_providers()
 
 
+def get_known_providers() -> list[str]:
+    """Return a sorted list of all known provider names."""
+    return sorted(PROVIDERS.keys())
+
+
 def get_provider(name: str) -> Provider:
     try:
         return PROVIDERS[name]

@@ -35,7 +35,7 @@ class ConfigureRequirementsTests(unittest.TestCase):
             # Verify error message mentions init command (printed to stdout)
 
     def test_unknown_provider_exits(self) -> None:
-        """Provider not in KNOWN_PROVIDERS → SystemExit(1) listing known providers."""
+        """Unknown provider → SystemExit(1) listing known providers."""
         with tempfile.TemporaryDirectory() as tmp:
             project_dir = Path(tmp)
             # Create a valid config file first so we pass the first guard

@@ -12,6 +12,7 @@ from typing import Any
 import yaml
 
 from ..configuration import load_builtin_catalog, load_layered_config
+from ..configuration.providers import get_known_providers
 from ..integrations.mcp import (
     DEFAULT_MCP_ROLES,
     DEFAULT_MCP_SERVERS,
@@ -40,7 +41,6 @@ except ImportError:  # pragma: no cover - optional at import time in this enviro
     Rule = None  # type: ignore[assignment]
 
 
-KNOWN_PROVIDERS = ("claude", "codex", "gemini", "opencode", "copilot", "qwen")
 PROMPTED_ROLES = ("architect", "product-manager", "reviewer", "coder", "designer")
 PROMPT_STUB_ROLES = ("coder", "reviewer", "architect", "product-manager", "designer")
 
@@ -306,14 +306,15 @@ def _stub_path(project_dir: Path, role: str) -> Path:
 
 def detect_clis() -> dict[str, bool]:
     return {
-        provider: shutil.which(provider) is not None for provider in KNOWN_PROVIDERS
+        provider: shutil.which(provider) is not None
+        for provider in get_known_providers()
     }
 
 
 def display_detection(console: Any | None, detected: dict[str, bool]) -> None:
     output = _console(console)
     parts = ["[bold white]Detected CLI tools:[/bold white]"]
-    for provider in KNOWN_PROVIDERS:
+    for provider in get_known_providers():
         if detected.get(provider, False):
             parts.append(f"{provider} [green]✓[/green]")
         else:
@@ -327,9 +328,9 @@ def prompt_role_config(
     current_project_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not detected_providers:
+        known = ", ".join(get_known_providers())
         raise SystemExit(
-            "No supported provider CLI detected. "
-            "Install one of: claude, codex, gemini, opencode, copilot, qwen."
+            f"No supported provider CLI detected. Install one of: {known}."
         )
 
     defaults = dict(defaults_config.get("defaults", {}))
@@ -686,9 +687,9 @@ def run_init(defaults_mode: bool = False) -> int:
                 "Interactive init requires a TTY. Use `agentmux init --defaults`."
             )
         if not detected_providers:
+            known = ", ".join(get_known_providers())
             raise SystemExit(
-                "No supported provider CLI detected. "
-                "Install one of: claude, codex, gemini, opencode, copilot, qwen."
+                f"No supported provider CLI detected. Install one of: {known}."
             )
         output.print(_rule("Role Configuration"))
         role_overrides = prompt_role_config(detected_providers, defaults_config)
@@ -758,8 +759,11 @@ def run_init_provider(
 
     Returns 0 on success, 1 on error.
     """
-    if provider not in KNOWN_PROVIDERS:
-        print(f"Unknown provider: {provider}", file=sys.stderr)
+    if provider not in get_known_providers():
+        known = ", ".join(get_known_providers())
+        print(
+            f"Unknown provider: {provider}. Expected one of: {known}", file=sys.stderr
+        )
         raise SystemExit(1)
 
     if provider == "copilot":
