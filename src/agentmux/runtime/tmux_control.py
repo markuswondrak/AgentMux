@@ -208,6 +208,13 @@ def _set_placeholder_id(session_name: str, pane_id: str) -> None:
     )
 
 
+def _park_to_hidden(pane_id: str) -> None:
+    """Move a pane to the _hidden window (break-pane -d)."""
+    run_command(
+        ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
+    )
+
+
 def set_pane_identity(
     pane_id: str,
     *,
@@ -393,20 +400,16 @@ class ContentZone:
             placeholder = self._require_placeholder()
             if not placeholder:
                 return
-            _log(f"ContentZone.show: swap-pane -s {pane_id} -t {placeholder}")
-            run_command(
-                ["tmux", "swap-pane", "-s", pane_id, "-t", placeholder], check=False
-            )
+            _log(f"ContentZone.show: swap {pane_id} <-> {placeholder}")
+            self._swap_panes(pane_id, placeholder)
         else:
             keep = pane_id if pane_id in self._visible else self._visible[-1]
             for other in list(self._visible):
                 if other != keep:
                     self._park(other)
             if keep != pane_id:
-                _log(f"ContentZone.show: swap-pane -s {pane_id} -t {keep}")
-                run_command(
-                    ["tmux", "swap-pane", "-s", pane_id, "-t", keep], check=False
-                )
+                _log(f"ContentZone.show: swap {pane_id} <-> {keep}")
+                self._swap_panes(pane_id, keep)
 
         self._visible = [pane_id]
         self._enforce_invariant()
@@ -450,10 +453,8 @@ class ContentZone:
             placeholder = self._require_placeholder()
             if not placeholder:
                 return
-            _log(f"ContentZone.hide: swap-pane -s {placeholder} -t {pane_id}")
-            run_command(
-                ["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False
-            )
+            _log(f"ContentZone.hide: swap {placeholder} <-> {pane_id}")
+            self._swap_panes(placeholder, pane_id)
             self._visible = []
         else:
             self._park(pane_id)
@@ -475,10 +476,8 @@ class ContentZone:
 
         placeholder = self._require_placeholder()
         if placeholder:
-            _log(f"ContentZone.hide_all: swap-pane -s {placeholder} -t {keep}")
-            run_command(
-                ["tmux", "swap-pane", "-s", placeholder, "-t", keep], check=False
-            )
+            _log(f"ContentZone.hide_all: swap {placeholder} <-> {keep}")
+            self._swap_panes(placeholder, keep)
             self._visible = []
             self._enforce_invariant()
             _enforce_monitor_min_width(self._session)
@@ -499,10 +498,11 @@ class ContentZone:
         return [pane_id for pane_id in self._visible if pane_id in known]
 
     def _park(self, pane_id: str) -> None:
-        _log(f"ContentZone: break-pane -d -s {pane_id} -n _hidden")
-        run_command(
-            ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
-        )
+        _log(f"ContentZone: parking {pane_id} to _hidden")
+        _park_to_hidden(pane_id)
+
+    def _swap_panes(self, src: str, target: str) -> None:
+        run_command(["tmux", "swap-pane", "-s", src, "-t", target], check=False)
 
     def _require_placeholder(self) -> str | None:
         if self._placeholder and tmux_pane_exists(self._placeholder):
@@ -526,10 +526,8 @@ class ContentZone:
             return
         for pane_id in reversed(self._visible):
             if tmux_pane_exists(pane_id) and _pane_in_window(pane_id, MAIN_WINDOW):
-                _log(f"ContentZone: swap-pane -s {placeholder} -t {pane_id}")
-                run_command(
-                    ["tmux", "swap-pane", "-s", placeholder, "-t", pane_id], check=False
-                )
+                _log(f"ContentZone: swap {placeholder} <-> {pane_id}")
+                self._swap_panes(placeholder, pane_id)
                 return
         control = _find_control_pane(self._session)
         if control:
@@ -685,10 +683,7 @@ def tmux_new_session(
     run_command(["tmux", "select-pane", "-t", placeholder_pane, "-T", "placeholder"])
     run_command(["tmux", "set-option", "-p", "-t", placeholder_pane, "@role", ""])
     run_command(["tmux", "set-option", "-p", "-t", placeholder_pane, "@pane_label", ""])
-    run_command(
-        ["tmux", "break-pane", "-d", "-s", placeholder_pane, "-n", "_hidden"],
-        check=False,
-    )
+    _park_to_hidden(placeholder_pane)
     _set_placeholder_id(session_name, placeholder_pane)
 
     _log(
@@ -714,6 +709,44 @@ def tmux_new_session(
     )
 
 
+def _spawn_hidden_pane(
+    session_name: str,
+    project_dir: Path,
+    cmd: str,
+    *,
+    label: str = "",
+) -> tuple[str, int]:
+    """Split a new pane from a hidden anchor, park it, and return (pane_id, pid)."""
+    split_target = _find_any_hidden_pane(session_name)
+    if not split_target:
+        raise RuntimeError(
+            f"No pane available to seed hidden pane creation for {session_name}"
+        )
+    _log(f"_spawn_hidden_pane: starting {label!r} at {split_target}")
+    _log(f"_spawn_hidden_pane: command: {cmd}")
+    result = run_command(
+        [
+            "tmux",
+            "split-window",
+            "-v",
+            "-t",
+            split_target,
+            "-c",
+            str(project_dir),
+            "-P",
+            "-F",
+            "#{pane_id} #{pane_pid}",
+            cmd,
+        ]
+    )
+    parts = result.stdout.strip().split()
+    pane_id = parts[0]
+    pid = int(parts[1]) if len(parts) > 1 else 0
+    if _pane_in_window(pane_id, MAIN_WINDOW):
+        _park_to_hidden(pane_id)
+    return pane_id, pid
+
+
 def create_agent_pane(
     session_name: str,
     agent_name: str,
@@ -729,39 +762,10 @@ def create_agent_pane(
         Tuple of (pane_id, process_pid)
     """
     agent = agents[agent_name]
-    agent_cmd = build_agent_command(agent)
-    split_target = _find_any_hidden_pane(session_name)
-    if not split_target:
-        raise RuntimeError(
-            f"No pane available to seed hidden pane creation for {session_name}"
-        )
-
-    _log(f"create_agent_pane: Creating {agent_name} hidden at {split_target}")
-    result = run_command(
-        [
-            "tmux",
-            "split-window",
-            "-v",
-            "-t",
-            split_target,
-            "-c",
-            str(project_dir),
-            "-P",
-            "-F",
-            "#{pane_id} #{pane_pid}",
-            agent_cmd,
-        ]
+    pane_id, pid = _spawn_hidden_pane(
+        session_name, project_dir, build_agent_command(agent), label=agent_name
     )
-    parts = result.stdout.strip().split()
-    pane_id = parts[0]
-    pid = int(parts[1]) if len(parts) > 1 else 0
-
     set_pane_identity(pane_id, role=agent.role, display_label=display_label)
-    if _pane_in_window(pane_id, MAIN_WINDOW):
-        run_command(
-            ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
-        )
-
     accept_trust_prompt(pane_id, snippet=trust_snippet)
     return pane_id, pid
 
@@ -791,53 +795,16 @@ def create_batch_agent_pane(
         Tuple of (pane_id, process_pid)
     """
     agent = agents[agent_name]
-
-    # Build command with prompt file path as final argument (absolute path)
     agent_cmd = build_agent_command(agent, prompt_file)
-
-    # Redirect stderr to output log if provided (captures all agent output)
     if output_log_path:
         output_log_path.parent.mkdir(parents=True, exist_ok=True)
         agent_cmd += f" 2>{shlex.quote(str(output_log_path))}"
         _log(f"create_batch_agent_pane: stderr will be captured to {output_log_path}")
 
-    _log(f"create_batch_agent_pane: command = {agent_cmd}")
-
-    split_target = _find_any_hidden_pane(session_name)
-    if not split_target:
-        raise RuntimeError(
-            f"No pane available to seed hidden pane creation for {session_name}"
-        )
-
-    _log(
-        f"create_batch_agent_pane: Creating {agent_name} (batch mode) hidden "
-        f"at {split_target} with cwd={project_dir}"
+    pane_id, pid = _spawn_hidden_pane(
+        session_name, project_dir, agent_cmd, label=agent_name
     )
-    result = run_command(
-        [
-            "tmux",
-            "split-window",
-            "-v",
-            "-t",
-            split_target,
-            "-c",
-            str(project_dir),
-            "-P",
-            "-F",
-            "#{pane_id} #{pane_pid}",
-            agent_cmd,
-        ]
-    )
-    parts = result.stdout.strip().split()
-    pane_id = parts[0]
-    pid = int(parts[1]) if len(parts) > 1 else 0
-
     set_pane_identity(pane_id, role=agent.role, display_label=display_label)
-    if _pane_in_window(pane_id, MAIN_WINDOW):
-        run_command(
-            ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
-        )
-
     # No trust prompt handling needed for batch mode
     return pane_id, pid
 
@@ -860,49 +827,10 @@ def create_completion_pane(
         f" --feature-dir {shlex.quote(str(feature_dir))}"
         f" --project-dir {shlex.quote(str(project_dir))}"
     )
-
-    split_target = _find_any_hidden_pane(session_name)
-    if not split_target:
-        raise RuntimeError(
-            f"No pane available to seed hidden pane creation for {session_name}"
-        )
-
-    _log(f"create_completion_pane: Creating completion UI pane at {split_target}")
-    result = run_command(
-        [
-            "tmux",
-            "split-window",
-            "-v",
-            "-t",
-            split_target,
-            "-c",
-            str(project_dir),
-            "-P",
-            "-F",
-            "#{pane_id} #{pane_pid}",
-            completion_cmd,
-        ]
+    pane_id, pid = _spawn_hidden_pane(
+        session_name, project_dir, completion_cmd, label="completion"
     )
-    parts = result.stdout.strip().split()
-    pane_id = parts[0]
-    pid = int(parts[1]) if len(parts) > 1 else 0
-
-    run_command(
-        ["tmux", "select-pane", "-t", pane_id, "-T", "Confirmation"], check=False
-    )
-    run_command(
-        ["tmux", "set-option", "-p", "-t", pane_id, "@role", "completion"], check=False
-    )
-    run_command(
-        ["tmux", "set-option", "-p", "-t", pane_id, "@pane_label", "Confirmation"],
-        check=False,
-    )
-
-    if _pane_in_window(pane_id, MAIN_WINDOW):
-        run_command(
-            ["tmux", "break-pane", "-d", "-s", pane_id, "-n", "_hidden"], check=False
-        )
-
+    set_pane_identity(pane_id, role="completion", display_label="Confirmation")
     return pane_id, pid
 
 
