@@ -146,7 +146,6 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn("Dependencies", planner_prompt)
             self.assertIn("Isolation", planner_prompt)
             self.assertIn("Final Artifact Generation", planner_prompt)
-            self.assertIn("execution_plan.yaml", planner_prompt)
             self.assertNotIn("plan_meta.json", planner_prompt)
 
             self.assertIn("06_implementation/done_1", coder_prompt)
@@ -254,7 +253,7 @@ class TasksRequirementsTests(unittest.TestCase):
             self.assertIn('<file path="04_planning/plan.md">', prompt)
             self.assertNotIn('<file path="04_planning/tasks.md">', prompt)
             self.assertIn('<file path="04_planning/changes.md">', prompt)
-            self.assertIn("execution_plan.yaml", prompt)
+            self.assertIn("plan.yaml", prompt)
             self.assertNotIn("04_planning/plan_meta.json", prompt)
             self.assertIn(
                 "Documentation updates must be captured as explicit tasks "

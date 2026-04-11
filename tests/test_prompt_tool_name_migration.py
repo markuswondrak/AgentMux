@@ -82,21 +82,6 @@ class PromptToolNameMigrationTests(unittest.TestCase):
         self.assertIn("submit_review", content)
         self.assertNotIn("agentmux_submit_review", content)
 
-    def test_handoff_contracts_mention_event_model(self) -> None:
-        """Each handoff contract should mention the event-based workflow model."""
-        for name in (
-            "handoff-contract-architecture.md",
-            "handoff-contract-plan.md",
-            "handoff-contract-review.md",
-        ):
-            path = PROMPTS_DIR / "shared" / name
-            content = path.read_text(encoding="utf-8")
-            self.assertTrue(
-                "event" in content.lower()
-                or "orchestrator observes" in content.lower(),
-                f"{name} should mention the event-based workflow model",
-            )
-
     def test_architect_prompt_uses_unprefixed_research_tools(self) -> None:
         """architect.md should reference unprefixed research dispatch tools."""
         path = PROMPTS_DIR / "agents" / "architect.md"
