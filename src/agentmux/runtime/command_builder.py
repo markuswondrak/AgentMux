@@ -73,9 +73,11 @@ def _build_cli_segment(agent: AgentConfig, prompt_file: str | None) -> str:
         # Flag-style: cli -p prompt.md
         return f"{cli_quoted} {verb_quoted} {prompt_quoted}"
     elif batch_cmd.mode is BatchCommandMode.STDIN:
-        # Stdin redirect: cli exec
+        # Stdin redirect: cli (optional verb)
         # Actual redirect (< prompt.md) is appended later
-        return f"{cli_quoted} {verb_quoted}"
+        if batch_cmd.verb:
+            return f"{cli_quoted} {verb_quoted}"
+        return cli_quoted
     else:
         # POSITIONAL: cli verb (prompt appended later in build_agent_command)
         return f"{cli_quoted} {verb_quoted}"

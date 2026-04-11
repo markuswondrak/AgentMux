@@ -19,7 +19,7 @@ class BatchCommandMode(Enum):
 class BatchCommand:
     """Describes how to invoke a batch-mode agent."""
 
-    verb: str  # the subcommand (e.g. "run", "exec", "-p")
+    verb: str = ""  # Subcommand or empty for stdin-only CLIs (no subcommand)
     mode: BatchCommandMode = BatchCommandMode.POSITIONAL
 
 
