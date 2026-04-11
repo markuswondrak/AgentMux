@@ -9,7 +9,7 @@ Handoff contracts define the structured interface between workflow phases. Each 
 Agents submit phase outputs by writing the canonical file, then calling the MCP submission tool as a completion signal:
 
 1. **Write the output file** — the agent writes the artifact directly (e.g., `02_architecting/architecture.md`, `04_planning/plan.yaml`). Shared prompt fragments (`[[shared:handoff-contract-*]]`) embedded in agent prompts provide the schema and examples.
-2. **Call the MCP signal tool** — the `agentmux-research` MCP server exposes `submit_*` tools that validate the agent-written file, append a minimal signal entry to `tool_events.jsonl`, and return a confirmation string (or a validation error the agent can act on). The tools write no files themselves.
+2. **Call the MCP signal tool** — the `agentmux` MCP server exposes `submit_*` tools that validate the agent-written file, append a minimal signal entry to `tool_events.jsonl`, and return a confirmation string (or a validation error the agent can act on). The tools write no files themselves.
 
 The orchestrator observes the signal event, materializes derived companions and scheduling files, and drives the state transition.
 

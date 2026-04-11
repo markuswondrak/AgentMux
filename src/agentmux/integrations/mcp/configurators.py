@@ -308,7 +308,7 @@ class QwenConfigurator(JsonMcpConfigurator):
 
 
 class CopilotConfigurator(JsonMcpConfigurator):
-    """Installs agentmux-research MCP server into GitHub Copilot CLI config.
+    """Installs agentmux MCP server into GitHub Copilot CLI config.
 
     Config path: ~/.copilot/mcp-config.json
     Source: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers

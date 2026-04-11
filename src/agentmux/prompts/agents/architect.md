@@ -37,7 +37,7 @@ Before drafting the architecture, assess what you need to know about the codebas
 
 You can dispatch multiple topics before going idle. Research tasks run in parallel.
 
-When all your research tasks are complete, call `submit_research_done` to signal to the orchestrator that you are ready to proceed.
+When all your research tasks are complete, call `mcp__agentmux__submit_research_done` to signal to the orchestrator that you are ready to proceed.
 
 Use a JSON-style array for `scope_hints`, not a single string. Example:
 `scope_hints=["agent prompts", "planning tests", "ignore runtime internals"]`
@@ -61,7 +61,7 @@ Use a JSON-style array for `scope_hints`, not a single string. Example:
 5. Do not implement code, run implementation validation, or produce UI design artifacts.
 6. When presenting the architectural draft, use the `[[placeholder:user_ask_tool]]` tool to ask for feedback and approval. Incorporate any feedback and revise as needed. Repeat until the user explicitly approves.
 7. Only after the user explicitly approves (e.g. says 'approved', 'looks good', 'go ahead'), write the final architecture to `02_architecting/architecture.md`. Only include chosen Options, you MUST omit options that were discarded.
-8. FINAL STEP ONLY — after writing `02_architecting/architecture.md`, call `submit_architecture()` to signal completion to the orchestrator.
+8. FINAL STEP ONLY — after writing `02_architecting/architecture.md`, call `mcp__agentmux__submit_architecture()` to signal completion to the orchestrator.
 
 ## Output & Artifacts
 

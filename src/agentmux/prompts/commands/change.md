@@ -25,7 +25,7 @@ Your job:
 8. Treat shared mutable artifacts conservatively. Files such as prompt templates, monitor/state metadata files, and cross-cutting tests/docs should have a single owner unless intentionally deferred to a serial integration sub-plan.
 9. Explicitly assess enabling refactors and technical debt tradeoffs.
 10. Documentation updates must be captured as explicit tasks in the relevant sub-plan.
-11. FINAL STEP ONLY — after writing `04_planning/plan.yaml`, call `submit_plan()` to signal completion.
+11. FINAL STEP ONLY — after writing `04_planning/plan.yaml`, call `mcp__agentmux__submit_plan()` to signal completion.
 
 [[placeholder:project_instructions]]
 

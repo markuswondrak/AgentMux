@@ -1,6 +1,6 @@
 ## Submitting Your Review
 
-Write `07_review/review.yaml` with the fields below, then call `submit_review()` to validate your file and signal completion.
+Write `07_review/review.yaml` with the fields below, then call `mcp__agentmux__submit_review()` to validate your file and signal completion.
 
 On pass:
 ```yaml
@@ -22,4 +22,4 @@ findings:
     recommendation: Add email format check before database lookup.
 ```
 
-After writing the file, call `submit_review()` (no arguments needed).
+After writing the file, call `mcp__agentmux__submit_review()` (no arguments needed).

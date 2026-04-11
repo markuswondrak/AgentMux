@@ -2,13 +2,13 @@ version: 2
 
 defaults:
   session_name: agentmux
-  provider: copilot
+  provider: qwen
   max_review_iterations: 3
 
-roles:
-  coder:
-    model: gpt-5.4
-  web-researcher:
-    model: claude-haiku-4.5
-  code-researcher:
-    model: claude-haiku-4.5
+#roles:
+#  coder:
+#    model: gpt-5.4
+#  web-researcher:
+#    model: claude-haiku-4.5
+#  code-researcher:
+#    model: claude-haiku-4.5

@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - runtime dependency check
 
 TOPIC_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-mcp = FastMCP("agentmux-research") if FastMCP is not None else None
+mcp = FastMCP("agentmux") if FastMCP is not None else None
 
 
 def _get_allowed_tools() -> frozenset[str] | None:

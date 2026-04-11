@@ -15,8 +15,8 @@ class CopilotConfiguratorTests(unittest.TestCase):
 
     def _server(self) -> McpServerSpec:
         return McpServerSpec(
-            name="agentmux-research",
-            module="agentmux.integrations.mcp_research_server",
+            name="agentmux",
+            module="agentmux.integrations.mcp_server",
             env={},
         )
 
@@ -109,12 +109,12 @@ class CopilotConfiguratorTests(unittest.TestCase):
                 json.dumps(
                     {
                         "mcpServers": {
-                            "agentmux-research": {
+                            "agentmux": {
                                 "type": "local",
                                 "command": sys.executable,
                                 "args": [
                                     "-m",
-                                    "agentmux.integrations.mcp_research_server",
+                                    "agentmux.integrations.mcp_server",
                                 ],
                             }
                         }
@@ -150,12 +150,10 @@ class CopilotConfiguratorTests(unittest.TestCase):
             self.assertTrue(config_path.exists())
             data = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertIn("mcpServers", data)
-            server = data["mcpServers"]["agentmux-research"]
+            server = data["mcpServers"]["agentmux"]
             self.assertEqual("local", server["type"])
             self.assertEqual(sys.executable, server["command"])
-            self.assertEqual(
-                ["-m", "agentmux.integrations.mcp_research_server"], server["args"]
-            )
+            self.assertEqual(["-m", "agentmux.integrations.mcp_server"], server["args"])
             self.assertTrue(server["enabled"])
 
     def test_install_adds_server_to_existing_config(self) -> None:
@@ -189,7 +187,7 @@ class CopilotConfiguratorTests(unittest.TestCase):
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertIn("playwright", data["mcpServers"])
-            self.assertIn("agentmux-research", data["mcpServers"])
+            self.assertIn("agentmux", data["mcpServers"])
 
     def test_install_is_idempotent(self) -> None:
         """install called twice does not duplicate the server entry."""
@@ -207,10 +205,8 @@ class CopilotConfiguratorTests(unittest.TestCase):
                 self.configurator.install(self._server(), project_dir)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(
-                1, len([k for k in data["mcpServers"] if k == "agentmux-research"])
-            )
-            server = data["mcpServers"]["agentmux-research"]
+            self.assertEqual(1, len([k for k in data["mcpServers"] if k == "agentmux"]))
+            server = data["mcpServers"]["agentmux"]
             self.assertEqual("local", server["type"])
             self.assertEqual(sys.executable, server["command"])
 
@@ -226,7 +222,7 @@ class CopilotConfiguratorTests(unittest.TestCase):
                 json.dumps(
                     {
                         "mcpServers": {
-                            "agentmux-research": {
+                            "agentmux": {
                                 "type": "local",
                                 "command": "old-python",
                                 "args": ["-m", "old.module"],
@@ -245,11 +241,9 @@ class CopilotConfiguratorTests(unittest.TestCase):
                 self.configurator.install(self._server(), project_dir)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            server = data["mcpServers"]["agentmux-research"]
+            server = data["mcpServers"]["agentmux"]
             self.assertEqual(sys.executable, server["command"])
-            self.assertEqual(
-                ["-m", "agentmux.integrations.mcp_research_server"], server["args"]
-            )
+            self.assertEqual(["-m", "agentmux.integrations.mcp_server"], server["args"])
 
     # --- prompt_message tests ---
 

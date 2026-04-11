@@ -5,14 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import agentmux.integrations.mcp_research_server as mcp_research_server
+import agentmux.integrations.mcp_server as mcp_server
 
 
-class McpResearchServerRequirementsTests(unittest.TestCase):
+class McpServerRequirementsTests(unittest.TestCase):
     def test_dispatch_code_appends_to_log_with_expected_payload(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            result = mcp_research_server.research_dispatch_code(
+            result = mcp_server.research_dispatch_code(
                 topic="auth-module",
                 context="Planning auth changes",
                 questions=[
@@ -41,7 +41,7 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
     def test_dispatch_web_appends_and_handles_empty_scope_hints(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            result = mcp_research_server.research_dispatch_web(
+            result = mcp_server.research_dispatch_web(
                 topic="sdk-compat",
                 context="Need latest SDK compatibility matrix",
                 questions=["Which SDK versions support MCP?"],
@@ -61,7 +61,7 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
     def test_dispatch_code_accepts_scope_hints_as_single_string(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            mcp_research_server.research_dispatch_code(
+            mcp_server.research_dispatch_code(
                 topic="planning-conventions",
                 context="Understand planning conventions",
                 questions=["Which tests constrain planning artifacts?"],
@@ -81,7 +81,7 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
     def test_dispatch_code_treats_blank_scope_hints_string_as_none(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            mcp_research_server.research_dispatch_code(
+            mcp_server.research_dispatch_code(
                 topic="feature-surface",
                 context="Survey likely feature surfaces",
                 questions=["What are the likely extension points?"],
@@ -99,7 +99,7 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             with self.assertRaises(ValueError):
-                mcp_research_server.research_dispatch_code(
+                mcp_server.research_dispatch_code(
                     topic="Auth_Module",
                     context="x",
                     questions=["q"],
@@ -108,12 +108,12 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
                 )
 
     def test_module_no_longer_exposes_blocking_await_tool(self) -> None:
-        self.assertFalse(hasattr(mcp_research_server, "agentmux_research_await"))
-        self.assertFalse(hasattr(mcp_research_server, "research_await"))
+        self.assertFalse(hasattr(mcp_server, "agentmux_research_await"))
+        self.assertFalse(hasattr(mcp_server, "research_await"))
 
     def test_dispatch_rejects_missing_feature_dir(self) -> None:
         with self.assertRaises(RuntimeError):
-            mcp_research_server.research_dispatch_code(
+            mcp_server.research_dispatch_code(
                 topic="runtime",
                 context="Planning runtime changes",
                 questions=["Where is runtime created?"],
@@ -124,7 +124,7 @@ class McpResearchServerRequirementsTests(unittest.TestCase):
     def test_dispatch_does_not_write_request_md(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            mcp_research_server.research_dispatch_code(
+            mcp_server.research_dispatch_code(
                 topic="test-topic",
                 context="x",
                 questions=["q"],

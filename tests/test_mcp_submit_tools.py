@@ -86,7 +86,7 @@ class TestSubmitArchitecture(SubmitToolTestBase):
         return path
 
     def _submit(self, feature_dir=None):
-        from agentmux.integrations.mcp_research_server import submit_architecture
+        from agentmux.integrations.mcp_server import submit_architecture
 
         return submit_architecture(
             feature_dir=feature_dir or str(self.feature_dir),
@@ -111,14 +111,14 @@ class TestSubmitArchitecture(SubmitToolTestBase):
         )
 
     def test_raises_when_md_missing(self):
-        from agentmux.integrations.mcp_research_server import submit_architecture
+        from agentmux.integrations.mcp_server import submit_architecture
 
         with self.assertRaises(ValueError) as ctx:
             submit_architecture(feature_dir=str(self.feature_dir))
         self.assertIn("architecture.md", str(ctx.exception))
 
     def test_raises_when_md_empty(self):
-        from agentmux.integrations.mcp_research_server import submit_architecture
+        from agentmux.integrations.mcp_server import submit_architecture
 
         self._write_md("   \n")
         with self.assertRaises(ValueError) as ctx:
@@ -128,7 +128,7 @@ class TestSubmitArchitecture(SubmitToolTestBase):
 
 class TestSubmitPlan(SubmitToolTestBase):
     def _submit(self, feature_dir=None):
-        from agentmux.integrations.mcp_research_server import submit_plan
+        from agentmux.integrations.mcp_server import submit_plan
 
         return submit_plan(
             feature_dir=feature_dir or str(self.feature_dir),
@@ -152,14 +152,14 @@ class TestSubmitPlan(SubmitToolTestBase):
         )
 
     def test_raises_when_yaml_missing(self):
-        from agentmux.integrations.mcp_research_server import submit_plan
+        from agentmux.integrations.mcp_server import submit_plan
 
         with self.assertRaises(ValueError) as ctx:
             submit_plan(feature_dir=str(self.feature_dir))
         self.assertIn("plan.yaml", str(ctx.exception))
 
     def test_raises_when_yaml_is_not_a_dict(self):
-        from agentmux.integrations.mcp_research_server import submit_plan
+        from agentmux.integrations.mcp_server import submit_plan
 
         path = self.feature_dir / "04_planning" / "plan.yaml"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,7 +169,7 @@ class TestSubmitPlan(SubmitToolTestBase):
         self.assertIn("must be a YAML mapping", str(ctx.exception))
 
     def test_raises_on_invalid_mode(self):
-        from agentmux.integrations.mcp_research_server import submit_plan
+        from agentmux.integrations.mcp_server import submit_plan
 
         bad = dict(_VALID_PLAN)
         bad["groups"] = [
@@ -181,7 +181,7 @@ class TestSubmitPlan(SubmitToolTestBase):
         self.assertIn("mode", str(ctx.exception))
 
     def test_raises_on_empty_subplans(self):
-        from agentmux.integrations.mcp_research_server import submit_plan
+        from agentmux.integrations.mcp_server import submit_plan
 
         bad = dict(_VALID_PLAN)
         bad["subplans"] = []
@@ -199,7 +199,7 @@ class TestSubmitPlan(SubmitToolTestBase):
                 from pathlib import Path as _Path
 
                 self._write_yaml("04_planning/plan.yaml", _VALID_PLAN)
-                from agentmux.integrations.mcp_research_server import submit_plan
+                from agentmux.integrations.mcp_server import submit_plan
 
                 result = submit_plan(
                     feature_dir=str(self.feature_dir),
@@ -225,7 +225,7 @@ class TestSubmitPlan(SubmitToolTestBase):
 
 class TestSubmitReview(SubmitToolTestBase):
     def _submit(self, feature_dir=None):
-        from agentmux.integrations.mcp_research_server import submit_review
+        from agentmux.integrations.mcp_server import submit_review
 
         return submit_review(
             feature_dir=feature_dir or str(self.feature_dir),
@@ -246,14 +246,14 @@ class TestSubmitReview(SubmitToolTestBase):
         self.assertFalse((self.feature_dir / "07_review" / "review.md").exists())
 
     def test_raises_when_yaml_missing(self):
-        from agentmux.integrations.mcp_research_server import submit_review
+        from agentmux.integrations.mcp_server import submit_review
 
         with self.assertRaises(ValueError) as ctx:
             submit_review(feature_dir=str(self.feature_dir))
         self.assertIn("review.yaml", str(ctx.exception))
 
     def test_raises_when_yaml_is_not_a_dict(self):
-        from agentmux.integrations.mcp_research_server import submit_review
+        from agentmux.integrations.mcp_server import submit_review
 
         path = self.feature_dir / "07_review" / "review.yaml"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -282,7 +282,7 @@ class TestSubmitReview(SubmitToolTestBase):
         self.assertEqual(entries[0]["payload"], {})
 
     def test_fail_without_findings_raises(self):
-        from agentmux.integrations.mcp_research_server import submit_review
+        from agentmux.integrations.mcp_server import submit_review
 
         self._write_yaml("07_review/review.yaml", {"verdict": "fail", "summary": "Bad"})
         with self.assertRaises(ValueError) as ctx:
@@ -290,7 +290,7 @@ class TestSubmitReview(SubmitToolTestBase):
         self.assertIn("findings", str(ctx.exception))
 
     def test_invalid_verdict_raises(self):
-        from agentmux.integrations.mcp_research_server import submit_review
+        from agentmux.integrations.mcp_server import submit_review
 
         self._write_yaml(
             "07_review/review.yaml", {"verdict": "maybe", "summary": "Unsure"}
@@ -314,7 +314,7 @@ class TestSubmitReview(SubmitToolTestBase):
                 from pathlib import Path as _Path
 
                 self._write_yaml("07_review/review.yaml", _VALID_REVIEW_PASS)
-                from agentmux.integrations.mcp_research_server import submit_review
+                from agentmux.integrations.mcp_server import submit_review
 
                 result = submit_review(
                     feature_dir=str(self.feature_dir),

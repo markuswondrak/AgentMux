@@ -23,7 +23,7 @@ Before finalizing recommendations, assess what you need to know about the codeba
 
 You can dispatch multiple topics before going idle. Research tasks run in parallel.
 
-When your product management deliverable is ready, call `submit_pm_done` to signal completion to the orchestrator.
+When your product management deliverable is ready, call `mcp__agentmux__submit_pm_done` to signal completion to the orchestrator.
 
 Example:
 `scope_hints=["user-facing docs", "config tests", "ignore unrelated runtime internals"]`
@@ -52,7 +52,7 @@ You represent the customer. Your primary lens is usability: how easy and intuiti
 
    The test for a good `requirements.md`: the architect must be able to design a solution without guessing. Every ambiguity the user's initial request leaves open must be resolved here. Scenarios need not use "As a user…" user story format — use whatever structure makes the requirements unambiguous. At least one concrete example per scenario is required.
 
-10. FINAL STEP ONLY — call `submit_pm_done()` to signal completion to the orchestrator.
+10. FINAL STEP ONLY — call `mcp__agentmux__submit_pm_done()` to signal completion to the orchestrator.
 
 ## Preference memory at phase-end approval
 

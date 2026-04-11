@@ -29,7 +29,7 @@ Interactive init first asks for a default provider, then offers:
 - **Use default provider for all roles** — keeps built-in role defaults and skips per-role provider/model prompts
 - **Customize roles** — prompts for per-role provider and model
 
-After config validation, init checks the effective `architect` and `product-manager` providers. If their persistent `agentmux-research` MCP entry is missing, init asks once to add it to the provider's native config scope.
+After config validation, init checks the effective `architect` and `product-manager` providers. If their persistent `agentmux` MCP entry is missing, init asks once to add it to the provider's native config scope.
 
 ## Primary project config
 
@@ -300,7 +300,7 @@ MCP setup for research uses a **two-layer configuration approach** that separate
 
 ### Persistent config (project-level)
 
-`agentmux init` and foreground pipeline startup check whether the effective `architect` / `product-manager` providers already have an `agentmux-research` entry in the provider's native config location:
+`agentmux init` and foreground pipeline startup check whether the effective `architect` / `product-manager` providers already have an `agentmux` entry in the provider's native config location:
 
 - Claude: project `.claude/settings.json`
 - Codex: user `~/.codex/config.toml`
@@ -320,7 +320,7 @@ At pipeline startup, a runtime MCP config file is generated at `.agentmux/mcp_se
 ```json
 {
   "mcpServers": {
-    "agentmux-research": {
+    "agentmux": {
       "type": "stdio",
       "command": "/path/to/python",
       "args": ["-m", "agentmux.integrations.mcp_server"],
@@ -345,4 +345,4 @@ For Claude agents, the pipeline appends `["--mcp-config", ".agentmux/mcp_servers
 
 For other providers (Codex, Copilot, Gemini, OpenCode, Qwen), the pipeline only injects `PYTHONPATH=<project_dir>` into the launched process environment so the research server can import the project checkout.
 
-Claude additionally needs explicit tool allowlisting, so defaults include `mcp__agentmux-research__*` in architect/product-manager `--allowedTools`. Other bundled providers run in approval modes that auto-approve tool calls.
+Claude additionally needs explicit tool allowlisting, so defaults include `mcp__agentmux__*` in architect/product-manager `--allowedTools`. Other bundled providers run in approval modes that auto-approve tool calls.

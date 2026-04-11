@@ -23,22 +23,22 @@ providers:
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__research_dispatch_code
-        mcp__agentmux-research__research_dispatch_web mcp__agentmux-research__submit_architecture
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__research_dispatch_code
+        mcp__agentmux__research_dispatch_web mcp__agentmux__submit_architecture
       planner:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__research_dispatch_code
-        mcp__agentmux-research__research_dispatch_web mcp__agentmux-research__submit_plan
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__research_dispatch_code
+        mcp__agentmux__research_dispatch_web mcp__agentmux__submit_plan
       product-manager:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__research_dispatch_code
-        mcp__agentmux-research__research_dispatch_web mcp__agentmux-research__submit_pm_done
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__research_dispatch_code
+        mcp__agentmux__research_dispatch_web mcp__agentmux__submit_pm_done
       reviewer:
       - --permission-mode
       - acceptEdits
@@ -49,7 +49,7 @@ providers:
       - --permission-mode
       - acceptEdits
       - --allowedTools
-      - mcp__agentmux-research__submit_done
+      - mcp__agentmux__submit_done
       designer:
       - --permission-mode
       - acceptEdits
@@ -58,31 +58,31 @@ providers:
       - acceptEdits
       - --allowedTools
       - Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*)
-        Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__submit_research_done
+        Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__submit_research_done
       web-researcher:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - WebFetch WebSearch Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(head:*)
-        Bash(tail:*) mcp__agentmux-research__submit_research_done
+        Bash(tail:*) mcp__agentmux__submit_research_done
       reviewer_expert:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__submit_review
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__submit_review
       reviewer_logic:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__submit_review
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__submit_review
       reviewer_quality:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__submit_review
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__submit_review
   codex:
     command: codex
     model_flag: --model

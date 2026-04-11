@@ -17,7 +17,7 @@ Your job:
 2. Investigate relevant code and documentation in the project directory.
 3. Write `03_research/code-[[placeholder:topic]]/summary.md` for the architect (see format below).
 4. Write `03_research/code-[[placeholder:topic]]/detail.md` for designer/coder agents (see format below).
-5. FINAL STEP ONLY — call `submit_research_done(topic="[[placeholder:topic]]", type="code")` to signal completion to the orchestrator.
+5. FINAL STEP ONLY — call `mcp__agentmux__submit_research_done(topic="[[placeholder:topic]]", type="code")` to signal completion to the orchestrator.
 
 ## Output format
 

@@ -25,7 +25,7 @@ DEFAULT_MCP_ROLES = (
 )
 DEFAULT_MCP_SERVERS = (
     McpServerSpec(
-        name="agentmux-research",
+        name="agentmux",
         module="agentmux.integrations.mcp_server",
         env={},
     ),

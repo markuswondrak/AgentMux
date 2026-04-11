@@ -13,7 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import agentmux.integrations.mcp_research_server as mrs
+import agentmux.integrations.mcp_server as mrs
 
 
 class _FeatureDirMixin:
@@ -383,7 +383,7 @@ class TestSubmitPmDone(_FeatureDirMixin, unittest.TestCase):
 
 
 class TestNoHandoffArtifactsImport(unittest.TestCase):
-    """Verify handoff_artifacts is no longer imported in mcp_research_server."""
+    """Verify handoff_artifacts is no longer imported in mcp_server."""
 
     def test_no_handoff_artifacts_import(self):
         import inspect

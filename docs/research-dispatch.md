@@ -6,7 +6,7 @@ Research dispatch is now MCP-first. The architect and product-manager should cal
 
 ## MCP tools
 
-The `agentmux-research` MCP server exposes research dispatch tools and structured submission tools.
+The `agentmux` MCP server exposes research dispatch tools and structured submission tools.
 
 ### Research dispatch
 
@@ -44,7 +44,7 @@ These tools validate input against handoff contracts defined in `agentmux/workfl
 
 ## Provider setup strategy
 
-AgentMux expects an MCP registration named `agentmux-research` for the effective `architect` and `product-manager` providers at the provider's native config scope:
+AgentMux expects an MCP registration named `agentmux` for the effective `architect` and `product-manager` providers at the provider's native config scope:
 
 - Claude: project `.claude/settings.json`
 - Codex: user `~/.codex/config.toml`
@@ -57,4 +57,4 @@ AgentMux expects an MCP registration named `agentmux-research` for the effective
 
 For each run, AgentMux may inject `PYTHONPATH` into the launched `architect` / `product-manager` process so the MCP server can import the project checkout. Feature routing now comes from the `feature_dir` MCP tool argument.
 
-For Claude, default provider args allow MCP calls via `mcp__agentmux-research__*` in `--allowedTools`.
+For Claude, default provider args allow MCP calls via `mcp__agentmux__*` in `--allowedTools`.

@@ -16,8 +16,8 @@ class QwenConfiguratorTests(unittest.TestCase):
 
     def _server(self) -> McpServerSpec:
         return McpServerSpec(
-            name="agentmux-research",
-            module="agentmux.integrations.mcp_research_server",
+            name="agentmux",
+            module="agentmux.integrations.mcp_server",
             env={},
         )
 
@@ -110,12 +110,12 @@ class QwenConfiguratorTests(unittest.TestCase):
                 json.dumps(
                     {
                         "mcpServers": {
-                            "agentmux-research": {
+                            "agentmux": {
                                 "type": "stdio",
                                 "command": sys.executable,
                                 "args": [
                                     "-m",
-                                    "agentmux.integrations.mcp_research_server",
+                                    "agentmux.integrations.mcp_server",
                                 ],
                             }
                         }
@@ -151,12 +151,10 @@ class QwenConfiguratorTests(unittest.TestCase):
             self.assertTrue(config_path.exists())
             data = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertIn("mcpServers", data)
-            server = data["mcpServers"]["agentmux-research"]
+            server = data["mcpServers"]["agentmux"]
             self.assertEqual("stdio", server["type"])
             self.assertEqual(sys.executable, server["command"])
-            self.assertEqual(
-                ["-m", "agentmux.integrations.mcp_research_server"], server["args"]
-            )
+            self.assertEqual(["-m", "agentmux.integrations.mcp_server"], server["args"])
 
     def test_install_adds_server_to_existing_config(self) -> None:
         """install preserves existing config and adds server entry."""
@@ -189,7 +187,7 @@ class QwenConfiguratorTests(unittest.TestCase):
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertIn("playwright", data["mcpServers"])
-            self.assertIn("agentmux-research", data["mcpServers"])
+            self.assertIn("agentmux", data["mcpServers"])
 
     def test_install_is_idempotent(self) -> None:
         """install called twice does not duplicate the server entry."""
@@ -207,10 +205,8 @@ class QwenConfiguratorTests(unittest.TestCase):
                 self.configurator.install(self._server(), project_dir)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(
-                1, len([k for k in data["mcpServers"] if k == "agentmux-research"])
-            )
-            server = data["mcpServers"]["agentmux-research"]
+            self.assertEqual(1, len([k for k in data["mcpServers"] if k == "agentmux"]))
+            server = data["mcpServers"]["agentmux"]
             self.assertEqual("stdio", server["type"])
             self.assertEqual(sys.executable, server["command"])
 
@@ -226,7 +222,7 @@ class QwenConfiguratorTests(unittest.TestCase):
                 json.dumps(
                     {
                         "mcpServers": {
-                            "agentmux-research": {
+                            "agentmux": {
                                 "type": "stdio",
                                 "command": "old-python",
                                 "args": ["-m", "old.module"],
@@ -244,11 +240,9 @@ class QwenConfiguratorTests(unittest.TestCase):
                 self.configurator.install(self._server(), project_dir)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            server = data["mcpServers"]["agentmux-research"]
+            server = data["mcpServers"]["agentmux"]
             self.assertEqual(sys.executable, server["command"])
-            self.assertEqual(
-                ["-m", "agentmux.integrations.mcp_research_server"], server["args"]
-            )
+            self.assertEqual(["-m", "agentmux.integrations.mcp_server"], server["args"])
 
     # --- prompt_message tests ---
 

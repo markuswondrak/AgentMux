@@ -1,6 +1,6 @@
 ## Submitting Your Plan
 
-Write a single `04_planning/plan.yaml` containing all sub-plans and execution metadata, then call `submit_plan()` once.
+Write a single `04_planning/plan.yaml` containing all sub-plans and execution metadata, then call `mcp__agentmux__submit_plan()` once.
 
 ```yaml
 version: 2
@@ -41,6 +41,6 @@ subplans:
       Why this sub-plan is safe for parallel execution.
 ```
 
-After writing the file, call `submit_plan()` (no arguments needed).
+After writing the file, call `mcp__agentmux__submit_plan()` (no arguments needed).
 
 Each sub-plan in `subplans` must be referenced exactly once in `groups[].plans[]` via its `index`. Indices must start at 1 and be contiguous (1, 2, 3, …).

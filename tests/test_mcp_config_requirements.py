@@ -25,8 +25,8 @@ from agentmux.shared.models import OPENCODE_AGENT_ROLES, AgentConfig
 class McpConfigRequirementsTests(unittest.TestCase):
     def _server(self) -> McpServerSpec:
         return McpServerSpec(
-            name="agentmux-research",
-            module="agentmux.integrations.mcp_research_server",
+            name="agentmux",
+            module="agentmux.integrations.mcp_server",
             env={},
         )
 
@@ -119,13 +119,11 @@ class McpConfigRequirementsTests(unittest.TestCase):
             )
 
             config = json.loads(config_path.read_text(encoding="utf-8"))
-            server = config["mcpServers"]["agentmux-research"]
+            server = config["mcpServers"]["agentmux"]
             self.assertTrue(config["existing"])
             self.assertEqual("stdio", server["type"])
             self.assertEqual(sys.executable, server["command"])
-            self.assertEqual(
-                ["-m", "agentmux.integrations.mcp_research_server"], server["args"]
-            )
+            self.assertEqual(["-m", "agentmux.integrations.mcp_server"], server["args"])
 
     def test_ensure_mcp_config_writes_gemini_project_config(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -151,11 +149,9 @@ class McpConfigRequirementsTests(unittest.TestCase):
             config = json.loads(
                 (project_dir / ".gemini" / "settings.json").read_text(encoding="utf-8")
             )
-            server = config["mcpServers"]["agentmux-research"]
+            server = config["mcpServers"]["agentmux"]
             self.assertEqual(sys.executable, server["command"])
-            self.assertEqual(
-                ["-m", "agentmux.integrations.mcp_research_server"], server["args"]
-            )
+            self.assertEqual(["-m", "agentmux.integrations.mcp_server"], server["args"])
             self.assertTrue(server["trust"])
 
     def test_ensure_mcp_config_writes_opencode_project_config(self) -> None:
@@ -182,11 +178,11 @@ class McpConfigRequirementsTests(unittest.TestCase):
             )
 
             config = json.loads(config_path.read_text(encoding="utf-8"))
-            server = config["mcp"]["agentmux-research"]
+            server = config["mcp"]["agentmux"]
             self.assertEqual({"x": True}, config["tools"])
             self.assertEqual("local", server["type"])
             self.assertEqual(
-                [sys.executable, "-m", "agentmux.integrations.mcp_research_server"],
+                [sys.executable, "-m", "agentmux.integrations.mcp_server"],
                 server["command"],
             )
             self.assertTrue(server["enabled"])
@@ -202,11 +198,11 @@ class McpConfigRequirementsTests(unittest.TestCase):
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 'foo = "bar"\n\n'
-                "[mcp_servers.agentmux-research]\n"
+                "[mcp_servers.agentmux]\n"
                 'command = "python3"\n'
-                'args = ["-m", "agentmux.integrations.mcp_research_server"]\n'
+                'args = ["-m", "agentmux.integrations.mcp_server"]\n'
                 "enabled = true\n\n"
-                "[mcp_servers.agentmux-research.env]\n"
+                "[mcp_servers.agentmux.env]\n"
                 'FEATURE_DIR = "/old/feature"\n',
                 encoding="utf-8",
             )
@@ -235,10 +231,8 @@ class McpConfigRequirementsTests(unittest.TestCase):
             content = config_path.read_text(encoding="utf-8")
             self.assertIn('foo = "bar"', content)
             self.assertIn(f'command = "{sys.executable}"', content)
-            self.assertIn(
-                'args = ["-m", "agentmux.integrations.mcp_research_server"]', content
-            )
-            self.assertEqual(1, content.count("[mcp_servers.agentmux-research]"))
+            self.assertIn('args = ["-m", "agentmux.integrations.mcp_server"]', content)
+            self.assertEqual(1, content.count("[mcp_servers.agentmux]"))
             self.assertNotIn('FEATURE_DIR = "/old/feature"', content)
 
     def test_ensure_mcp_config_warns_when_noninteractive_and_missing(self) -> None:
@@ -328,7 +322,7 @@ class McpConfigRequirementsTests(unittest.TestCase):
                     role="architect",
                     cli="claude",
                     model="opus",
-                    args=["--allowedTools", "mcp__agentmux-research__*"],
+                    args=["--allowedTools", "mcp__agentmux__*"],
                 ),
                 "product-manager": AgentConfig(
                     role="product-manager", cli="claude", model="sonnet", args=[]
@@ -404,13 +398,11 @@ class McpConfigRequirementsTests(unittest.TestCase):
             self.assertEqual(config_path.parent, agentmux_dir)
             config = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertIn("mcpServers", config)
-            self.assertIn("agentmux-research", config["mcpServers"])
-            server = config["mcpServers"]["agentmux-research"]
+            self.assertIn("agentmux", config["mcpServers"])
+            server = config["mcpServers"]["agentmux"]
             self.assertEqual("stdio", server["type"])
             self.assertEqual(sys.executable, server["command"])
-            self.assertEqual(
-                ["-m", "agentmux.integrations.mcp_research_server"], server["args"]
-            )
+            self.assertEqual(["-m", "agentmux.integrations.mcp_server"], server["args"])
             self.assertIn("env", server)
             self.assertEqual(str(project_dir), server["env"]["PYTHONPATH"])
 
@@ -439,10 +431,10 @@ class McpConfigRequirementsTests(unittest.TestCase):
             # Create existing config that matches what would be generated
             existing_config = {
                 "mcpServers": {
-                    "agentmux-research": {
+                    "agentmux": {
                         "type": "stdio",
                         "command": sys.executable,
-                        "args": ["-m", "agentmux.integrations.mcp_research_server"],
+                        "args": ["-m", "agentmux.integrations.mcp_server"],
                     }
                 }
             }
@@ -606,7 +598,7 @@ class RoleToolFilteringTests(unittest.TestCase):
 
     def _server(self) -> McpServerSpec:
         return McpServerSpec(
-            name="agentmux-research",
+            name="agentmux",
             module="agentmux.integrations.mcp_server",
             env={},
         )
@@ -633,7 +625,7 @@ class RoleToolFilteringTests(unittest.TestCase):
                 updated["architect"].args.index("--mcp-config") + 1
             ]
             config = json.loads(Path(config_path_str).read_text(encoding="utf-8"))
-            server_env = config["mcpServers"]["agentmux-research"]["env"]
+            server_env = config["mcpServers"]["agentmux"]["env"]
             self.assertIn("AGENTMUX_ALLOWED_TOOLS", server_env)
             allowed = set(server_env["AGENTMUX_ALLOWED_TOOLS"].split(","))
             self.assertIn("submit_architecture", allowed)
@@ -675,10 +667,10 @@ class RoleToolFilteringTests(unittest.TestCase):
             self.assertNotEqual(arch_path, coder_path)
 
             arch_env = json.loads(Path(arch_path).read_text())["mcpServers"][
-                "agentmux-research"
+                "agentmux"
             ]["env"]["AGENTMUX_ALLOWED_TOOLS"]
             coder_env = json.loads(Path(coder_path).read_text())["mcpServers"][
-                "agentmux-research"
+                "agentmux"
             ]["env"]["AGENTMUX_ALLOWED_TOOLS"]
             self.assertIn("submit_architecture", arch_env)
             self.assertNotIn("submit_architecture", coder_env)

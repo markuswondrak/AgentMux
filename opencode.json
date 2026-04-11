@@ -1,12 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "agentmux-research": {
+    "agentmux": {
       "type": "local",
       "command": [
         "/home/markus/.local/share/pipx/venvs/agentmux/bin/python",
         "-m",
-        "agentmux.integrations.mcp_research_server"
+        "agentmux.integrations.mcp_server"
       ],
       "enabled": true
     }
