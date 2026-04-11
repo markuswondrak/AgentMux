@@ -4,6 +4,18 @@ This file provides guidance to coding agents when working with code in this repo
 
 ## Development
 
+### Test-Driven Development
+
+For every functional change, new feature, or bugfix, you MUST write or update tests FIRST — before implementing the change. This is a mandatory requirement:
+
+1. **Write the test first** — Create or update tests that describe the expected behavior
+2. **Run tests to confirm they fail** — Verify the test captures the issue or new requirement
+3. **Implement the change** — Write the minimum code to make the test pass
+4. **Run tests to confirm they pass** — Ensure all tests pass, including existing ones
+5. **Refactor if needed** — Clean up code while keeping tests green
+
+Do not skip this process. Tests are the specification of desired behavior.
+
 ### Install for development
 
 ```bash

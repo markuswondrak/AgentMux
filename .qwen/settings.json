@@ -6,7 +6,8 @@
       "Bash(copilot *)",
       "WebSearch",
       "Bash(python3 *)",
-      "Bash(pytest *)"
+      "Bash(pytest *)",
+      "Bash(python *)"
     ]
   },
   "$version": 3
