@@ -238,3 +238,10 @@ providers:
       - --reasoning-effort
       - high
     role_args: {}
+  qwen:
+    command: qwen
+    trust_snippet: null
+    default_model: qwen3-max
+    default_role_args:
+    - --yolo
+    role_args: {}

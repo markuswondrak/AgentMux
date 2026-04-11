@@ -19,7 +19,7 @@ Use `agentmux init` to scaffold a new project with configuration:
 
 - **Interactive mode** — Guides you through a quick setup or custom role assignments, GitHub settings, optional MCP setup, and optional prompt stubs
 - **Non-interactive mode** (`--defaults`) — Creates config with built-in defaults and CLAUDE.md template
-- **CLI detection** — Automatically detects installed providers (claude, codex, gemini, opencode, copilot)
+- **CLI detection** — Automatically detects installed providers (claude, codex, gemini, opencode, copilot, qwen)
 - **Config generation** — Creates `.agentmux/config.yaml` with only necessary overrides (minimal config files)
 - **CLAUDE.md setup** — Creates a template, symlinks an existing file, or skips
 - **Prompt stubs** — Optionally generates role-specific instruction files in `.agentmux/prompts/agents/`
@@ -148,6 +148,10 @@ roles:
 Supported models: `claude-sonnet-4.6`, `claude-opus-4.6`, `gpt-5.4`, `gemini-2.5-pro`. Models are selected via `--model=<model>`.
 
 `copilot` uses `--allow-all` and `--reasoning-effort high` for all roles to enable non-interactive operation with maximum reasoning capability. On first run in a directory, Copilot CLI asks "Do you trust the files in this folder?" — Agentmux auto-accepts this via the `trust_snippet: "trust the files"` configuration.
+
+## Qwen CLI provider
+
+`qwen` is a built-in provider. The bundled defaults use `qwen3-max` as the provider default model and pass `--yolo` for every role. When research-enabled roles need MCP setup, AgentMux manages the persistent registration in `~/.qwen/settings.json`.
 
 ### Provider default settings
 
@@ -300,8 +304,10 @@ MCP setup for research uses a **two-layer configuration approach** that separate
 
 - Claude: project `.claude/settings.json`
 - Codex: user `~/.codex/config.toml`
+- Copilot: user `~/.copilot/mcp-config.json`
 - Gemini: project `.gemini/settings.json`
 - OpenCode: project `opencode.json`
+- Qwen: user `~/.qwen/settings.json`
 
 When the entry is missing, the user is prompted to create or refresh it. This persistent config serves as a fallback for manual CLI tool usage outside the pipeline.
 
@@ -337,6 +343,6 @@ At pipeline startup, a runtime MCP config file is generated at `.agentmux/mcp_se
 
 For Claude agents, the pipeline appends `["--mcp-config", ".agentmux/mcp_servers.json"]` to the launch arguments. This bypasses project-level settings trust requirements by explicitly providing the MCP server configuration at runtime.
 
-For other providers (Codex, Gemini, OpenCode), the pipeline only injects `PYTHONPATH=<project_dir>` into the launched process environment so the research server can import the project checkout.
+For other providers (Codex, Copilot, Gemini, OpenCode, Qwen), the pipeline only injects `PYTHONPATH=<project_dir>` into the launched process environment so the research server can import the project checkout.
 
 Claude additionally needs explicit tool allowlisting, so defaults include `mcp__agentmux-research__*` in architect/product-manager `--allowedTools`. Other bundled providers run in approval modes that auto-approve tool calls.

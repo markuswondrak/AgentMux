@@ -31,4 +31,5 @@ Your job:
 
 Constraints:
 - Communicate only through the files in the shared feature directory.
+- Do not update state.json or other orchestrator runtime files directly.
 - Make concrete repository changes rather than producing only prose.

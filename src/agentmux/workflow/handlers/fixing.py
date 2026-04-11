@@ -9,7 +9,12 @@ from agentmux.workflow.event_catalog import (
     EVENT_IMPLEMENTATION_COMPLETED,
     EVENT_REVIEW_FAILED,
 )
-from agentmux.workflow.event_router import EventSpec, ToolSpec, WorkflowEvent
+from agentmux.workflow.event_router import (
+    EventSpec,
+    ToolSpec,
+    WorkflowEvent,
+    extract_subplan_index,
+)
 from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
@@ -62,9 +67,11 @@ class FixingHandler:
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Handle events for fixing phase."""
-        if event.kind == "done":
+        if event.kind in {"done", "fix_done"}:
             payload = event.payload.get("payload", {})
             subplan_index = payload.get("subplan_index")
+            if subplan_index is None and event.path is not None:
+                subplan_index = extract_subplan_index(event.path)
             if subplan_index is not None:
                 # Write done_N marker for tracking (idempotent)
                 done_n_path = ctx.files.implementation_dir / f"done_{subplan_index}"

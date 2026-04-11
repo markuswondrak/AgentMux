@@ -155,7 +155,7 @@ def _handle_interactive_mode(
         if not available:
             print(
                 "No supported provider CLI detected. "
-                "Install one of: claude, codex, gemini, opencode, copilot.",
+                "Install one of: claude, codex, gemini, opencode, copilot, qwen.",
                 file=sys.stderr,
             )
             raise SystemExit(1)

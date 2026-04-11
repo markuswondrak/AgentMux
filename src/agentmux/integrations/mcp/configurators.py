@@ -276,6 +276,47 @@ class CodexConfigurator(PersistentMcpConfigurator):
         return f"Configured agentmux MCP tools for codex at {path}."
 
 
+class QwenConfigurator(JsonMcpConfigurator):
+    provider = "qwen"
+
+    def config_path(self, project_dir: Path) -> Path:
+        _ = project_dir
+        return Path.home() / ".qwen" / "settings.json"
+
+    def has_server(self, server: McpServerSpec, project_dir: Path) -> bool:
+        data = self._load_json(project_dir)
+        servers = data.get("mcpServers", {})
+        return isinstance(servers, dict) and server.name in servers
+
+    def install(self, server: McpServerSpec, project_dir: Path) -> None:
+        data = self._load_json(project_dir)
+        servers = data.get("mcpServers")
+        if not isinstance(servers, dict):
+            servers = {}
+        servers[server.name] = _persistent_stdio_server(server)
+        data["mcpServers"] = servers
+        self._write_json(data, project_dir)
+
+    def uninstall(self, server: McpServerSpec, project_dir: Path) -> None:
+        path = self.config_path(project_dir)
+        if not path.exists():
+            return
+        data = self._load_json(project_dir)
+        servers = data.get("mcpServers")
+        if isinstance(servers, dict):
+            servers.pop(server.name, None)
+        self._write_json(data, project_dir)
+
+    def prompt_message(
+        self, server: McpServerSpec, project_dir: Path, roles_label: str
+    ) -> str:
+        path = self.config_path(project_dir)
+        return (
+            f"Agentmux requires its MCP server for qwen ({roles_label}) "
+            f"to coordinate agents. Install at {path}?"
+        )
+
+
 class CopilotConfigurator(JsonMcpConfigurator):
     """Installs agentmux-research MCP server into GitHub Copilot CLI config.
 
@@ -329,6 +370,7 @@ CONFIGURATORS: dict[str, PersistentMcpConfigurator] = {
     "copilot": CopilotConfigurator(),
     "gemini": GeminiConfigurator(),
     "opencode": OpenCodeConfigurator(),
+    "qwen": QwenConfigurator(),
 }
 
 

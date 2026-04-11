@@ -315,7 +315,8 @@ def build_coder_subplan_prompt(
     completion_instruction = (
         "FINAL STEP ONLY — once all code is written and nothing else remains, "
         f"call `submit_done(subplan_index={subplan_index})` "
-        "to signal completion to the orchestrator. "
+        "to signal completion to the orchestrator and materialize "
+        f"`06_implementation/done_{subplan_index}`. "
         "This must be the very last action you take."
     )
 
@@ -416,7 +417,8 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
                     "",
                     f"**Signal completion for plan {index}**: "
                     f"call `submit_done(subplan_index={index})` when this plan is "
-                    f"fully implemented and validated.",
+                    f"fully implemented and validated. This materializes "
+                    f"`06_implementation/done_{index}`.",
                     "",
                 ]
             )

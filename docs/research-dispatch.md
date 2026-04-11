@@ -48,8 +48,10 @@ AgentMux expects an MCP registration named `agentmux-research` for the effective
 
 - Claude: project `.claude/settings.json`
 - Codex: user `~/.codex/config.toml`
+- Copilot: user `~/.copilot/mcp-config.json`
 - Gemini: project `.gemini/settings.json`
 - OpenCode: project `opencode.json`
+- Qwen: user `~/.qwen/settings.json`
 
 `agentmux init` and interactive pipeline startup prompt to create that entry only when it is missing. The registered command uses the current Python interpreter and launches `-m agentmux.integrations.mcp_server`.
 
