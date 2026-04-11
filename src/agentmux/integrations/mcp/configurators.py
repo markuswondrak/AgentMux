@@ -297,16 +297,6 @@ class QwenConfigurator(JsonMcpConfigurator):
         data["mcpServers"] = servers
         self._write_json(data, project_dir)
 
-    def uninstall(self, server: McpServerSpec, project_dir: Path) -> None:
-        path = self.config_path(project_dir)
-        if not path.exists():
-            return
-        data = self._load_json(project_dir)
-        servers = data.get("mcpServers")
-        if isinstance(servers, dict):
-            servers.pop(server.name, None)
-        self._write_json(data, project_dir)
-
     def prompt_message(
         self, server: McpServerSpec, project_dir: Path, roles_label: str
     ) -> str:
@@ -342,16 +332,6 @@ class CopilotConfigurator(JsonMcpConfigurator):
             servers = {}
         servers[server.name] = _copilot_local_server(server)
         data["mcpServers"] = servers
-        self._write_json(data, project_dir)
-
-    def uninstall(self, server: McpServerSpec, project_dir: Path) -> None:
-        path = self.config_path(project_dir)
-        if not path.exists():
-            return
-        data = self._load_json(project_dir)
-        servers = data.get("mcpServers")
-        if isinstance(servers, dict):
-            servers.pop(server.name, None)
         self._write_json(data, project_dir)
 
     def prompt_message(
