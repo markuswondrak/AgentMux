@@ -10,6 +10,10 @@ import yaml
 
 from agentmux import monitor
 from agentmux.agent_labels import role_display_label
+from agentmux.monitor.progress_parser import (
+    ExecutionProgress,
+    parse_execution_progress,
+)
 from agentmux.monitor.state_reader import (
     EVENT_LABELS,
     OPTIONAL_PHASES,
@@ -1154,6 +1158,154 @@ class MonitorTests(unittest.TestCase):
                 len(lines),
                 f"Expected {height} lines, got {len(lines)}",
             )
+
+
+class ExecutionProgressParserTests(unittest.TestCase):
+    """Direct unit tests for parse_execution_progress()."""
+
+    def test_known_field_names(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 3,
+                "completed_groups": 1,
+                "active_group_index": 1,
+                "active_group_mode": "serial",
+                "active_plan_ids": ["plan_2"],
+                "groups": [{"id": "g1"}, {"id": "g2"}, {"id": "g3"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        self.assertIsInstance(result, ExecutionProgress)
+        assert result is not None
+        self.assertEqual(result.total, 3)
+        self.assertEqual(result.completed, 1)
+        self.assertEqual(result.active_index, 1)
+        self.assertEqual(result.active_group, "g2")
+        self.assertEqual(result.active_mode, "serial")
+        self.assertEqual(result.active_plan_ids, ["plan_2"])
+        self.assertEqual(result.completed_group_ids, ["g1"])
+        self.assertEqual(result.queued_group_ids, ["g3"])
+
+    def test_alternative_field_names(self) -> None:
+        state = {
+            "implementation_group_total": 3,
+            "implementation_group_index": 2,
+            "implementation_group_mode": "parallel",
+            "implementation_active_plan_ids": ["plan_2", "plan_3"],
+            "implementation_completed_group_ids": ["group_1"],
+        }
+        result = parse_execution_progress(state)
+        self.assertIsInstance(result, ExecutionProgress)
+        assert result is not None
+        self.assertEqual(result.total, 3)
+        self.assertEqual(result.completed, 1)
+        self.assertEqual(result.active_index, 1)
+        self.assertEqual(result.active_mode, "parallel")
+        self.assertEqual(result.active_plan_ids, ["plan_2", "plan_3"])
+
+    def test_active_index_zero_based_stays(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 2,
+                "completed_groups": 0,
+                "active_group_index": 0,
+                "groups": [{"id": "g1"}, {"id": "g2"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        self.assertEqual(result.active_index, 0)
+
+    def test_active_index_one_based_converted(self) -> None:
+        """active_group_index=1 stays 1 (0-based).
+
+        Only implementation_group_index is 1-based.
+        """
+        state = {
+            "execution_progress": {
+                "total_groups": 3,
+                "completed_groups": 0,
+                "active_group_index": 1,
+                "groups": [{"id": "g1"}, {"id": "g2"}, {"id": "g3"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        self.assertEqual(result.active_index, 1)
+
+    def test_active_index_one_based_for_implementation_group_index(self) -> None:
+        state = {
+            "implementation_group_total": 3,
+            "implementation_group_index": 2,
+            "groups": [{"id": "g1"}, {"id": "g2"}, {"id": "g3"}],
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        self.assertEqual(result.active_index, 1)
+
+    def test_none_when_no_signal(self) -> None:
+        state = {"phase": "implementing"}
+        result = parse_execution_progress(state)
+        self.assertIsNone(result)
+
+    def test_none_when_empty_state(self) -> None:
+        result = parse_execution_progress({})
+        self.assertIsNone(result)
+
+    def test_none_when_total_zero(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 0,
+                "completed_groups": 0,
+                "groups": [],
+            }
+        }
+        result = parse_execution_progress(state)
+        self.assertIsNone(result)
+
+    def test_completed_from_list_length(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 4,
+                "completed_groups": ["g1", "g2"],
+                "active_group_index": 2,
+                "groups": [{"id": "g1"}, {"id": "g2"}, {"id": "g3"}, {"id": "g4"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        self.assertEqual(result.completed, 2)
+
+    def test_scheduled_execution_progress(self) -> None:
+        state = {
+            "phase": "implementing",
+            "staged_execution": {
+                "total_groups": 2,
+                "completed_groups": 0,
+                "active_group_index": 0,
+                "active_group_mode": "parallel",
+                "active_plan_ids": ["plan_1", "plan_2"],
+                "groups": [{"id": "stage1"}, {"id": "stage2"}],
+            },
+        }
+        result = parse_execution_progress(state)
+        self.assertIsInstance(result, ExecutionProgress)
+        assert result is not None
+        self.assertEqual(result.total, 2)
+        self.assertEqual(result.active_group, "stage1")
+        self.assertEqual(result.active_mode, "parallel")
+
+    def test_frozen_dataclass_is_immutable(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 1,
+                "groups": [{"id": "g1"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        with self.assertRaises(AttributeError):
+            result.total = 99  # type: ignore[misc]
 
 
 if __name__ == "__main__":
