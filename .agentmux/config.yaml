@@ -5,10 +5,10 @@ defaults:
   provider: qwen
   max_review_iterations: 3
 
-#roles:
-#  coder:
-#    model: gpt-5.4
-#  web-researcher:
-#    model: claude-haiku-4.5
-#  code-researcher:
-#    model: claude-haiku-4.5
+roles:
+  architect:
+    provider: copilot
+  web-researcher:
+    provider: opencode
+  code-researcher:
+    provider: opencode

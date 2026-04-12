@@ -1065,5 +1065,249 @@ class ProjectDirInferenceTests(unittest.TestCase):
             self.assertEqual(project_dir, infer_project_dir(feature_dir))
 
 
+class ResumeBranchValidationTests(unittest.TestCase):
+    """Tests for branch validation when resuming a session.
+
+    When resuming, the _prepare_session() method should read feature_branch
+    from the saved state and call git_manager.ensure_branch() if present.
+    """
+
+    def _make_base_state(self, feature_dir: Path) -> dict:
+        return {
+            "feature_dir": str(feature_dir),
+            "phase": "failed",
+            "last_event": "run_failed",
+            "product_manager": True,
+            "subplan_count": 0,
+            "review_iteration": 0,
+            "research_tasks": {},
+            "web_research_tasks": {},
+            "updated_at": "2026-01-01T12:00:00+01:00",
+            "updated_by": "pipeline",
+        }
+
+    def _make_loaded_config(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            session_name="multi-agent-mvp",
+            max_review_iterations=3,
+            github=GitHubConfig(),
+            agents={
+                "architect": _agent("architect"),
+                "planner": _agent("planner"),
+                "product-manager": _agent("product-manager"),
+            },
+        )
+
+    def test_resume_with_feature_branch_calls_ensure_branch(self) -> None:
+        """Resume with feature_branch in state should call ensure_branch()."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            app = application.PipelineApplication(project_dir)
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            )
+            feature_dir.mkdir(parents=True)
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            state = self._make_base_state(feature_dir)
+            state["feature_branch"] = "feature/demo-branch"
+            state["branch_created"] = True
+            write_state(feature_dir / "state.json", state)
+
+            loaded = self._make_loaded_config()
+
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.GitBranchManager"
+                ) as git_manager_mock,
+            ):
+                git_manager_instance = git_manager_mock.return_value
+                git_manager_instance.ensure_branch.return_value = SimpleNamespace(
+                    created=True
+                )
+
+                result = app.run_resume(session="20260101-120000-demo")
+
+                self.assertEqual(0, result)
+                git_manager_mock.assert_called_once_with(project_dir)
+                git_manager_instance.ensure_branch.assert_called_once_with(
+                    "feature/demo-branch"
+                )
+
+    def test_resume_without_feature_branch_does_not_call_ensure_branch(
+        self,
+    ) -> None:
+        """Resume without feature_branch in state should NOT call ensure_branch()."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            app = application.PipelineApplication(project_dir)
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            )
+            feature_dir.mkdir(parents=True)
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            state = self._make_base_state(feature_dir)
+            # No feature_branch key
+            write_state(feature_dir / "state.json", state)
+
+            loaded = self._make_loaded_config()
+
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.GitBranchManager"
+                ) as git_manager_mock,
+            ):
+                result = app.run_resume(session="20260101-120000-demo")
+
+                self.assertEqual(0, result)
+                git_manager_mock.assert_not_called()
+
+    def test_resume_with_failed_ensure_branch_prints_warning_no_abort(
+        self,
+    ) -> None:
+        """Resume with feature_branch where ensure_branch returns created=False
+        should print a warning but NOT abort the session."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            messages: list[str] = []
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=messages.append)
+            )
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            )
+            feature_dir.mkdir(parents=True)
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            state = self._make_base_state(feature_dir)
+            state["feature_branch"] = "feature/demo-branch"
+            state["branch_created"] = True
+            write_state(feature_dir / "state.json", state)
+
+            loaded = self._make_loaded_config()
+
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.GitBranchManager"
+                ) as git_manager_mock,
+            ):
+                git_manager_instance = git_manager_mock.return_value
+                git_manager_instance.ensure_branch.return_value = SimpleNamespace(
+                    created=False
+                )
+
+                result = app.run_resume(session="20260101-120000-demo")
+
+                self.assertEqual(0, result)
+                git_manager_instance.ensure_branch.assert_called_once_with(
+                    "feature/demo-branch"
+                )
+                # Verify warning was printed
+                self.assertTrue(
+                    any(
+                        "Could not create/switch to feature branch" in msg
+                        for msg in messages
+                    ),
+                    f"Expected warning message, got: {messages}",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
