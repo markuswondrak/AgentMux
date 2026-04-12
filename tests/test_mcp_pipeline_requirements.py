@@ -9,7 +9,7 @@ from unittest.mock import patch
 import yaml
 
 import agentmux.pipeline.application as application
-from agentmux.runtime.tmux_control import build_agent_command
+from agentmux.runtime.command_builder import build_agent_command
 from agentmux.sessions.state_store import create_feature_files
 from agentmux.shared.models import (
     AgentConfig,
@@ -367,8 +367,19 @@ class McpPipelineRequirementsTests(unittest.TestCase):
         )
 
         role_args = config["providers"]["claude"]["role_args"]
-        self.assertIn("mcp__agentmux-research__*", role_args["architect"][-1])
-        self.assertIn("mcp__agentmux-research__*", role_args["product-manager"][-1])
+        # Each role must list only the specific MCP tools it actually needs —
+        # no wildcard is allowed; this is the per-role filtering contract.
+        arch_tools = role_args["architect"][-1]
+        self.assertIn("mcp__agentmux__research_dispatch_code", arch_tools)
+        self.assertIn("mcp__agentmux__research_dispatch_web", arch_tools)
+        self.assertIn("mcp__agentmux__submit_architecture", arch_tools)
+        self.assertNotIn("mcp__agentmux__*", arch_tools)
+
+        pm_tools = role_args["product-manager"][-1]
+        self.assertIn("mcp__agentmux__research_dispatch_code", pm_tools)
+        self.assertIn("mcp__agentmux__research_dispatch_web", pm_tools)
+        self.assertIn("mcp__agentmux__submit_pm_done", pm_tools)
+        self.assertNotIn("mcp__agentmux__*", pm_tools)
 
     def test_architect_and_product_manager_prompts_reference_mcp_tools(
         self,
@@ -386,8 +397,8 @@ class McpPipelineRequirementsTests(unittest.TestCase):
             product_prompt = build_product_manager_prompt(files)
 
             for prompt in (architect_prompt, product_prompt):
-                self.assertIn("agentmux_research_dispatch_code", prompt)
-                self.assertIn("agentmux_research_dispatch_web", prompt)
+                self.assertIn("research_dispatch_code", prompt)
+                self.assertIn("research_dispatch_web", prompt)
                 self.assertNotIn("agentmux_research_await", prompt)
                 self.assertIn(f'feature_dir="{feature_dir}"', prompt)
                 self.assertIn("scope_hints=[", prompt)

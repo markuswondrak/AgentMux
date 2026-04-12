@@ -65,7 +65,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
     def _write_coder_inputs(
         self, feature_dir: Path, *, plan_name: str = "plan_1.md"
     ) -> None:
-        planning_dir = feature_dir / "02_planning"
+        planning_dir = feature_dir / "04_planning"
         planning_dir.mkdir(parents=True, exist_ok=True)
         (planning_dir / plan_name).write_text(f"## {plan_name}\n", encoding="utf-8")
 
@@ -82,34 +82,38 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
 
         # Create required files for prompts
         (feature_dir / "context.md").write_text("# Context", encoding="utf-8")
-        (planning_dir / "architecture.md").write_text(
+        architecting_dir = feature_dir / "02_architecting"
+        architecting_dir.mkdir(parents=True, exist_ok=True)
+        (architecting_dir / "architecture.md").write_text(
             "# Architecture", encoding="utf-8"
         )
 
     def _write_confirmation_inputs(self, feature_dir: Path) -> None:
-        planning_dir = feature_dir / "02_planning"
+        planning_dir = feature_dir / "04_planning"
         planning_dir.mkdir(parents=True, exist_ok=True)
         (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
-        review_dir = feature_dir / "06_review"
+        review_dir = feature_dir / "07_review"
         review_dir.mkdir(parents=True, exist_ok=True)
         (review_dir / "review.md").write_text("verdict: pass\n", encoding="utf-8")
 
         # Create required files for reviewer prompts
         (feature_dir / "context.md").write_text("# Context", encoding="utf-8")
-        (planning_dir / "architecture.md").write_text(
+        architecting_dir = feature_dir / "02_architecting"
+        architecting_dir.mkdir(parents=True, exist_ok=True)
+        (architecting_dir / "architecture.md").write_text(
             "# Architecture", encoding="utf-8"
         )
 
     def _write_fix_inputs(self, feature_dir: Path) -> None:
-        planning_dir = feature_dir / "02_planning"
+        planning_dir = feature_dir / "04_planning"
         planning_dir.mkdir(parents=True, exist_ok=True)
         (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
-        review_dir = feature_dir / "06_review"
+        review_dir = feature_dir / "07_review"
         review_dir.mkdir(parents=True, exist_ok=True)
         (review_dir / "fix_request.md").write_text("# Fix request\n", encoding="utf-8")
 
     def _write_change_inputs(self, feature_dir: Path) -> None:
-        planning_dir = feature_dir / "02_planning"
+        planning_dir = feature_dir / "04_planning"
         planning_dir.mkdir(parents=True, exist_ok=True)
         (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
         (planning_dir / "tasks.md").write_text("# Tasks\n", encoding="utf-8")
@@ -118,7 +122,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
         (completion_dir / "changes.md").write_text("# Changes\n", encoding="utf-8")
 
     def _write_designer_inputs(self, feature_dir: Path) -> None:
-        planning_dir = feature_dir / "02_planning"
+        planning_dir = feature_dir / "04_planning"
         planning_dir.mkdir(parents=True, exist_ok=True)
         (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
 
@@ -360,10 +364,15 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             with self.subTest(template=str(template_path)):
                 template = template_path.read_text(encoding="utf-8")
                 self.assertIn("[[placeholder:project_instructions]]", template)
-                self.assertIn("Constraints:", template)
+                # Agent templates use "## Constraints", commands use "Constraints:"
+                if "## Constraints" in template:
+                    constraints_str = "## Constraints"
+                else:
+                    constraints_str = "Constraints:"
+                self.assertIn(constraints_str, template)
                 self.assertLess(
                     template.index("[[placeholder:project_instructions]]"),
-                    template.index("Constraints:"),
+                    template.index(constraints_str),
                 )
 
     def test_builders_inject_project_prompt_extensions_before_constraints(self) -> None:
@@ -412,7 +421,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                     "coder",
                     "EXT-CODER",
                     lambda runtime: build_coder_subplan_prompt(
-                        runtime, feature_dir / "02_planning" / "plan_1.md", 1
+                        runtime, feature_dir / "04_planning" / "plan_1.md", 1
                     ),
                 ),
                 (
@@ -456,8 +465,13 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                 with self.subTest(marker=marker):
                     prompt = builder(files)
                     self.assertIn(marker, prompt)
-                    self.assertIn("Constraints:", prompt)
-                    self.assertLess(prompt.index(marker), prompt.index("Constraints:"))
+                    # Agent prompts use "## Constraints", commands use "Constraints:"
+                    if "## Constraints" in prompt:
+                        constraints_str = "## Constraints"
+                    else:
+                        constraints_str = "Constraints:"
+                    self.assertIn(constraints_str, prompt)
+                    self.assertLess(prompt.index(marker), prompt.index(constraints_str))
 
     def test_project_prompts_with_curly_braces_do_not_break_template_rendering(
         self,
@@ -479,7 +493,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self._write_project_prompt(project_dir, "agents", "coder", injected)
 
             prompt = build_coder_subplan_prompt(
-                files, feature_dir / "02_planning" / "plan_1.md", 1
+                files, feature_dir / "04_planning" / "plan_1.md", 1
             )
 
             self.assertIn(injected, prompt)
@@ -500,7 +514,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self._write_coder_inputs(feature_dir, plan_name="plan_1.md")
 
             # Write architecture.md so planner prompt can include it
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             (planning_dir / "architecture.md").write_text(
                 "# Architecture\n", encoding="utf-8"
             )
@@ -508,22 +522,26 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             architect_prompt = build_architect_prompt(files)
             change_prompt = build_change_prompt(files)
             coder_prompt = build_coder_subplan_prompt(
-                files, feature_dir / "02_planning" / "plan_1.md", 1
+                files, feature_dir / "04_planning" / "plan_1.md", 1
             )
 
             planning_contract_line = (
                 "Documentation updates must be captured as explicit plan "
                 "and task items in "
-                "`02_planning/plan.md`, every `02_planning/plan_<N>.md`, "
-                "and every `02_planning/tasks_<N>.md`."
+                "`04_planning/plan.md`, every `04_planning/plan_<N>.md`, "
+                "and every `04_planning/tasks_<N>.md`."
             )
             # Planning contract belongs to the planner, not the architect
             self.assertNotIn(planning_contract_line, architect_prompt)
-            # Note: planning_contract_line removed from streamlined planner
-            self.assertIn(planning_contract_line, change_prompt)
+            # change.md (replanning prompt) now uses plan.yaml v2 schema
+            change_docs_line = (
+                "Documentation updates must be captured as explicit tasks "
+                "in the relevant sub-plan."
+            )
+            self.assertIn(change_docs_line, change_prompt)
             self.assertIn(
-                "When your assigned task checklist includes documentation tasks, "
-                "complete them as part of implementation in this coder step.",
+                "When the task checklist includes documentation tasks, "
+                "complete them as part of implementation.",
                 coder_prompt,
             )
             self.assertIn(
@@ -557,7 +575,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
 
             prompt = build_coder_subplan_prompt(
-                files, feature_dir / "02_planning" / "plan_1.md", 1
+                files, feature_dir / "04_planning" / "plan_1.md", 1
             )
 
             self.assertIn("Research handoff (read before new exploration):", prompt)
@@ -592,7 +610,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
 
             prompt = build_coder_subplan_prompt(
-                files, feature_dir / "02_planning" / "plan_1.md", 1
+                files, feature_dir / "04_planning" / "plan_1.md", 1
             )
 
             self.assertIn("Research handoff (read before new exploration):", prompt)
@@ -617,7 +635,7 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             )
 
             subplan_prompt = build_coder_subplan_prompt(
-                files, feature_dir / "02_planning" / "plan_1.md", 1
+                files, feature_dir / "04_planning" / "plan_1.md", 1
             )
 
             self.assertNotIn(
@@ -646,17 +664,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertIn(str(project_dir), product_prompt)
             self.assertIn(str(project_dir), architect_prompt)
             self.assertIn(str(project_dir), reviewer_prompt)
-
-            self.assertIn(
-                files.relative_path(files.pm_preference_proposal), product_prompt
-            )
-            self.assertIn(
-                files.relative_path(files.architect_preference_proposal),
-                architect_prompt,
-            )
-            self.assertIn(
-                files.relative_path(files.reviewer_preference_proposal), reviewer_prompt
-            )
 
     def test_agent_preference_prompts_include_shared_block_and_role_specific_guidance(
         self,
@@ -687,25 +694,18 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             self.assertIn(shared_line, architect_prompt)
             self.assertIn(shared_line, reviewer_prompt)
 
-            self.assertIn('"source_role":"product-manager"', product_prompt)
-            self.assertIn(
-                files.relative_path(files.pm_preference_proposal), product_prompt
+            preferences_param_text = (
+                "pass them via the `preferences` parameter "
+                "when calling your submit tool"
             )
-
-            self.assertIn('"source_role":"architect"', architect_prompt)
-            self.assertIn(
-                files.relative_path(files.architect_preference_proposal),
-                architect_prompt,
-            )
+            self.assertIn(preferences_param_text, product_prompt)
+            self.assertIn(preferences_param_text, architect_prompt)
+            self.assertIn(preferences_param_text, reviewer_prompt)
 
             self.assertIn(
-                "Implementation review (`06_review/review.md`): "
+                "Implementation review (`07_review/review.md`): "
                 "focus strictly on correctness",
                 reviewer_prompt,
-            )
-            self.assertIn("Persist approved candidates only via", reviewer_prompt)
-            self.assertIn(
-                files.relative_path(files.reviewer_preference_proposal), reviewer_prompt
             )
 
     def test_affected_prompt_templates_use_shared_preference_fragment(self) -> None:
@@ -752,17 +752,6 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
                         "do not persist anything without explicit user approval",
                         prompt.lower(),
                     )
-
-            self.assertIn(
-                files.relative_path(files.pm_preference_proposal), product_prompt
-            )
-            self.assertIn(
-                files.relative_path(files.architect_preference_proposal),
-                architect_prompt,
-            )
-            self.assertIn(
-                files.relative_path(files.reviewer_preference_proposal), reviewer_prompt
-            )
 
 
 if __name__ == "__main__":

@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 # Individual handler classes (kept for direct imports in tests and other modules).
-# PHASE_HANDLERS remains available here for backward compatibility, but it is
-# resolved lazily to avoid a package import cycle with phase_registry.
+# PHASE_HANDLERS is resolved lazily here to avoid a package import cycle
+# with phase_registry.
 from .architecting import ArchitectingHandler
 from .completing import CompletingHandler
 from .designing import DesigningHandler

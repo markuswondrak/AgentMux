@@ -118,7 +118,7 @@ After review passes, AgentMux asks for approval (unless approval skipping is con
 - Commits changes locally
 - Optionally opens a pull request if `gh` is available and configured
 
-For phase-level details, see [File Protocol](file-protocol.md) and [Completing Phase](completing-phase.md).
+For the full phase catalog with artifacts and transitions, see [Workflow Phases](phases/index.md). For file event protocol details, see [File Protocol](file-protocol.md). For approval/commit flow, see [Completion Phase](phases/08_completion.md).
 
 ## Tmux Essentials
 
@@ -163,7 +163,7 @@ Fix:
 
 - Tune provider/model settings in [Configuration](configuration.md)
 - Add a requirements-refinement phase with `--product-manager`
-- Bootstrap runs from GitHub issues with `--issue <number-or-url>`
+- Bootstrap runs from GitHub issues with `--issue <number-or-url>` (includes issue body and all comments)
 - Continue interrupted work with `--resume` (see [Session Resumption](session-resumption.md))
 - Use reference docs as needed:
   - [Tmux Layout](tmux-layout.md)

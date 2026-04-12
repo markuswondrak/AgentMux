@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -121,17 +120,82 @@ def _touch(path: Path) -> None:
 def _write_execution_plan(ctx: PipelineContext, groups: list[dict]) -> None:
     planning_dir = ctx.files.planning_dir
     planning_dir.mkdir(parents=True, exist_ok=True)
-    (planning_dir / "architecture.md").write_text("# Architecture\n", encoding="utf-8")
+    ctx.files.architecting_dir.mkdir(parents=True, exist_ok=True)
+    (ctx.files.architecting_dir / "architecture.md").write_text(
+        "# Architecture\n", encoding="utf-8"
+    )
     (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
-    payload = {"version": 1, "groups": groups}
-    (planning_dir / "execution_plan.json").write_text(
-        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+    import yaml
+
+    payload = {"groups": groups}
+    (planning_dir / "execution_plan.yaml").write_text(
+        yaml.dump(payload, default_flow_style=False), encoding="utf-8"
+    )
+    # Write plan.yaml (version 2) so resume check passes
+    all_indices = []
+    subplans = []
+    for group in groups:
+        for plan_file in group["plans"]:
+            plan_ref = plan_file["file"] if isinstance(plan_file, dict) else plan_file
+            plan_name = (
+                plan_file.get("name", plan_ref)
+                if isinstance(plan_file, dict)
+                else plan_ref
+            )
+            import re
+
+            match = re.search(r"plan_(\d+)\.md", plan_ref)
+            if match:
+                idx = int(match.group(1))
+                all_indices.append(idx)
+                subplans.append(
+                    {
+                        "index": idx,
+                        "title": plan_name,
+                        "scope": plan_name,
+                        "owned_files": [],
+                        "dependencies": "None",
+                        "implementation_approach": plan_name,
+                        "acceptance_criteria": "Done",
+                        "tasks": [plan_name],
+                    }
+                )
+    plan2_groups = [
+        {
+            "group_id": g["group_id"],
+            "mode": g.get("mode", "serial"),
+            "plans": [
+                {
+                    "index": (
+                        int(re.search(r"plan_(\d+)\.md", p["file"]).group(1))
+                        if isinstance(p, dict)
+                        and re.search(r"plan_(\d+)\.md", p["file"])
+                        else 1
+                    ),
+                    "name": (p.get("name", p["file"]) if isinstance(p, dict) else p),
+                }
+                for p in g["plans"]
+            ],
+        }
+        for g in groups
+    ]
+    plan2_payload = {
+        "version": 2,
+        "plan_overview": "# Plan\n\nScheduler test.",
+        "groups": plan2_groups,
+        "subplans": subplans,
+        "review_strategy": {"severity": "medium", "focus": []},
+        "needs_design": False,
+        "needs_docs": False,
+        "doc_files": [],
+    }
+    (planning_dir / "plan.yaml").write_text(
+        yaml.dump(plan2_payload, default_flow_style=False), encoding="utf-8"
     )
     for group in groups:
         for plan_file in group["plans"]:
             plan_ref = plan_file["file"] if isinstance(plan_file, dict) else plan_file
             (planning_dir / plan_ref).write_text(f"# {plan_ref}\n", encoding="utf-8")
-            # Create per-plan tasks file
             import re
 
             match = re.search(r"plan_(\d+)\.md", plan_ref)
@@ -168,15 +232,14 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
 
             self.assertIn(
-                ("send", "coder", "coder_prompt_1.txt", "[coder] Foundation", None),
+                ("send", "coder", "coder_prompt_1.md", "[coder] Foundation", None),
                 ctx.runtime.calls,
             )
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_1",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 1}},
             )
             state = load_state(state_path)
             updates, next_phase = handler.handle_event(event, state, ctx)
@@ -209,15 +272,14 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
 
             self.assertIn(
-                ("send_many", "coder", ["coder_prompt_1.txt", "coder_prompt_2.txt"]),
+                ("send_many", "coder", ["coder_prompt_1.md", "coder_prompt_2.md"]),
                 ctx.runtime.calls,
             )
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_1",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 1}},
             )
             state = load_state(state_path)
             updates, next_phase = handler.handle_event(event, state, ctx)
@@ -227,9 +289,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_2")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_2",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 2}},
             )
             updates, next_phase = handler.handle_event(event, state, ctx)
             state.update(updates)
@@ -273,15 +334,14 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
 
             self.assertIn(
-                ("send", "coder", "coder_prompt_1.txt", "[coder] Foundation", None),
+                ("send", "coder", "coder_prompt_1.md", "[coder] Foundation", None),
                 ctx.runtime.calls,
             )
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_1",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 1}},
             )
             state = load_state(state_path)
             updates, next_phase = handler.handle_event(event, state, ctx)
@@ -289,22 +349,21 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
             self.assertIsNone(next_phase)
             self.assertIn(
-                ("send_many", "coder", ["coder_prompt_2.txt", "coder_prompt_3.txt"]),
+                ("send_many", "coder", ["coder_prompt_2.md", "coder_prompt_3.md"]),
                 ctx.runtime.calls,
             )
             self.assertIn(
                 [
-                    (2, "coder_prompt_2.txt", "[coder] API wiring"),
-                    (3, "coder_prompt_3.txt", "[coder] UI polish"),
+                    (2, "coder_prompt_2.md", "[coder] API wiring"),
+                    (3, "coder_prompt_3.md", "[coder] UI polish"),
                 ],
                 ctx.runtime.parallel_specs,
             )
 
             _touch(ctx.files.implementation_dir / "done_2")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_2",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 2}},
             )
             state = load_state(state_path)
             updates, next_phase = handler.handle_event(event, state, ctx)
@@ -314,9 +373,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_3")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_3",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 3}},
             )
             state = load_state(state_path)
             updates, next_phase = handler.handle_event(event, state, ctx)
@@ -324,15 +382,14 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
             self.assertIsNone(next_phase)
             self.assertIn(
-                ("send", "coder", "coder_prompt_4.txt", "[coder] Integration", None),
+                ("send", "coder", "coder_prompt_4.md", "[coder] Integration", None),
                 ctx.runtime.calls,
             )
 
             _touch(ctx.files.implementation_dir / "done_4")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_4",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 4}},
             )
             updates, next_phase = handler.handle_event(event, state, ctx)
             state.update(updates)
@@ -376,9 +433,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_1",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 1}},
             )
             state = load_state(state_path)
             updates, next_phase = handler.handle_event(event, state, ctx)
@@ -387,9 +443,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             _touch(ctx.files.implementation_dir / "done_2")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_2",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 2}},
             )
             state = load_state(state_path)
             updates, next_phase = handler.handle_event(event, state, ctx)
@@ -422,19 +477,18 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, resumed_state)
 
             self.assertIn(
-                ("send", "coder", "coder_prompt_3.txt", "[coder] UI polish", None),
+                ("send", "coder", "coder_prompt_3.md", "[coder] UI polish", None),
                 resumed_ctx.runtime.calls,
             )
             self.assertNotIn(
-                ("send", "coder", "coder_prompt_2.txt", "[coder] API wiring", None),
+                ("send", "coder", "coder_prompt_2.md", "[coder] API wiring", None),
                 resumed_ctx.runtime.calls,
             )
 
             _touch(ctx.files.implementation_dir / "done_3")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_3",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 3}},
             )
             state = load_state(state_path)
             updates, next_phase = resumed_handler.handle_event(
@@ -444,15 +498,14 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
             self.assertIsNone(next_phase)
             self.assertIn(
-                ("send", "coder", "coder_prompt_4.txt", "[coder] Integration", None),
+                ("send", "coder", "coder_prompt_4.md", "[coder] Integration", None),
                 resumed_ctx.runtime.calls,
             )
 
             _touch(ctx.files.implementation_dir / "done_4")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_4",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 4}},
             )
             updates, next_phase = resumed_handler.handle_event(
                 event, state, resumed_ctx
@@ -488,7 +541,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             # First plan should be dispatched (serial sends one at a time)
             self.assertIn(
-                ("send", "coder", "coder_prompt_1.txt", "[coder] Docs Update", None),
+                ("send", "coder", "coder_prompt_1.md", "[coder] Docs Update", None),
                 ctx.runtime.calls,
             )
             # Second plan should NOT be dispatched yet
@@ -496,7 +549,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
                 (
                     "send",
                     "coder",
-                    "coder_prompt_2.txt",
+                    "coder_prompt_2.md",
                     "[coder] Test Validation",
                     None,
                 ),
@@ -506,9 +559,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             # Complete first plan
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_1",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 1}},
             )
             state = load_state(state_path)
             updates, next_phase = handler.handle_event(event, state, ctx)
@@ -522,7 +574,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
                 (
                     "send",
                     "coder",
-                    "coder_prompt_2.txt",
+                    "coder_prompt_2.md",
                     "[coder] Test Validation",
                     None,
                 ),
@@ -532,9 +584,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             # Complete second plan
             _touch(ctx.files.implementation_dir / "done_2")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_2",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 2}},
             )
             state = load_state(state_path)
             updates, next_phase = handler.handle_event(event, state, ctx)
@@ -555,14 +606,14 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             handler = FixingHandler()
             handler.enter(state, ctx)
             self.assertIn(
-                ("send", "coder", "fix_prompt.txt", "[coder] fix 1", None),
+                ("send", "coder", "fix_prompt.md", "[coder] fix 1", None),
                 ctx.runtime.calls,
             )
 
             _touch(ctx.files.implementation_dir / "done_1")
             event = WorkflowEvent(
-                kind="fix_done",
-                path="05_implementation/done_1",
+                kind="done",
+                path="06_implementation/done_1",
                 payload={},
             )
             state = load_state(state_path)

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
+
+import yaml
 
 from agentmux.agent_labels import role_display_label
 from agentmux.workflow.event_catalog import (
@@ -12,6 +14,11 @@ from agentmux.workflow.event_catalog import (
     EVENT_REVIEW_PASSED,
 )
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
+from agentmux.workflow.handoff_artifacts import (
+    load_review_text,
+    review_yaml_has_verdict,
+)
 from agentmux.workflow.phase_helpers import (
     load_plan_meta,
     select_reviewer_type,
@@ -36,36 +43,11 @@ _REVIEWER_ROLE_MAP = {
 }
 
 
-def _review_has_verdict(review_path: Path) -> bool:
-    """Return True when review.md contains a final verdict on its first line."""
-    try:
-        lines = review_path.read_text(encoding="utf-8").splitlines()
-        return bool(lines) and lines[0].strip().lower() in (
-            "verdict: pass",
-            "verdict: fail",
-        )
-    except OSError:
-        return False
-
-
-def _review_ready(path: str, ctx: PipelineContext, state: dict) -> bool:
-    return (
-        not state.get("awaiting_summary")
-        and ctx.files.review.exists()
-        and _review_has_verdict(ctx.files.review)
-    )
-
-
 def _summary_ready(path: str, ctx: PipelineContext, state: dict) -> bool:
     return bool(state.get("awaiting_summary")) and ctx.files.summary.exists()
 
 
 _SPECS = (
-    EventSpec(
-        name="review_ready",
-        watch_paths=("06_review/review.md",),
-        is_ready=_review_ready,
-    ),
     EventSpec(
         name="summary_ready",
         watch_paths=("08_completion/summary.md",),
@@ -74,10 +56,19 @@ _SPECS = (
 )
 
 
-class ReviewingHandler:
+class ReviewingHandler(BaseToolHandler):
     """Event-driven handler for reviewing phase."""
 
-    def get_event_specs(self) -> tuple[EventSpec, ...]:
+    def _get_tool_handlers(self) -> tuple[ToolHandlerEntry, ...]:
+        return (
+            ToolHandlerEntry(
+                name="review",
+                tool_names=("submit_review",),
+                handler=lambda s, e, st, c: s._handle_review(e, st, c),
+            ),
+        )
+
+    def get_event_specs(self) -> Sequence[EventSpec]:
         return _SPECS
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
@@ -85,14 +76,19 @@ class ReviewingHandler:
 
         Sends reviewer prompt based on review_strategy routing.
         """
-        # On resume, if the reviewer already wrote review.md leave it in place.
-        # seed_existing_files() will publish FILE_EVENT_CREATED for it and
-        # handle_event() will process the verdict correctly.
-        if state.get("last_event") == EVENT_RESUMED and ctx.files.review.exists():
+        # On resume, if the reviewer already wrote review output leave it in
+        # place. seed_existing_files() will publish file events and handle_event()
+        # will process the verdict correctly.
+        if state.get("last_event") == EVENT_RESUMED and (
+            ctx.files.review.exists() or review_yaml_has_verdict(ctx.files.review_dir)
+        ):
             return {}
 
         if ctx.files.review.exists():
             ctx.files.review.unlink()
+        review_yaml = ctx.files.review_dir / "review.yaml"
+        if review_yaml.exists():
+            review_yaml.unlink()
 
         # Load plan_meta and determine reviewer type
         plan_meta = load_plan_meta(ctx.files.planning_dir)
@@ -119,13 +115,28 @@ class ReviewingHandler:
 
         config = reviewer_config[reviewer_type]
 
-        # Build the command prompt (review.md) combined with agent prompt
+        # Build the prompt: specialized agent prompts are self-contained,
+        # the generic reviewer combines agent prompt + command prompt.
         reviewer_role = config["role"]
-        agent_prompt = config["prompt_builder"](
-            ctx.files, ctx.agents.get(reviewer_role)
-        )
-        command_prompt = build_reviewer_prompt(ctx.files, is_review=True)
-        full_prompt = f"{agent_prompt}\n\n{command_prompt}"
+        if reviewer_type == "logic":
+            full_prompt = build_reviewer_logic_prompt(
+                ctx.files, ctx.agents.get(reviewer_role)
+            )
+        elif reviewer_type == "quality":
+            full_prompt = build_reviewer_quality_prompt(
+                ctx.files, ctx.agents.get(reviewer_role)
+            )
+        elif reviewer_type == "expert":
+            full_prompt = build_reviewer_expert_prompt(
+                ctx.files, ctx.agents.get(reviewer_role)
+            )
+        else:
+            # Fallback: generic reviewer combines agent + command prompt
+            agent_prompt = build_reviewer_prompt(
+                ctx.files, agent=ctx.agents.get(reviewer_role)
+            )
+            command_prompt = build_reviewer_prompt(ctx.files, is_review=True)
+            full_prompt = f"{agent_prompt}\n\n{command_prompt}"
 
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
@@ -148,47 +159,46 @@ class ReviewingHandler:
         state: dict,
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
-        """Handle events for reviewing phase."""
-        if event.kind == "review_ready":
-            return self._handle_review_written(state, ctx)
+        """Handle events: Tool-Events via base, File-Events via EventSpec."""
+        # File events from EventSpec
         if event.kind == "summary_ready":
             return self._handle_summary_written(ctx)
-        return {}, None
+        # Tool events from BaseToolHandler
+        return super().handle_event(event, state, ctx)
 
-    def _handle_review_written(
+    def _handle_review(
         self,
+        event: WorkflowEvent,
         state: dict,
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
-        """Handle review written event."""
-        if not ctx.files.review.exists():
-            return {}, None
-
-        review_text = ctx.files.review.read_text(encoding="utf-8")
-        first_line = (
-            review_text.splitlines()[0].strip().lower()
-            if review_text.splitlines()
-            else ""
-        )
+        """Handle review submission via tool event."""
+        # YAML is agent-written and already validated by the MCP signal tool.
+        yaml_path = ctx.files.review_dir / "review.yaml"
+        data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        verdict = data.get("verdict", "").lower()
 
         review_iteration = int(state.get("review_iteration", 0))
 
         # Archive this review for history (review_0.md, review_1.md, …).
-        # review.md itself is kept so the summary prompt and monitor can still
-        # reference it by the canonical name.
         archive_path = ctx.files.review_dir / f"review_{review_iteration}.md"
-        archive_path.write_text(review_text, encoding="utf-8")
+        review_text = load_review_text(
+            ctx.files.review_dir,
+            materialize_markdown=True,
+        )
+        if review_text is not None:
+            archive_path.write_text(review_text, encoding="utf-8")
 
-        if first_line == "verdict: pass":
+        if verdict == "pass":
             ctx.runtime.finish_many("coder")
             ctx.runtime.kill_primary("coder")
             return self._request_summary(state, ctx)
 
-        if first_line == "verdict: fail":
+        if verdict == "fail":
             if review_iteration >= ctx.max_review_iterations:
                 return {"last_event": EVENT_REVIEW_FAILED}, "completing"
 
-            ctx.files.fix_request.write_text(review_text, encoding="utf-8")
+            ctx.files.fix_request.write_text(review_text or "", encoding="utf-8")
             return {
                 "last_event": EVENT_REVIEW_FAILED,
                 "review_iteration": review_iteration + 1,

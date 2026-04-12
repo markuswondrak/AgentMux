@@ -1,18 +1,16 @@
 You have just completed a successful code review (verdict: pass). Now write a concise
 implementation summary for the user.
 
-Session directory: [[placeholder:feature_dir]]
-
 <file path="requirements.md">
 [[include:requirements.md]]
 </file>
 
-<file path="02_planning/plan.md">
-[[include:02_planning/plan.md]]
+<file path="04_planning/plan.md">
+[[include:04_planning/plan.md]]
 </file>
 
-<file path="06_review/review.md">
-[[include:06_review/review.md]]
+<file path="07_review/review.md">
+[[include:07_review/review.md]]
 </file>
 
 Your job:
@@ -31,13 +29,8 @@ Your job:
 
    <Any gaps or intentional scope changes; write "None" if everything was delivered as planned>
    ```
-2. Optionally write `[[placeholder:reviewer_preference_proposal_file]]` if you have approved
-   reusable preferences to record for future sessions:
-   `{{"source_role":"reviewer","approved":[{{"target_role":"coder","bullet":"- ..."}}]}}`
-   Skip this file entirely if you have no approved preferences.
 
 FINAL STEP ONLY — once `08_completion/summary.md` is fully written, stop.
-Do not update `state.json` or any other workflow file.
 
 [[placeholder:project_instructions]]
 

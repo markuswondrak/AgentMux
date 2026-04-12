@@ -89,6 +89,10 @@ class MockHandler:
         """Return empty specs — use legacy raw-event path for these tests."""
         return ()
 
+    def get_tool_specs(self):
+        """Return empty tool specs — tool events return empty for these tests."""
+        return ()
+
     def handle_event(
         self, event: WorkflowEvent, state: dict, ctx: PipelineContext
     ) -> tuple[dict, str | None]:
@@ -790,3 +794,221 @@ class TestEventSpecRouting:
 
         assert len(received) == 1
         assert received[0].kind == "done_marker"
+
+
+class TestToolSpecRouting:
+    """Test ToolSpec-based tool.* event routing in the router."""
+
+    def _make_ctx(self, tmp_path):
+        """Build a minimal mock context with a real feature_dir."""
+        files = MagicMock(spec=RuntimeFiles)
+        files.feature_dir = tmp_path
+        files.state = tmp_path / "state.json"
+        runtime = MagicMock()
+        agents = {"coder": MagicMock(spec=AgentConfig)}
+        return PipelineContext(
+            files=files,
+            runtime=runtime,
+            agents=agents,
+            max_review_iterations=3,
+            prompts={},
+            github_config=GitHubConfig(),
+            workflow_settings=WorkflowSettings(),
+        )
+
+    def test_tool_event_matching_spec_dispatches_logical_event(self, tmp_path):
+        """tool.* event matching a ToolSpec dispatches WorkflowEvent(kind=spec.name)."""
+        from agentmux.workflow.event_router import ToolSpec
+
+        received = []
+
+        class ToolSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def get_tool_specs(self):
+                return (
+                    ToolSpec(
+                        name="architecture_submitted",
+                        tool_names=("submit_architecture",),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"architecting": ToolSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "architecting"}
+
+        event = WorkflowEvent(
+            kind="tool.submit_architecture",
+            payload={"status": "ok"},
+        )
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert len(received) == 1
+        assert received[0].kind == "architecture_submitted"
+        assert received[0].payload == {"status": "ok"}
+
+    def test_tool_event_non_matching_returns_empty(self, tmp_path):
+        """Non-matching tool name returns ({}, None)."""
+        from agentmux.workflow.event_router import ToolSpec
+
+        received = []
+
+        class ToolSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def get_tool_specs(self):
+                return (
+                    ToolSpec(
+                        name="plan_submitted",
+                        tool_names=("submit_plan",),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"planning": ToolSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "planning"}
+
+        event = WorkflowEvent(
+            kind="tool.submit_architecture",
+            payload={"status": "ok"},
+        )
+        with patch("agentmux.sessions.state_store.write_state"):
+            updates, next_phase = router.handle(event, state, ctx)
+
+        assert updates == {}
+        assert next_phase is None
+        assert received == []
+
+    def test_backward_compat_file_events_still_route_via_eventspec(self, tmp_path):
+        """file.created events still route via EventSpec when handler has both specs."""
+        from agentmux.workflow.event_router import EventSpec, ToolSpec
+
+        file_received = []
+        tool_received = []
+
+        class DualSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="plan_written",
+                        watch_paths=("02_planning/plan.md",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
+            def get_tool_specs(self):
+                return (
+                    ToolSpec(
+                        name="plan_submitted",
+                        tool_names=("submit_plan",),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                if event.kind.startswith("tool."):
+                    tool_received.append(event)
+                else:
+                    file_received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"planning": DualSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "planning"}
+
+        # File event should still route via EventSpec
+        file_event = WorkflowEvent(kind="file.created", path="02_planning/plan.md")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(file_event, state, ctx)
+
+        assert len(file_received) == 1
+        assert file_received[0].kind == "plan_written"
+        assert file_received[0].path == "02_planning/plan.md"
+        assert tool_received == []
+
+    def test_tool_event_with_multiple_tool_names_in_spec(self, tmp_path):
+        """A single ToolSpec can match multiple bare tool names."""
+        from agentmux.workflow.event_router import ToolSpec
+
+        received = []
+
+        class ToolSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def get_tool_specs(self):
+                return (
+                    ToolSpec(
+                        name="any_submission",
+                        tool_names=(
+                            "submit_architecture",
+                            "submit_plan",
+                            "submit_review",
+                        ),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"architecting": ToolSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "architecting"}
+
+        for tool_name in ("submit_architecture", "submit_plan", "submit_review"):
+            event = WorkflowEvent(kind=f"tool.{tool_name}", payload={"tool": tool_name})
+            with patch("agentmux.sessions.state_store.write_state"):
+                router.handle(event, state, ctx)
+
+        assert len(received) == 3
+        assert all(r.kind == "any_submission" for r in received)
+
+    def test_handler_without_get_tool_specs_ignores_tool_events(self, tmp_path):
+        """Handler without get_tool_specs returns empty for tool.* events."""
+        received = []
+
+        class NoToolSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"architecting": NoToolSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "architecting"}
+
+        event = WorkflowEvent(kind="tool.submit_architecture", payload={})
+        with patch("agentmux.sessions.state_store.write_state"):
+            updates, next_phase = router.handle(event, state, ctx)
+
+        assert updates == {}
+        assert next_phase is None
+        assert received == []

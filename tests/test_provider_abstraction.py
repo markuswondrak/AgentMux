@@ -10,11 +10,9 @@ import yaml
 
 from agentmux.configuration import load_explicit_config, load_layered_config
 from agentmux.configuration.providers import PROVIDERS, get_provider, resolve_agent
-from agentmux.runtime.tmux_control import (
-    accept_trust_prompt,
-    build_agent_command,
-)
-from agentmux.shared.models import AgentConfig
+from agentmux.runtime.command_builder import build_agent_command
+from agentmux.runtime.pane_io import accept_trust_prompt
+from agentmux.shared.models import AgentConfig, BatchCommand, BatchCommandMode
 
 
 class ProviderAbstractionTests(unittest.TestCase):
@@ -338,8 +336,8 @@ roles:
 
     def test_accept_trust_prompt_skips_when_no_snippet(self) -> None:
         with (
-            patch("agentmux.runtime.tmux_control.capture_pane") as capture_pane,
-            patch("agentmux.runtime.tmux_control.run_command") as run_command,
+            patch("agentmux.runtime.pane_io.capture_pane") as capture_pane,
+            patch("agentmux.runtime.pane_io.run_command") as run_command,
         ):
             accept_trust_prompt("%1", snippet=None)
         capture_pane.assert_not_called()
@@ -404,7 +402,7 @@ roles:
                 cli="opencode",
                 model="opencode/qwen3-plus",
                 model_flag=None,
-                batch_subcommand="run",
+                batch_command=BatchCommand("run", BatchCommandMode.POSITIONAL),
                 args=["--agent", "agentmux-researcher"],
             ),
             prompt_file="/tmp/prompt.md",
@@ -432,15 +430,15 @@ roles:
         self.assertIn("sonnet", cmd)
         self.assertIn("/tmp/prompt.md", cmd)
 
-    def test_interactive_agent_excludes_batch_subcommand(self) -> None:
-        """Interactive agents (no prompt_file) must NOT include batch_subcommand."""
+    def test_interactive_agent_excludes_batch_command(self) -> None:
+        """Interactive agents (no prompt_file) must NOT include batch_command."""
         cmd = build_agent_command(
             AgentConfig(
                 role="architect",
                 cli="opencode",
                 model="opencode/qwen3-plus",
                 model_flag=None,
-                batch_subcommand="run",
+                batch_command=BatchCommand("run", BatchCommandMode.POSITIONAL),
                 args=["--agent", "agentmux-architect"],
             )
         )
@@ -451,15 +449,15 @@ roles:
         self.assertIn("--agent", cmd)
         self.assertIn("agentmux-architect", cmd)
 
-    def test_batch_agent_includes_batch_subcommand_with_prompt_file(self) -> None:
-        """Batch agents (with prompt_file) MUST include batch_subcommand."""
+    def test_batch_agent_includes_batch_command_with_prompt_file(self) -> None:
+        """Batch agents (with prompt_file) MUST include batch_command."""
         cmd = build_agent_command(
             AgentConfig(
                 role="code-researcher",
                 cli="opencode",
                 model="opencode/qwen3-plus",
                 model_flag=None,
-                batch_subcommand="run",
+                batch_command=BatchCommand("run", BatchCommandMode.POSITIONAL),
                 args=["--agent", "agentmux-code-researcher"],
             ),
             prompt_file="/tmp/prompt.md",
@@ -478,7 +476,7 @@ roles:
                 cli="opencode",
                 model="opencode/qwen3-plus",
                 model_flag=None,
-                batch_subcommand="run",
+                batch_command=BatchCommand("run", BatchCommandMode.POSITIONAL),
                 args=["--agent", "agentmux-architect"],
             )
         )
@@ -489,7 +487,7 @@ roles:
         self.assertIn("--agent", cmd)
 
     def test_claude_architect_command_unaffected(self) -> None:
-        """Claude architect should work as before (no batch_subcommand)."""
+        """Claude architect should work as before (no batch_command)."""
         cmd = build_agent_command(
             AgentConfig(
                 role="architect",
@@ -504,15 +502,15 @@ roles:
         self.assertIn("sonnet", cmd)
         self.assertNotIn("run", cmd)
 
-    def test_batch_subcommand_none_with_prompt_file(self) -> None:
-        """When batch_subcommand is None, prompt_file is still appended."""
+    def test_batch_command_none_with_prompt_file(self) -> None:
+        """When batch_command is None, prompt_file is still appended."""
         cmd = build_agent_command(
             AgentConfig(
                 role="researcher",
                 cli="claude",
                 model="sonnet",
                 model_flag="--model",
-                batch_subcommand=None,
+                batch_command=None,
                 args=[],
             ),
             prompt_file="/tmp/prompt.md",
@@ -520,16 +518,94 @@ roles:
         self.assertIn("/tmp/prompt.md", cmd)
         self.assertNotIn(" run ", f" {cmd} ")
 
+    def test_batch_command_flag_mode_places_prompt_right_after(self) -> None:
+        """Flag-style batch_command (e.g. -p) puts prompt file right after it."""
+        cmd = build_agent_command(
+            AgentConfig(
+                role="code-researcher",
+                cli="copilot",
+                model="claude-haiku",
+                model_flag="--model",
+                batch_command=BatchCommand("-p", BatchCommandMode.FLAG),
+                args=["--allow-all", "--reasoning-effort", "high"],
+            ),
+            prompt_file="/tmp/prompt.md",
+        )
+        # Should be: copilot -p /tmp/prompt.md --model claude-haiku --allow-all ...
+        self.assertIn("copilot", cmd)
+        self.assertIn("-p", cmd)
+        self.assertIn("/tmp/prompt.md", cmd)
+        self.assertIn("--model", cmd)
+        self.assertIn("claude-haiku", cmd)
+        # Prompt must come right after -p, not at the end
+        self.assertIn("-p /tmp/prompt.md", cmd)
+        # Ensure prompt is not duplicated at the end
+        parts = cmd.split()
+        prompt_positions = [i for i, p in enumerate(parts) if "/tmp/prompt.md" in p]
+        self.assertEqual(len(prompt_positions), 1)
+
+    def test_gemini_batch_command_uses_prompt_flag(self) -> None:
+        """Gemini batch command should use -p flag for prompt file."""
+        cmd = build_agent_command(
+            AgentConfig(
+                role="web-researcher",
+                cli="gemini",
+                model="gemini-2.5-flash",
+                model_flag="--model",
+                batch_command=BatchCommand("-p", BatchCommandMode.FLAG),
+                args=["--approval-mode", "yolo"],
+            ),
+            prompt_file="/tmp/prompt.md",
+        )
+        # gemini -p /tmp/prompt.md --model gemini-2.5-flash ...
+        self.assertIn("gemini", cmd)
+        self.assertIn("-p", cmd)
+        self.assertIn("/tmp/prompt.md", cmd)
+        self.assertIn("--model", cmd)
+        self.assertIn("gemini-2.5-flash", cmd)
+        self.assertIn("-p /tmp/prompt.md", cmd)
+        # Ensure prompt is not duplicated at the end
+        parts = cmd.split()
+        prompt_positions = [i for i, p in enumerate(parts) if "/tmp/prompt.md" in p]
+        self.assertEqual(len(prompt_positions), 1)
+
+    def test_codex_batch_command_uses_stdin_redirect(self) -> None:
+        """Codex exec batch command should use stdin redirect for prompt file."""
+        cmd = build_agent_command(
+            AgentConfig(
+                role="code-researcher",
+                cli="codex",
+                model="o4-mini",
+                model_flag="--model",
+                batch_command=BatchCommand("exec", BatchCommandMode.STDIN),
+                args=["-s", "workspace-write", "-a", "never"],
+            ),
+            prompt_file="/tmp/prompt.md",
+        )
+        # codex exec --model o4-mini ... < /tmp/prompt.md
+        self.assertIn("codex", cmd)
+        self.assertIn("exec", cmd)
+        self.assertIn("--model", cmd)
+        self.assertIn("o4-mini", cmd)
+        self.assertIn("/tmp/prompt.md", cmd)
+        # Must use stdin redirect, not a positional arg
+        self.assertIn("<", cmd)
+        self.assertIn("< /tmp/prompt.md", cmd)
+        # Ensure prompt appears only once (not as positional and not duplicated)
+        parts = cmd.split()
+        prompt_positions = [i for i, p in enumerate(parts) if "/tmp/prompt.md" in p]
+        self.assertEqual(len(prompt_positions), 1)
+
     def test_accept_trust_prompt_accepts_when_snippet_is_present(self) -> None:
         commands: list[list[str]] = []
 
         with (
             patch(
-                "agentmux.runtime.tmux_control.capture_pane",
+                "agentmux.runtime.pane_io.capture_pane",
                 side_effect=["some output", "Trust this folder?"],
             ),
             patch(
-                "agentmux.runtime.tmux_control.run_command",
+                "agentmux.runtime.pane_io.run_command",
                 side_effect=lambda args, cwd=None, check=True: commands.append(args),
             ),
         ):
@@ -544,27 +620,6 @@ roles:
         )
 
     # New v2-specific tests
-    def test_v1_config_produces_migration_error(self) -> None:
-        """v1 config without version key produces helpful migration error."""
-        with tempfile.TemporaryDirectory() as td:
-            cfg_path = Path(td) / "config.json"
-            cfg = {
-                "defaults": {"provider": "claude"},
-                "roles": {"architect": {"profile": "max"}},  # v1 uses profile
-            }
-            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
-
-            with self.assertRaises(ValueError) as exc:
-                load_explicit_config(cfg_path)
-
-            error_msg = str(exc.exception)
-            self.assertIn("Legacy config detected", error_msg)
-            self.assertIn("version: 2", error_msg)
-            self.assertIn("Rename 'launchers:' to 'providers:'", error_msg)
-            self.assertIn(
-                "Replace 'profile: <name>' with 'model: <model-name>'", error_msg
-            )
-
     def test_profile_key_in_v2_produces_error(self) -> None:
         """Using profile key in v2 config produces error."""
         with tempfile.TemporaryDirectory() as td:
@@ -579,7 +634,7 @@ roles:
             with self.assertRaises(ValueError) as exc:
                 load_explicit_config(cfg_path)
 
-            self.assertIn("Profiles are removed in v2", str(exc.exception))
+            self.assertIn("Profiles are not supported", str(exc.exception))
 
     def test_v2_config_parses_correctly(self) -> None:
         """v2 config with providers and model keys parses correctly."""
@@ -678,18 +733,21 @@ roles:
             self.assertEqual("opencode", loaded.agents["coder"].provider)
 
     def test_copilot_provider_has_default_model_and_role_args(self) -> None:
-        """Copilot provider should have default_model and default_role_args."""
+        """Copilot provider has default_model, default_role_args, model_args."""
         copilot = get_provider("copilot")
         self.assertEqual("claude-sonnet-4.6", copilot.default_model)
+        self.assertEqual(["--allow-all"], copilot.default_role_args)
+        self.assertIsNotNone(copilot.model_args)
         self.assertEqual(
-            ["--allow-all", "--reasoning-effort", "high"], copilot.default_role_args
+            ["--reasoning-effort", "high"],
+            copilot.model_args.get("claude-sonnet-4.6"),
         )
 
     def test_copilot_roles_inherit_default_role_args(self) -> None:
-        """All copilot roles should inherit default_role_args."""
+        """Copilot roles inherit default_role_args plus model_args."""
         copilot = get_provider("copilot")
 
-        # Test various roles
+        # Test with default model (claude-sonnet-4.6) – gets model_args appended
         for role in ["architect", "coder", "reviewer", "product-manager", "designer"]:
             agent = resolve_agent(
                 global_provider=copilot,
@@ -699,7 +757,7 @@ roles:
             self.assertEqual(
                 ["--allow-all", "--reasoning-effort", "high"],
                 agent.args,
-                f"Role {role} should inherit default_role_args",
+                f"Role {role} with sonnet model should include reasoning-effort",
             )
             self.assertEqual("claude-sonnet-4.6", agent.model)
 
@@ -759,6 +817,33 @@ roles:
         )
         self.assertEqual("claude-sonnet-4.6", agent.model)
 
+    def test_model_args_appended_for_matching_model(self) -> None:
+        """model_args should be appended when model matches."""
+        copilot = get_provider("copilot")
+        agent = resolve_agent(
+            global_provider=copilot,
+            role="web-researcher",
+            role_config={"model": "claude-sonnet-4.6"},
+        )
+        self.assertEqual(
+            ["--allow-all", "--reasoning-effort", "high"],
+            agent.args,
+        )
+
+    def test_model_args_not_appended_for_non_matching_model(self) -> None:
+        """model_args should NOT be appended when model has no entry."""
+        copilot = get_provider("copilot")
+        agent = resolve_agent(
+            global_provider=copilot,
+            role="web-researcher",
+            role_config={"model": "claude-haiku-4.5"},
+        )
+        # Haiku has no model_args entry, so only default_role_args should be present
+        self.assertEqual(
+            ["--allow-all"],
+            agent.args,
+        )
+
     def test_role_model_overrides_provider_default_model(self) -> None:
         """Role-specific model should override provider default_model."""
         copilot = get_provider("copilot")
@@ -768,6 +853,38 @@ roles:
             role_config={"model": "custom-model"},
         )
         self.assertEqual("custom-model", agent.model)
+
+    def test_qwen_provider_loads(self):
+        p = PROVIDERS["qwen"]
+        self.assertEqual("qwen", p.cli)
+        self.assertIsNone(p.model_flag)
+        self.assertIsNone(p.trust_snippet)
+        self.assertEqual("qwen3-max", p.default_model)
+        self.assertEqual(["--yolo"], p.default_role_args)
+
+    def test_qwen_resolve_agent(self):
+        agent = resolve_agent(
+            global_provider=get_provider("qwen"),
+            role="coder",
+            role_config={},
+        )
+        self.assertEqual("qwen", agent.cli)
+        self.assertIsNone(agent.model_flag)
+        self.assertIsNone(agent.trust_snippet)
+        self.assertIn("--yolo", agent.args)
+
+    def test_qwen_build_agent_command(self):
+        agent = AgentConfig(
+            role="coder",
+            cli="qwen",
+            model="qwen3-max",
+            model_flag=None,
+            args=["--yolo"],
+        )
+        cmd = build_agent_command(agent)
+        self.assertIn("qwen", cmd)
+        self.assertIn("--yolo", cmd)
+        self.assertNotIn("--model", cmd)
 
 
 if __name__ == "__main__":

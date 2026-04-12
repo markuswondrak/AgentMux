@@ -75,46 +75,39 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
                 project_dir, feature_dir, "phase dirs", "session-x"
             )
 
-            self.assertEqual(feature_dir / "02_planning", files.planning_dir)
+            self.assertEqual(feature_dir / "02_architecting", files.architecting_dir)
+            self.assertEqual(feature_dir / "04_planning", files.planning_dir)
             self.assertEqual(feature_dir / "03_research", files.research_dir)
-            self.assertEqual(feature_dir / "04_design", files.design_dir)
+            self.assertEqual(feature_dir / "05_design", files.design_dir)
             self.assertEqual(
-                feature_dir / "05_implementation", files.implementation_dir
+                feature_dir / "06_implementation", files.implementation_dir
             )
-            self.assertEqual(feature_dir / "06_review", files.review_dir)
+            self.assertEqual(feature_dir / "07_review", files.review_dir)
             self.assertEqual(feature_dir / "08_completion", files.completion_dir)
             self.assertFalse((feature_dir / "01_product_management").exists())
+            self.assertFalse(files.architecting_dir.exists())
             self.assertFalse(files.planning_dir.exists())
             self.assertFalse(files.research_dir.exists())
             self.assertFalse(files.design_dir.exists())
             self.assertFalse(files.implementation_dir.exists())
             self.assertFalse(files.review_dir.exists())
             self.assertFalse(files.completion_dir.exists())
-            self.assertEqual(feature_dir / "02_planning" / "plan.md", files.plan)
-            self.assertEqual(feature_dir / "02_planning" / "tasks.md", files.tasks)
             self.assertEqual(
-                feature_dir / "02_planning" / "execution_plan.json",
+                feature_dir / "02_architecting" / "architecture.md", files.architecture
+            )
+            self.assertEqual(feature_dir / "04_planning" / "plan.md", files.plan)
+            self.assertEqual(feature_dir / "04_planning" / "tasks.md", files.tasks)
+            self.assertEqual(
+                feature_dir / "04_planning" / "execution_plan.yaml",
                 files.execution_plan,
             )
-            self.assertEqual(feature_dir / "04_design" / "design.md", files.design)
-            self.assertEqual(feature_dir / "06_review" / "review.md", files.review)
+            self.assertEqual(feature_dir / "05_design" / "design.md", files.design)
+            self.assertEqual(feature_dir / "07_review" / "review.md", files.review)
             self.assertEqual(
-                feature_dir / "06_review" / "fix_request.md", files.fix_request
+                feature_dir / "07_review" / "fix_request.md", files.fix_request
             )
             self.assertEqual(
                 feature_dir / "08_completion" / "changes.md", files.changes
-            )
-            self.assertEqual(
-                feature_dir / "01_product_management" / "approved_preferences.json",
-                files.pm_preference_proposal,
-            )
-            self.assertEqual(
-                feature_dir / "02_planning" / "approved_preferences.json",
-                files.architect_preference_proposal,
-            )
-            self.assertEqual(
-                feature_dir / "08_completion" / "approved_preferences.json",
-                files.reviewer_preference_proposal,
             )
 
     def test_create_feature_files_initializes_staged_execution_state_fields(
@@ -151,10 +144,13 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
     def test_load_plan_meta_reads_from_planning_directory(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
-            (planning_dir / "plan_meta.json").write_text(
-                '{"needs_design": true}', encoding="utf-8"
+            import yaml
+
+            (planning_dir / "execution_plan.yaml").write_text(
+                yaml.dump({"needs_design": True}, default_flow_style=False),
+                encoding="utf-8",
             )
 
             meta = load_plan_meta(planning_dir)
@@ -164,15 +160,25 @@ class PhaseDirectoryRequirementsTests(unittest.TestCase):
     def test_coder_label_for_subplan_reads_name_from_execution_plan(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_1.md").write_text(
                 "## Sub-plan 1: API wiring\n", encoding="utf-8"
             )
-            (planning_dir / "execution_plan.json").write_text(
-                (
-                    '{"version": 1, "groups": [{"group_id": "g1", "mode": "serial", '
-                    '"plans": [{"file": "plan_1.md", "name": "API wiring"}]}]}'
+            import yaml
+
+            (planning_dir / "execution_plan.yaml").write_text(
+                yaml.dump(
+                    {
+                        "groups": [
+                            {
+                                "group_id": "g1",
+                                "mode": "serial",
+                                "plans": [{"file": "plan_1.md", "name": "API wiring"}],
+                            }
+                        ],
+                    },
+                    default_flow_style=False,
                 ),
                 encoding="utf-8",
             )

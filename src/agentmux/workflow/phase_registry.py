@@ -11,7 +11,6 @@ To add a new phase:
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,6 +36,7 @@ from .handlers.implementing import ImplementingHandler
 from .handlers.planning import PlanningHandler
 from .handlers.product_management import ProductManagementHandler
 from .handlers.reviewing import ReviewingHandler
+from .handoff_artifacts import review_yaml_has_verdict
 from .phase_helpers import select_reviewer_type
 
 # ---------------------------------------------------------------------------
@@ -69,14 +69,14 @@ def _implementing_done(feature_dir: Path, state: dict[str, Any]) -> bool:
     and review_iteration > 0), so that the registry walk skips to the fixing
     phase check rather than incorrectly returning "implementing".
     """
-    review_dir = feature_dir / "06_review"
+    review_dir = feature_dir / "07_review"
     fix_iteration = (review_dir / "fix_request.md").exists() and int(
         state.get("review_iteration", 0)
     ) > 0
     if fix_iteration:
         return True  # Implementing phase is past; fixing phase handles this iteration
 
-    implementation_dir = feature_dir / "05_implementation"
+    implementation_dir = feature_dir / "06_implementation"
     subplan_count_raw = state.get("subplan_count")
     try:
         subplan_count = int(subplan_count_raw)
@@ -96,19 +96,19 @@ def _implementing_done(feature_dir: Path, state: dict[str, Any]) -> bool:
 def _reviewing_done(feature_dir: Path, state: dict[str, Any]) -> bool:
     """True when the reviewing phase has completed.
 
-    In a fix iteration review.md is processed and deleted before transitioning to
-    fixing.  We use fix_request.md + done_1 presence to distinguish:
+    In a fix iteration review output is processed and deleted before transitioning
+    to fixing. We use fix_request.md + done_1 presence to distinguish:
     - done_1 missing → review ran, fix needed → reviewing IS done
     - done_1 exists  → fix applied, follow-up review pending → reviewing NOT done
     """
-    review_dir = feature_dir / "06_review"
-    if (review_dir / "review.md").exists():
+    review_dir = feature_dir / "07_review"
+    if (review_dir / "review.md").exists() or review_yaml_has_verdict(review_dir):
         return True  # Reviewer wrote output; orchestrator may not have processed it yet
     fix_iteration = (review_dir / "fix_request.md").exists() and int(
         state.get("review_iteration", 0)
     ) > 0
     if fix_iteration:
-        return not (feature_dir / "05_implementation" / "done_1").exists()
+        return not (feature_dir / "06_implementation" / "done_1").exists()
     return False
 
 
@@ -117,41 +117,43 @@ def _fixing_done(feature_dir: Path, state: dict[str, Any]) -> bool:
 
     Fixing only applies when fix_request.md exists and review_iteration > 0.
     """
-    review_dir = feature_dir / "06_review"
+    review_dir = feature_dir / "07_review"
     in_fix_iteration = (review_dir / "fix_request.md").exists() and int(
         state.get("review_iteration", 0)
     ) > 0
     if not in_fix_iteration:
         return True  # Not in a fix iteration — phase not needed
-    return (feature_dir / "05_implementation" / "done_1").exists()
+    return (feature_dir / "06_implementation" / "done_1").exists()
 
 
 def _designing_needed_and_done(feature_dir: Path, state: dict[str, Any]) -> bool:
     """True when the design artifact exists (or the phase is not needed)."""
-    plan_meta_path = feature_dir / "02_planning" / "plan_meta.json"
-    if not plan_meta_path.exists():
-        return True  # No plan_meta → designing not needed → treat as done
+    import yaml
+
+    ep_path = feature_dir / "04_planning" / "execution_plan.yaml"
+    if not ep_path.exists():
+        return True  # No execution plan → designing not needed → treat as done
     try:
-        plan_meta: dict[str, Any] = json.loads(
-            plan_meta_path.read_text(encoding="utf-8")
-        )
-    except json.JSONDecodeError:
+        data: dict[str, Any] = yaml.safe_load(ep_path.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError):
         return True
-    if not bool(plan_meta.get("needs_design")):
+    if not isinstance(data, dict) or not bool(data.get("needs_design")):
         return True  # Phase not required for this run
-    return (feature_dir / "04_design" / "design.md").exists()
+    return (feature_dir / "05_design" / "design.md").exists()
 
 
 def _reviewing_startup_role(
     feature_dir: Path, state: dict[str, Any], agents: dict[str, Any]
 ) -> str | None:
+    import yaml
+
     _ = state
-    plan_meta_path = feature_dir / "02_planning" / "plan_meta.json"
+    ep_path = feature_dir / "04_planning" / "execution_plan.yaml"
     plan_meta: dict[str, Any] = {}
-    if plan_meta_path.exists():
+    if ep_path.exists():
         try:
-            loaded = json.loads(plan_meta_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+            loaded = yaml.safe_load(ep_path.read_text(encoding="utf-8"))
+        except (yaml.YAMLError, OSError):
             loaded = {}
         if isinstance(loaded, dict):
             plan_meta = loaded
@@ -234,25 +236,25 @@ PHASE_REGISTRY: tuple[PhaseDescriptor, ...] = (
     ),
     PhaseDescriptor(
         name="architecting",
-        dir_name="02_planning",
+        dir_name="02_architecting",
         handler_class=ArchitectingHandler,
         primary_roles=("architect",),
-        resume_check=ResumeCheck(completion_artifact="02_planning/architecture.md"),
+        resume_check=ResumeCheck(completion_artifact="02_architecting/architecture.md"),
         research_owner="architect",
         emitted_events=(EVENT_ARCHITECTURE_WRITTEN,),
     ),
     PhaseDescriptor(
         name="planning",
-        dir_name="02_planning",
+        dir_name="04_planning",
         handler_class=PlanningHandler,
         primary_roles=("planner",),
-        resume_check=ResumeCheck(completion_artifact="02_planning/plan.md"),
+        resume_check=ResumeCheck(completion_artifact="04_planning/plan.yaml"),
         research_owner="architect",
         emitted_events=(EVENT_PLAN_WRITTEN,),
     ),
     PhaseDescriptor(
         name="designing",
-        dir_name="04_design",
+        dir_name="05_design",
         handler_class=DesigningHandler,
         primary_roles=("designer",),
         resume_check=ResumeCheck(custom=_designing_needed_and_done),
@@ -260,7 +262,7 @@ PHASE_REGISTRY: tuple[PhaseDescriptor, ...] = (
     ),
     PhaseDescriptor(
         name="implementing",
-        dir_name="05_implementation",
+        dir_name="06_implementation",
         handler_class=ImplementingHandler,
         primary_roles=("coder",),
         resume_check=ResumeCheck(custom=_implementing_done),
@@ -269,7 +271,7 @@ PHASE_REGISTRY: tuple[PhaseDescriptor, ...] = (
     ),
     PhaseDescriptor(
         name="reviewing",
-        dir_name="06_review",
+        dir_name="07_review",
         handler_class=ReviewingHandler,
         primary_roles=(
             "reviewer",
@@ -283,7 +285,7 @@ PHASE_REGISTRY: tuple[PhaseDescriptor, ...] = (
     ),
     PhaseDescriptor(
         name="fixing",
-        dir_name="05_implementation",
+        dir_name="06_implementation",
         handler_class=FixingHandler,
         primary_roles=("coder",),
         resume_check=ResumeCheck(custom=_fixing_done),

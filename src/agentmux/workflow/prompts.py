@@ -22,6 +22,7 @@ _USER_ASK_FALLBACK = "your native ask / question tool"
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 _SHARED_FRAGMENT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
+_SHARED_FRAGMENT_VARIANT_PATTERN = re.compile(r"\[\[shared:([a-z0-9][a-z0-9_-]*)\]\]")
 _VALUE_PLACEHOLDER_PATTERN = re.compile(r"\[\[placeholder:([a-z0-9][a-z0-9_-]*)\]\]")
 _SESSION_INCLUDE_PATTERN = re.compile(r"\[\[include:([^\]]+)\]\]")
 _SESSION_INCLUDE_OPTIONAL_PATTERN = re.compile(r"\[\[include-optional:([^\]]+)\]\]")
@@ -117,7 +118,7 @@ def write_prompt_file(feature_dir: Path, name: str, content: str) -> Path:
     return prompt_path
 
 
-def _build_coder_research_handoff(files: RuntimeFiles) -> str:
+def _build_research_handoff(files: RuntimeFiles) -> str:
     research_dir = files.research_dir
     if not research_dir.is_dir():
         return ""
@@ -158,10 +159,8 @@ def build_architect_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "architect_preference_proposal_file": files.relative_path(
-                files.architect_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
+            "research_handoff": _build_research_handoff(files),
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)
@@ -179,9 +178,6 @@ def build_product_manager_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "pm_preference_proposal_file": files.relative_path(
-                files.pm_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -210,9 +206,6 @@ def build_reviewer_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -232,9 +225,6 @@ def build_reviewer_logic_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -254,9 +244,6 @@ def build_reviewer_quality_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -276,9 +263,6 @@ def build_reviewer_expert_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
         },
     )
@@ -298,9 +282,6 @@ def build_reviewer_summary_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "reviewer_preference_proposal_file": files.relative_path(
-                files.reviewer_preference_proposal
-            ),
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)
@@ -309,13 +290,7 @@ def build_reviewer_summary_prompt(
 def build_designer_prompt(files: RuntimeFiles) -> str:
     completion_instruction = (
         "FINAL STEP ONLY — after writing design.md and any optional design artifacts, "
-        "stop. Do not update state.json or any workflow status from the designer step."
-    )
-    completion_constraints = "\n".join(
-        [
-            "- Do not update state.json from the designer step.",
-            "- `design.md` is the completion signal for this phase.",
-        ]
+        "stop. This must be the very last action you take."
     )
     rendered = _render_template(
         _load_template(
@@ -327,7 +302,6 @@ def build_designer_prompt(files: RuntimeFiles) -> str:
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
             "completion_instruction": completion_instruction,
-            "completion_constraints": completion_constraints,
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)
@@ -338,19 +312,12 @@ def build_coder_subplan_prompt(
     subplan_path: Path,
     subplan_index: int,
 ) -> str:
-    marker_name = f"done_{subplan_index}"
-    completion_marker = files.relative_path(files.implementation_dir / marker_name)
     completion_instruction = (
         "FINAL STEP ONLY — once all code is written and nothing else remains, "
-        f"create the completion marker file `{completion_marker}` "
-        "in the session directory and leave it empty. "
+        f"call `mcp__agentmux__submit_done(subplan_index={subplan_index})` "
+        "to signal completion to the orchestrator and materialize "
+        f"`06_implementation/done_{subplan_index}`. "
         "This must be the very last action you take."
-    )
-    completion_constraints = "\n".join(
-        [
-            "- Do not update state.json in parallel coder mode.",
-            "- Do not write anything to the marker file; create it as an empty file.",
-        ]
     )
 
     # Compute per-plan tasks file path and validate it exists
@@ -363,6 +330,26 @@ def build_coder_subplan_prompt(
         )
     tasks_file_relative = files.relative_path(tasks_path)
 
+    plan_file_rel = files.relative_path(subplan_path)
+    tasks_file_rel = tasks_file_relative
+
+    plans_section = (
+        f'<file path="{plan_file_rel}">\n'
+        f"[[include:{plan_file_rel}]]\n"
+        "</file>\n\n"
+        f'<file path="{tasks_file_rel}">\n'
+        f"[[include:{tasks_file_rel}]]\n"
+        "</file>"
+    )
+    post_discipline_items = (
+        f"12. If implementation reveals that requirements or the plan need adjustment "
+        "(e.g. a requirement turns out to be infeasible as written, or a task needs "
+        "to be split or reordered), "
+        f"update `requirements.md` and `{plan_file_rel}` / `{tasks_file_rel}` "
+        "accordingly so they stay in sync with reality.\n"
+        f"13. {completion_instruction}"
+    )
+
     rendered = _render_template(
         _load_template(
             "agents",
@@ -372,11 +359,9 @@ def build_coder_subplan_prompt(
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "plan_file": files.relative_path(subplan_path),
-            "tasks_file": tasks_file_relative,
-            "research_handoff": _build_coder_research_handoff(files),
-            "completion_instruction": completion_instruction,
-            "completion_constraints": completion_constraints,
+            "plans_section": plans_section,
+            "research_handoff": _build_research_handoff(files),
+            "post_discipline_items": post_discipline_items,
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)
@@ -385,7 +370,7 @@ def build_coder_subplan_prompt(
 def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
     """Build a single combined prompt for single-coder mode (e.g. copilot).
 
-    Reads all sub-plans from execution_plan.json and embeds their content
+    Reads all sub-plans from execution_plan.yaml and embeds their content
     inline so one coder instance can implement the full plan using internal
     sub-agents.  The coder is instructed to write each done_N marker as it
     finishes the corresponding plan.
@@ -400,7 +385,7 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
             match = re.match(r"^plan_(\d+)\.md$", plan_ref.file)
             if match is None:
                 raise RuntimeError(
-                    f"Unexpected plan file name in execution_plan.json: {plan_ref.file}"
+                    f"Unexpected plan file name in execution_plan.yaml: {plan_ref.file}"
                 )
             index = int(match.group(1))
             all_marker_indexes.append(index)
@@ -419,7 +404,6 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
 
             plan_rel = files.relative_path(plan_path)
             tasks_rel = files.relative_path(tasks_path)
-            done_rel = files.relative_path(files.implementation_dir / f"done_{index}")
 
             block = "\n".join(
                 [
@@ -431,9 +415,10 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
                     "",
                     tasks_path.read_text(encoding="utf-8").strip(),
                     "",
-                    f"**Completion marker for plan {index}**: "
-                    f"create empty file `{done_rel}` when this plan is "
-                    f"fully implemented and validated.",
+                    f"**Signal completion for plan {index}**: "
+                    f"call `mcp__agentmux__submit_done(subplan_index={index})` "
+                    f"when this plan is fully implemented and validated. "
+                    f"This materializes `06_implementation/done_{index}`.",
                     "",
                 ]
             )
@@ -442,40 +427,47 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
     plans_content = "\n".join(plans_blocks)
 
     all_marker_indexes_sorted = sorted(all_marker_indexes)
-    all_markers = [
-        f"`{files.relative_path(files.implementation_dir / f'done_{i}')}`"
+    done_calls = [
+        f"`mcp__agentmux__submit_done(subplan_index={i})`"
         for i in all_marker_indexes_sorted
     ]
-    markers_str = ", ".join(all_markers)
+    done_calls_str = ", ".join(done_calls)
 
     completion_instruction = (
         "FINAL STEP — once all code is written and all validations pass "
-        "for every plan above, ensure these completion marker files exist "
-        f"(each as an empty file): {markers_str}. "
-        "You may create each marker as you finish each individual plan, "
+        "for every plan above, call the completion tool for each plan: "
+        f"{done_calls_str}. "
+        "You may call submit_done as you finish each individual plan, "
         "or all at once at the end. "
-        "Do not write anything to the marker files — they must be empty."
+        "Each call signals to the orchestrator that the corresponding plan is complete."
     )
-    completion_constraints = "\n".join(
-        [
-            "- Do not update state.json.",
-            "- Do not write anything to the marker files; create them as empty files.",
-        ]
+
+    post_discipline_items = (
+        "12. If implementation reveals that requirements or a plan need adjustment "
+        "(e.g. a requirement turns out to be infeasible as written, or tasks need "
+        "reordering), update `requirements.md` and the embedded plan's task list "
+        "accordingly so they stay in sync with reality.\n"
+        f"13. {completion_instruction}\n"
+        "14. Sub-agent delegation: For each plan, spawn a dedicated sub-agent and "
+        "delegate that plan's full implementation to it. The sub-agent works through "
+        "the plan's task checklist end-to-end "
+        "(TDD → implement → validate → check off). "
+        "Only move to the next plan once the sub-agent for the current plan has "
+        "completed and its tasks are checked off."
     )
 
     rendered = _render_template(
         _load_template(
             "agents",
-            "coder_whole_plan",
+            "coder",
             project_dir=files.project_dir,
         ),
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "plans_content": plans_content,
-            "research_handoff": _build_coder_research_handoff(files),
-            "completion_instruction": completion_instruction,
-            "completion_constraints": completion_constraints,
+            "plans_section": plans_content,
+            "research_handoff": _build_research_handoff(files),
+            "post_discipline_items": post_discipline_items,
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)
@@ -550,6 +542,7 @@ def build_change_prompt(files: RuntimeFiles, agent: AgentConfig | None = None) -
         {
             "feature_dir": files.feature_dir,
             "user_ask_tool": _user_ask_tool_for(agent),
+            "research_handoff": _build_research_handoff(files),
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)
@@ -569,10 +562,8 @@ def build_planner_prompt(files: RuntimeFiles, agent: AgentConfig | None = None) 
         {
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
-            "planner_preference_proposal_file": files.relative_path(
-                files.planning_dir / "approved_preferences.json"
-            ),
             "user_ask_tool": _user_ask_tool_for(agent),
+            "research_handoff": _build_research_handoff(files),
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)

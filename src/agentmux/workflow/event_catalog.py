@@ -66,7 +66,7 @@ WORKFLOW_EVENT_CATALOG: dict[str, WorkflowEventDefinition] = {
     EVENT_PLAN_WRITTEN: WorkflowEventDefinition(
         name=EVENT_PLAN_WRITTEN,
         display_label="plan ready",
-        description="Planner wrote plan.md, execution_plan.json, and plan_meta.json.",
+        description="Planner wrote plan.md and execution_plan.yaml.",
     ),
     EVENT_DESIGN_WRITTEN: WorkflowEventDefinition(
         name=EVENT_DESIGN_WRITTEN,

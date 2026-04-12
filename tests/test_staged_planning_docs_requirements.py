@@ -12,7 +12,7 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
 
     def test_prompts_doc_covers_staged_planning_contract(self) -> None:
         text = self._read_doc("docs/prompts.md")
-        self.assertIn("02_planning/execution_plan.json", text)
+        self.assertIn("04_planning/execution_plan.yaml", text)
         self.assertIn("plan_<N>.md", text)
         self.assertIn("Scope", text)
         self.assertIn("Owned files/modules", text)
@@ -46,7 +46,7 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
         self.assertIn("Green", text)
         self.assertIn("phase order", text.lower())
         self.assertIn(
-            "one task from your assigned `02_planning/tasks_<N>.md` at a time", text
+            "one task from your assigned `04_planning/tasks_<N>.md` at a time", text
         )
 
     def test_prompts_doc_describes_strict_placeholder_rendering(self) -> None:
@@ -58,13 +58,15 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
     def test_file_protocol_doc_covers_execution_groups_and_strict_scheduling(
         self,
     ) -> None:
-        text = self._read_doc("docs/file-protocol.md")
-        self.assertIn("execution_plan.json", text)
+        text = self._read_doc("docs/phases/04_planning.md")
+        self.assertIn("execution_plan.yaml", text)
         self.assertIn("execution groups", text.lower())
         self.assertIn("serial", text.lower())
         self.assertIn("parallel", text.lower())
         self.assertIn("strict", text.lower())
-        self.assertIn('{ "file": "plan_<N>.md", "name": "Human title" }', text)
+        self.assertIn("YAML mapping", text)
+        self.assertIn("`- file: plan_1.md`", text)
+        self.assertIn("`name: Core setup`", text)
 
     def test_monitor_doc_covers_staged_execution_progress(self) -> None:
         text = self._read_doc("docs/monitor.md")
@@ -84,7 +86,7 @@ class StagedPlanningDocsRequirementsTests(unittest.TestCase):
     def test_workflow_docs_no_longer_reference_removed_docs_phase_markers(self) -> None:
         for relative_path in [
             "docs/file-protocol.md",
-            "docs/completing-phase.md",
+            "docs/phases/08_completion.md",
             "docs/session-resumption.md",
             "docs/monitor.md",
         ]:

@@ -31,6 +31,8 @@ class RuntimeFileExclusionTests(unittest.TestCase):
             "runtime_state.json",
             "created_files.log",
             "status_log.txt",
+            "tool_events.jsonl",
+            "tool_event_state.json",
         }
         self.assertEqual(RUNTIME_FILE_NAMES, expected_files)
 

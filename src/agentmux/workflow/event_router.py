@@ -58,6 +58,24 @@ class WorkflowEvent:
     payload: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class ToolSpec:
+    """Declarative specification for routing tool-call events.
+
+    When a ``SessionEvent`` with ``kind="tool.<bare_name>"`` arrives, the
+    router checks each ``ToolSpec`` returned by the handler's
+    ``get_tool_specs()``.  If ``bare_name`` is in ``tool_names``, the event
+    is dispatched to ``handle_event`` with ``kind=spec.name``.
+
+    Attributes:
+        name: Logical event name dispatched to ``handle_event``.
+        tool_names: Bare MCP tool names to match (without the "tool." prefix).
+    """
+
+    name: str
+    tool_names: tuple[str, ...]
+
+
 @runtime_checkable
 class PhaseHandler(Protocol):
     """Protocol for phase-specific event handling.
@@ -100,6 +118,15 @@ class PhaseHandler(Protocol):
         Returns:
             Sequence of EventSpec objects.  Return empty sequence (or don't
             override) to receive raw WorkflowEvents in handle_event instead.
+        """
+        ...
+
+    def get_tool_specs(self) -> Sequence[ToolSpec]:
+        """Return ToolSpecs for MCP tool-call events.
+
+        Returns:
+            Sequence of ToolSpec objects.  Return empty sequence (or don't
+            override) to have tool.* events return ({}, None).
         """
         ...
 
@@ -266,7 +293,25 @@ class WorkflowEventRouter:
         - If no spec fires, return ``{}, None``.
 
         Handlers without specs receive the raw WorkflowEvent unchanged.
+
+        Tool-call events (``tool.*``) are routed via ``ToolSpec``:
+        - If the handler declares ``get_tool_specs()``, match the bare tool
+          name against each spec's ``tool_names``.  On match, dispatch a
+          ``WorkflowEvent(kind=spec.name, payload=event.payload)``.
+        - Non-matching tool names return ``{}, None``.
         """
+        # Route tool.* events via ToolSpec
+        if event.kind.startswith("tool."):
+            get_tool_specs = getattr(handler, "get_tool_specs", None)
+            if get_tool_specs is not None:
+                bare_name = event.kind[len("tool.") :]
+                for spec in get_tool_specs():
+                    if bare_name in spec.tool_names:
+                        logical = WorkflowEvent(kind=spec.name, payload=event.payload)
+                        return handler.handle_event(logical, state, ctx)
+            return {}, None
+
+        # Route file events via EventSpec or raw
         get_specs = getattr(handler, "get_event_specs", None)
         if get_specs is None:
             # Legacy handler without specs — pass raw event through
@@ -297,10 +342,6 @@ class WorkflowEventRouter:
     def _now_iso() -> str:
         """Get current timestamp in ISO format."""
         return datetime.now().astimezone().isoformat(timespec="seconds")
-
-    # Keep static methods for backward compatibility within the class
-    path_matches = staticmethod(path_matches)
-    path_matches_any = staticmethod(path_matches_any)
 
 
 def extract_research_topic(path: str, prefix: str) -> str | None:

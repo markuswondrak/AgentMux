@@ -108,7 +108,9 @@ def _make_ctx(
     return ctx, files.state
 
 
-def _write_execution_plan(feature_dir: Path, *, name: str = "implementation") -> None:
+def _write_execution_plan(
+    feature_dir: Path, *, name: str = "implementation", **meta: object
+) -> None:
     planning_dir = feature_dir / PLANNING_DIR
     planning_dir.mkdir(parents=True, exist_ok=True)
     (planning_dir / "plan_1.md").write_text(
@@ -117,19 +119,20 @@ def _write_execution_plan(feature_dir: Path, *, name: str = "implementation") ->
     (planning_dir / "tasks_1.md").write_text(
         "# Tasks for plan 1\n\n- [ ] task\n", encoding="utf-8"
     )
-    (planning_dir / "execution_plan.json").write_text(
-        json.dumps(
+    import yaml
+
+    data: dict[str, object] = {
+        "groups": [
             {
-                "version": 1,
-                "groups": [
-                    {
-                        "group_id": "g1",
-                        "mode": "serial",
-                        "plans": [{"file": "plan_1.md", "name": name}],
-                    }
-                ],
+                "group_id": "g1",
+                "mode": "serial",
+                "plans": [{"file": "plan_1.md", "name": name}],
             }
-        ),
+        ],
+    }
+    data.update(meta)
+    (planning_dir / "execution_plan.yaml").write_text(
+        yaml.dump(data, default_flow_style=False),
         encoding="utf-8",
     )
 
@@ -205,9 +208,9 @@ class DesignerRequirementsTests(unittest.TestCase):
             designer_prompt = build_designer_prompt(files)
             initial_prompts = build_initial_prompts(files)
 
-            self.assertIn("done_1", coder_prompt)
+            self.assertIn("submit_done(subplan_index=1)", coder_prompt)
             self.assertIn("frontend-design", designer_prompt)
-            self.assertIn("04_design/design.md", designer_prompt)
+            self.assertIn("05_design/design.md", designer_prompt)
             self.assertNotIn("[[placeholder:", coder_prompt)
             self.assertNotIn("[[placeholder:", designer_prompt)
             self.assertEqual({}, initial_prompts)
@@ -252,24 +255,47 @@ class DesignerRequirementsTests(unittest.TestCase):
             state = load_state(state_path)
             state["phase"] = "planning"
             write_state(state_path, state)
-            _write_execution_plan(feature_dir, name="implementation")
-            (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
-            # Write all three required files for plan completion
-            (feature_dir / PLANNING_DIR / "plan.md").write_text(
-                "# Plan\n", encoding="utf-8"
-            )
-            (feature_dir / PLANNING_DIR / "tasks.md").write_text(
-                "# Tasks\n\n- [ ] task\n", encoding="utf-8"
-            )
-            (feature_dir / PLANNING_DIR / "plan_meta.json").write_text(
-                '{"needs_design": true}\n', encoding="utf-8"
+            import yaml as _yaml
+
+            planning_dir = feature_dir / PLANNING_DIR
+            planning_dir.mkdir(parents=True, exist_ok=True)
+            (planning_dir / "plan.yaml").write_text(
+                _yaml.safe_dump(
+                    {
+                        "version": 2,
+                        "plan_overview": "Implementation plan",
+                        "groups": [
+                            {
+                                "group_id": "g1",
+                                "mode": "serial",
+                                "plans": [{"index": 1, "name": "implementation"}],
+                            }
+                        ],
+                        "subplans": [
+                            {
+                                "index": 1,
+                                "title": "implementation",
+                                "scope": "Core implementation",
+                                "owned_files": ["src/feature.py"],
+                                "dependencies": "None",
+                                "implementation_approach": "Implement the feature",
+                                "acceptance_criteria": "Tests pass",
+                                "tasks": ["Implement feature"],
+                            }
+                        ],
+                        "review_strategy": {"severity": "medium", "focus": []},
+                        "needs_design": True,
+                        "needs_docs": False,
+                        "doc_files": [],
+                    }
+                ),
+                encoding="utf-8",
             )
 
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="plan_written",
-                path="02_planning/plan_meta.json",
-                payload={},
+                kind="plan",
+                payload={"payload": {}},
             )
             updates, next_phase = handler.handle_event(
                 event, load_state(state_path), ctx
@@ -320,7 +346,7 @@ class DesignerRequirementsTests(unittest.TestCase):
             handler = DesigningHandler()
             event = WorkflowEvent(
                 kind="design_written",
-                path="04_design/design.md",
+                path="05_design/design.md",
                 payload={},
             )
             updates, next_phase = handler.handle_event(

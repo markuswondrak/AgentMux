@@ -96,6 +96,7 @@ class InitRequirementsTests(unittest.TestCase):
             "gemini": None,
             "opencode": None,
             "copilot": None,
+            "qwen": None,
         }
         with patch(
             "agentmux.pipeline.init_command.shutil.which",
@@ -110,6 +111,7 @@ class InitRequirementsTests(unittest.TestCase):
                 "gemini": False,
                 "opencode": False,
                 "copilot": False,
+                "qwen": False,
             },
             detected,
         )

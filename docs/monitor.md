@@ -1,6 +1,6 @@
 # Monitor Display
 
-> Related source files: `agentmux/monitor/__init__.py`, `agentmux/monitor/state_reader.py`, `agentmux/monitor/render.py`, `agentmux/terminal_ui/layout.py`, `agentmux/terminal_ui/hyperlinks.py`
+> Related source file: `src/agentmux/monitor/render.py`
 
 The control pane renders a live status box with the following sections:
 
@@ -18,7 +18,7 @@ The control pane renders a live status box with the following sections:
   - Inactive agents are filtered out of the AGENTS section
   - For parallel coder mode, only non-inactive `coder_<n>` workers are shown
   - Agent rows use a shared `[role] secondary-info` format
-  - Coder rows use the explicit `name` from `02_planning/execution_plan.json`
+  - Coder rows use the explicit `name` from `04_planning/execution_plan.yaml`
   - Reviewer rows show the current review iteration, and designer rows show the feature being designed
 - **Research tasks** — progress on code and web research (if any)
 - **Event log** — recent timeline entries with timestamps: phase transitions plus filtered handover-relevant file creations from `created_files.log`
@@ -42,7 +42,7 @@ The control pane renders a live status box with the following sections:
 ## Staged implementation display notes
 
 - The monitor should represent implementing as grouped work, not only a single undifferentiated `implementing` phase.
-- Group labels are derived from orchestrator-managed state and should stay consistent with `02_planning/execution_plan.json`.
+- Group labels are derived from orchestrator-managed state and should stay consistent with `04_planning/execution_plan.yaml`.
 
 ## Component split
 

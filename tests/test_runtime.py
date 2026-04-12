@@ -181,11 +181,11 @@ class RuntimeTests(unittest.TestCase):
     def test_send_many_tracks_parallel_workers_and_finish_many_cleans_up(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            prompt_a = feature_dir / "coder_prompt_1.txt"
-            prompt_b = feature_dir / "coder_prompt_2.txt"
+            prompt_a = feature_dir / "coder_prompt_1.md"
+            prompt_b = feature_dir / "coder_prompt_2.md"
             prompt_a.write_text("a", encoding="utf-8")
             prompt_b.write_text("b", encoding="utf-8")
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_2.md").write_text(
                 "## Sub-plan 2: API wiring\n", encoding="utf-8"
@@ -237,7 +237,7 @@ class RuntimeTests(unittest.TestCase):
                 runtime.finish_many("coder")
 
             self.assertEqual([["%2", "%99"]], zone.parallel_shows)
-            self.assertEqual(["%2:coder_prompt_1.txt", "%99:coder_prompt_2.txt"], sent)
+            self.assertEqual(["%2:coder_prompt_1.md", "%99:coder_prompt_2.md"], sent)
             self.assertEqual(["%99"], zone.removed)
             snapshot = json.loads(
                 (feature_dir / "runtime_state.json").read_text(encoding="utf-8")
@@ -438,7 +438,7 @@ class RuntimeTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_2.md").write_text(
                 "## Sub-plan 2: UI polish\n", encoding="utf-8"
@@ -487,7 +487,7 @@ class RuntimeTests(unittest.TestCase):
     def test_finish_many_suppresses_interruption_poll_during_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_2.md").write_text(
                 "## Sub-plan 2: UI polish\n", encoding="utf-8"
@@ -516,7 +516,7 @@ class RuntimeTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_2.md").write_text(
                 "## Sub-plan 2: UI polish\n", encoding="utf-8"
@@ -565,7 +565,7 @@ class RuntimeTests(unittest.TestCase):
     def test_finish_task_suppresses_interruption_poll_during_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_2.md").write_text(
                 "## Sub-plan 2: UI polish\n", encoding="utf-8"
@@ -594,15 +594,25 @@ class RuntimeTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             (planning_dir / "plan_2.md").write_text(
                 "## Sub-plan 2: UI polish\n", encoding="utf-8"
             )
-            (planning_dir / "execution_plan.json").write_text(
-                (
-                    '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", '
-                    '"plans": [{"file": "plan_2.md", "name": "UI polish"}]}]}'
+            import yaml
+
+            (planning_dir / "execution_plan.yaml").write_text(
+                yaml.dump(
+                    {
+                        "groups": [
+                            {
+                                "group_id": "g1",
+                                "mode": "parallel",
+                                "plans": [{"file": "plan_2.md", "name": "UI polish"}],
+                            }
+                        ],
+                    },
+                    default_flow_style=False,
                 ),
                 encoding="utf-8",
             )
@@ -661,6 +671,88 @@ class RuntimeTests(unittest.TestCase):
             create_mock.assert_not_called()
             send_prompt_mock.assert_not_called()
             self.assertEqual([], zone.shown)
+
+
+class UnexpectedMissingRegisteredPanesTests(unittest.TestCase):
+    """Tests for TmuxAgentRuntime.unexpected_missing_registered_panes().
+
+    The method uses a grace period (2s) so that tool-event handlers have
+    time to mark a pane as expected before the interruption fires.
+    """
+
+    def _runtime(
+        self,
+        primary_panes: dict[str, str | None] | None = None,
+    ) -> TmuxAgentRuntime:
+        import tempfile
+
+        td = tempfile.mkdtemp()
+        return TmuxAgentRuntime(
+            feature_dir=Path(td),
+            project_dir=Path("/project"),
+            session_name="session-x",
+            agents=_agents(),
+            primary_panes=primary_panes or {"coder": "%1"},
+            zone=FakeZone("session-x"),
+        )
+
+    def test_returns_empty_when_no_panes_missing(self) -> None:
+        runtime = self._runtime()
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=True):
+            self.assertEqual([], runtime.unexpected_missing_registered_panes())
+
+    def test_returns_empty_during_grace_period(self) -> None:
+        runtime = self._runtime()
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            # First call starts grace period — still within 2s → empty
+            self.assertEqual([], runtime.unexpected_missing_registered_panes())
+            # Second call still within grace period → empty
+            self.assertEqual([], runtime.unexpected_missing_registered_panes())
+
+    def test_returns_pane_after_grace_expires(self) -> None:
+        runtime = self._runtime()
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            # Start grace period
+            runtime.unexpected_missing_registered_panes()
+
+        # Backdate grace entry to simulate expiry
+        import time
+
+        runtime._grace_panes["%1"] = time.monotonic() - 3.0
+
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            result = runtime.unexpected_missing_registered_panes()
+
+        self.assertEqual(1, len(result))
+        self.assertEqual("%1", result[0].pane_id)
+        self.assertEqual("coder", result[0].role)
+        # Grace entry should be cleaned up after firing
+        self.assertNotIn("%1", runtime._grace_panes)
+
+    def test_skips_expected_missing_pane(self) -> None:
+        runtime = self._runtime()
+        runtime._expected_missing_panes.add("%1")
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            self.assertEqual([], runtime.unexpected_missing_registered_panes())
+
+    def test_grace_resets_when_pane_comes_back(self) -> None:
+        runtime = self._runtime()
+        # Pane dies → grace starts
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            runtime.unexpected_missing_registered_panes()
+        self.assertIn("%1", runtime._grace_panes)
+
+        # Pane comes back alive → grace entry cleared
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=True):
+            result = runtime.unexpected_missing_registered_panes()
+        self.assertEqual([], result)
+        self.assertNotIn("%1", runtime._grace_panes)
+
+        # Pane dies again → new grace starts (not immediate fire)
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            result = runtime.unexpected_missing_registered_panes()
+        self.assertEqual([], result)
+        self.assertIn("%1", runtime._grace_panes)
 
 
 if __name__ == "__main__":

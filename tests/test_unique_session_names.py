@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import agentmux.pipeline.application as application
-from agentmux.runtime.tmux_control import list_agentmux_sessions
+from agentmux.runtime.tmux_core import list_agentmux_sessions
 from agentmux.sessions import PreparedSession
 from agentmux.sessions.state_store import create_feature_files
 from agentmux.shared.models import GitHubConfig
@@ -25,7 +25,7 @@ class UniqueSessionNamesTests(unittest.TestCase):
             stderr="",
         )
 
-        with patch("agentmux.runtime.tmux_control.run_command", return_value=completed):
+        with patch("agentmux.runtime.tmux_core.run_command", return_value=completed):
             sessions = list_agentmux_sessions()
 
         self.assertEqual(["agentmux-a", "agentmux-b"], sessions)

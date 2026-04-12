@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agentmux.runtime.event_bus import SessionEvent
+from agentmux.runtime.tool_events import load_tool_event_cursor
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import PHASE_HANDLERS
@@ -22,10 +23,16 @@ class _FakeRuntime:
 
     def __init__(self) -> None:
         self.notifications: list[tuple[str, str]] = []
+        self.spawned_tasks: list[tuple[str, str, str]] = []
+        self.parallel_panes: dict[str, dict[int | str, str]] = {}
         self._shutdown_called = False
 
     def notify(self, role: str, message: str) -> None:
         self.notifications.append((role, message))
+
+    def spawn_task(self, role: str, task_id: str, research_dir: Path) -> None:
+        self.spawned_tasks.append((role, task_id, research_dir.name))
+        self.parallel_panes.setdefault(role, {})[task_id] = f"%{role}-{task_id}"
 
     def shutdown(self, keep_session: bool) -> None:
         self._shutdown_called = True
@@ -186,6 +193,42 @@ class TestEventDrivenOrchestrator(unittest.TestCase):
 
                 self.assertEqual(orchestrator._exit_code, 0)
                 self.assertTrue(orchestrator._exit_event.is_set())
+
+    def test_on_event_acknowledges_tool_event_cursor(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+
+            files = create_feature_files(project_dir, feature_dir, "test", "session-x")
+            state = load_state(files.state)
+            state["phase"] = "planning"
+            write_state(files.state, state)
+
+            ctx = PipelineContext(
+                files=files,
+                runtime=_FakeRuntime(),
+                agents={},
+                max_review_iterations=3,
+                prompts={},
+            )
+            orchestrator = PipelineOrchestrator()
+            orchestrator._ctx = ctx
+
+            with patch.object(orchestrator._router, "handle", return_value=({}, None)):
+                session_event = SessionEvent(
+                    kind="tool.submit_plan",
+                    source="tool_call",
+                    payload={
+                        "tool": "submit_plan",
+                        "payload": {},
+                        "_tool_event_meta": {"start_offset": 0, "end_offset": 123},
+                    },
+                )
+                orchestrator._on_event(session_event)
+
+            self.assertEqual(123, load_tool_event_cursor(feature_dir))
 
     def test_handle_interruption_for_researcher_task(self) -> None:
         """Test that researcher task failures notify the owner."""
@@ -382,6 +425,54 @@ class TestEventDrivenOrchestrator(unittest.TestCase):
             self.assertEqual(0, result)
             self.assertEqual(["enter", "start"], order)
 
+    def test_run_rehydrates_dispatched_research_tasks_after_bus_start(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            project_dir = tmp_path / "project"
+            feature_dir = tmp_path / "feature"
+            project_dir.mkdir()
+
+            files = create_feature_files(project_dir, feature_dir, "test", "session-x")
+            state = load_state(files.state)
+            state["phase"] = "planning"
+            state["research_tasks"] = {"auth": "dispatched"}
+            write_state(files.state, state)
+
+            research_dir = files.research_dir / "code-auth"
+            research_dir.mkdir(parents=True, exist_ok=True)
+            (research_dir / "prompt.md").write_text("# prompt", encoding="utf-8")
+
+            bus = _MockEventBus()
+            runtime = _FakeRuntime()
+            orchestrator = PipelineOrchestrator()
+            ctx = PipelineContext(
+                files=files,
+                runtime=runtime,
+                agents={},
+                max_review_iterations=3,
+                prompts={},
+            )
+
+            def fake_start() -> None:
+                bus.started = True
+                assert orchestrator._exit_event is not None
+                orchestrator._exit_event.set()
+
+            bus.start = fake_start
+
+            with (
+                patch.object(orchestrator, "build_event_bus", return_value=bus),
+                patch.object(
+                    orchestrator._router, "enter_current_phase", return_value={}
+                ),
+            ):
+                result = orchestrator.run(ctx, keep_session=False)
+
+            self.assertEqual(0, result)
+            self.assertEqual(
+                [("code-researcher", "auth", "code-auth")], runtime.spawned_tasks
+            )
+
     def test_no_polling_loop_in_run(self) -> None:
         """Verify the run method does not contain a while True polling loop."""
         import inspect
@@ -394,6 +485,249 @@ class TestEventDrivenOrchestrator(unittest.TestCase):
         self.assertNotIn("wake_event.wait(timeout", source)
         # Should contain '_exit_event.wait()' (blocking pattern)
         self.assertIn("_exit_event.wait()", source)
+
+
+class RehydrateResearchTasksTests(unittest.TestCase):
+    """Tests for _rehydrate_dispatched_research_tasks double-dispatch safeguards."""
+
+    def _make_context(self, files, runtime, state: dict) -> PipelineContext:
+        write_state(files.state, state)
+        return PipelineContext(
+            files=files,
+            runtime=runtime,
+            agents={},
+            max_review_iterations=3,
+            prompts={},
+        )
+
+    def test_rehydrate_skips_completed_tasks(self) -> None:
+        """Task with existing output.log is not re-dispatched."""
+        orchestrator = PipelineOrchestrator()
+        runtime = _FakeRuntime()
+        with tempfile.TemporaryDirectory() as tmp:
+            fdir = Path(tmp)
+            research_dir = fdir / "03_research" / "code-auth"
+            research_dir.mkdir(parents=True, exist_ok=True)
+            (research_dir / "prompt.md").write_text("# prompt", encoding="utf-8")
+            (research_dir / "output.log").write_text("already ran", encoding="utf-8")
+
+            files = type(
+                "FakeFiles",
+                (),
+                {
+                    "state": fdir / "state.json",
+                    "research_dir": fdir / "03_research",
+                    "feature_dir": fdir,
+                },
+            )()
+            write_state(
+                files.state,
+                {
+                    "phase": "architecting",
+                    "research_tasks": {"auth": "dispatched"},
+                },
+            )
+
+            ctx = self._make_context(
+                files,
+                runtime,
+                {
+                    "phase": "architecting",
+                    "research_tasks": {"auth": "dispatched"},
+                },
+            )
+
+            orchestrator._rehydrate_dispatched_research_tasks(ctx)
+
+            # Should NOT have spawned — output.log exists
+            self.assertEqual([], runtime.spawned_tasks)
+
+    def test_rehydrate_marks_done_if_output_exists(self) -> None:
+        """Task with output.log is marked 'done' in state."""
+        orchestrator = PipelineOrchestrator()
+        runtime = _FakeRuntime()
+        with tempfile.TemporaryDirectory() as tmp:
+            fdir = Path(tmp)
+            research_dir = fdir / "03_research" / "code-auth"
+            research_dir.mkdir(parents=True, exist_ok=True)
+            (research_dir / "prompt.md").write_text("# prompt", encoding="utf-8")
+            (research_dir / "summary.md").write_text("done", encoding="utf-8")
+
+            files = type(
+                "FakeFiles",
+                (),
+                {
+                    "state": fdir / "state.json",
+                    "research_dir": fdir / "03_research",
+                    "feature_dir": fdir,
+                },
+            )()
+            ctx = self._make_context(
+                files,
+                runtime,
+                {
+                    "phase": "architecting",
+                    "research_tasks": {"auth": "dispatched"},
+                },
+            )
+
+            orchestrator._rehydrate_dispatched_research_tasks(ctx)
+
+            state = load_state(files.state)
+            self.assertEqual("done", state["research_tasks"]["auth"])
+            self.assertEqual([], runtime.spawned_tasks)
+
+    def test_rehydrate_skips_running_process(self) -> None:
+        """Task with alive PID is not re-dispatched."""
+        orchestrator = PipelineOrchestrator()
+        runtime = _FakeRuntime()
+        # Use current process PID as "alive" PID
+        import os
+
+        runtime._process_pids = {"auth": os.getpid()}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fdir = Path(tmp)
+            research_dir = fdir / "03_research" / "code-auth"
+            research_dir.mkdir(parents=True, exist_ok=True)
+            (research_dir / "prompt.md").write_text("# prompt", encoding="utf-8")
+
+            files = type(
+                "FakeFiles",
+                (),
+                {
+                    "state": fdir / "state.json",
+                    "research_dir": fdir / "03_research",
+                    "feature_dir": fdir,
+                },
+            )()
+            ctx = self._make_context(
+                files,
+                runtime,
+                {
+                    "phase": "architecting",
+                    "research_tasks": {"auth": "dispatched"},
+                },
+            )
+
+            orchestrator._rehydrate_dispatched_research_tasks(ctx)
+
+            self.assertEqual([], runtime.spawned_tasks)
+
+    def test_rehydrate_dispatches_missing_task(self) -> None:
+        """Task with prompt.md but no output and no alive PID IS dispatched."""
+        orchestrator = PipelineOrchestrator()
+        runtime = _FakeRuntime()
+        runtime._process_pids = {}  # No alive PIDs
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fdir = Path(tmp)
+            research_dir = fdir / "03_research" / "code-new-topic"
+            research_dir.mkdir(parents=True, exist_ok=True)
+            (research_dir / "prompt.md").write_text("# prompt", encoding="utf-8")
+
+            files = type(
+                "FakeFiles",
+                (),
+                {
+                    "state": fdir / "state.json",
+                    "research_dir": fdir / "03_research",
+                    "feature_dir": fdir,
+                },
+            )()
+            ctx = self._make_context(
+                files,
+                runtime,
+                {
+                    "phase": "architecting",
+                    "research_tasks": {"new-topic": "dispatched"},
+                },
+            )
+
+            orchestrator._rehydrate_dispatched_research_tasks(ctx)
+
+            self.assertEqual(
+                [("code-researcher", "new-topic", "code-new-topic")],
+                runtime.spawned_tasks,
+            )
+
+    def test_rehydrate_respects_parallel_panes(self) -> None:
+        """Task already in parallel_panes is not re-dispatched."""
+        orchestrator = PipelineOrchestrator()
+        runtime = _FakeRuntime()
+        runtime.parallel_panes = {"code-researcher": {"auth": "%code-auth"}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fdir = Path(tmp)
+            research_dir = fdir / "03_research" / "code-auth"
+            research_dir.mkdir(parents=True, exist_ok=True)
+            (research_dir / "prompt.md").write_text("# prompt", encoding="utf-8")
+
+            files = type(
+                "FakeFiles",
+                (),
+                {
+                    "state": fdir / "state.json",
+                    "research_dir": fdir / "03_research",
+                    "feature_dir": fdir,
+                },
+            )()
+            ctx = self._make_context(
+                files,
+                runtime,
+                {
+                    "phase": "architecting",
+                    "research_tasks": {"auth": "dispatched"},
+                },
+            )
+
+            orchestrator._rehydrate_dispatched_research_tasks(ctx)
+
+            self.assertEqual([], runtime.spawned_tasks)
+
+    def test_rehydrate_ignores_non_dispatched_status(self) -> None:
+        """Tasks with status != 'dispatched' are ignored."""
+        orchestrator = PipelineOrchestrator()
+        runtime = _FakeRuntime()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fdir = Path(tmp)
+            research_dir = fdir / "03_research" / "code-auth"
+            research_dir.mkdir(parents=True, exist_ok=True)
+            (research_dir / "prompt.md").write_text("# prompt", encoding="utf-8")
+
+            files = type(
+                "FakeFiles",
+                (),
+                {
+                    "state": fdir / "state.json",
+                    "research_dir": fdir / "03_research",
+                    "feature_dir": fdir,
+                },
+            )()
+            ctx = self._make_context(
+                files,
+                runtime,
+                {
+                    "phase": "architecting",
+                    "research_tasks": {"auth": "done", "other": "pending"},
+                },
+            )
+
+            orchestrator._rehydrate_dispatched_research_tasks(ctx)
+
+            self.assertEqual([], runtime.spawned_tasks)
+
+    def test_process_alive_true_for_current_pid(self) -> None:
+        """_process_alive returns True for the current process."""
+        import os
+
+        self.assertTrue(PipelineOrchestrator._process_alive(os.getpid()))
+
+    def test_process_alive_false_for_dead_pid(self) -> None:
+        """_process_alive returns False for a non-existent PID."""
+        # PID 1 is usually init, use a very high unlikely PID instead
+        self.assertFalse(PipelineOrchestrator._process_alive(999999999))
 
 
 if __name__ == "__main__":

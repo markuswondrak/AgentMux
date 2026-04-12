@@ -272,6 +272,24 @@ def read_session_summary(state_path: Path) -> str:
     return read_feature_request(state_path)
 
 
+def tmux_session_exists(session_name: str) -> bool:
+    """Check whether the given tmux session still exists.
+
+    Returns False if the session has been destroyed or tmux itself
+    is unavailable — signalling that the monitor should terminate.
+    """
+    try:
+        result = subprocess.run(
+            ["tmux", "has-session", "-t", session_name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def format_event(raw: str) -> str:
     from ..workflow.interruptions import monitor_label_from_event
 

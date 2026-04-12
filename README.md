@@ -5,7 +5,7 @@
 
 **Run a full multi-agent software pipeline using the AI subscriptions you already have.**
 
-AgentMux orchestrates a structured PM → Architect → Plan → Code → Review → Done workflow across `claude`, `codex`, `gemini`, and `opencode` — driving them through tmux, not the API. No pay-per-token. No new credentials. Just your existing CLI tools working in concert.
+AgentMux orchestrates a structured PM → Architect → Plan → Code → Review → Done workflow across `claude`, `codex`, `gemini`, `opencode`, `copilot`, and `qwen` — driving them through tmux, not the API. No pay-per-token. No new credentials. Just your existing CLI tools working in concert.
 
 ---
 <img width="1595" height="1071" alt="agentmux" src="https://github.com/user-attachments/assets/806e0fe8-decc-4869-80be-35f99f03481b" />
@@ -13,7 +13,7 @@ AgentMux orchestrates a structured PM → Architect → Plan → Code → Review
 
 ## Why AgentMux
 
-- **No API costs** — injects prompts into tmux panes, reusing your existing Claude, Codex, Gemini, or OpenCode subscriptions. No tokens billed to you directly.
+- **No API costs** — injects prompts into tmux panes, reusing your existing Claude, Codex, Gemini, OpenCode, Copilot CLI, or Qwen subscriptions. No tokens billed to you directly.
 - **Structured pipeline** — a deterministic state machine moves work through planning, implementation, and review phases. Agents don't freelance; they execute focused roles.
 - **Mix providers per role** — run the architect on Claude Max, the coder on Codex, and the reviewer on Gemini. Each role is independently configurable.
 - **Watch it work** — the session is a live tmux window. Attach at any time to observe, intervene, or take over.
@@ -73,8 +73,10 @@ Config is resolved in layers: built-in defaults → `~/.config/agentmux/config.y
 |----------|----------|
 | `claude` | Claude Code CLI |
 | `codex` | OpenAI Codex CLI |
+| `copilot` | GitHub Copilot CLI |
 | `gemini` | Google Gemini CLI |
 | `opencode` | OpenCode CLI |
+| `qwen` | Qwen CLI |
 
 ## Agent roles
 

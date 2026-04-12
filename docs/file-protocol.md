@@ -1,107 +1,58 @@
 # Shared File Protocol
 
-> Related source files: `agentmux/shared/models.py`, `agentmux/sessions/state_store.py`, `agentmux/runtime/event_bus.py`, `agentmux/runtime/file_events.py`, `agentmux/runtime/interruption_sources.py`, `agentmux/workflow/orchestrator.py`, `agentmux/workflow/event_router.py`, `agentmux/workflow/phases.py`, `agentmux/workflow/handlers.py`, `agentmux/workflow/prompts.py`
+> Related source file: `src/agentmux/workflow/orchestrator.py`
 
 Agents communicate via files in `.agentmux/.sessions/<feature-name>/`. Files are grouped by phase subdirectories and created on-demand as needed, while a small set of root runtime artifacts is maintained directly by the orchestrator.
 
 ## Root files
 
-- `state.json` — current workflow phase; orchestrator drives transitions
+- `state.json` — current workflow phase and all scheduling state. See [artifacts/session-state.md](artifacts/session-state.md#artifact-statejson).
 - `requirements.md` — initial request passed to architect
 - `context.md` — auto-generated rules/session info injected into prompts
-- `runtime_state.json` / `orchestrator.log` — runtime tracking and orchestrator logs
-- `created_files.log` — append-only created-file history written by the orchestrator as `YYYY-MM-DD HH:MM:SS  relative/path`; records files only (not directories), deduplicated by relative path, and seeded once at startup to include pre-existing session files
+- `runtime_state.json` / `orchestrator.log` — runtime tracking and orchestrator logs. See [artifacts/session-state.md](artifacts/session-state.md#artifact-runtime_statejson).
+- `created_files.log` — append-only created-file history. See [artifacts/event-logs.md](artifacts/event-logs.md#created_fileslog).
+- `tool_events.jsonl` — append-only MCP tool-call event log. See [artifacts/event-logs.md](artifacts/event-logs.md#tool_eventsjsonl).
+- `tool_event_state.json` — persisted tool-event replay cursor. See [artifacts/session-state.md](artifacts/session-state.md#artifact-tool_event_statejson).
 
-## Product Management (`01_product_management/`)
+## Phase artifacts
 
-- `product_manager_prompt.md` — prompt for PM analysis phase
-- `analysis.md` — PM usability rationale: friction points, integration fit, alternatives considered and rejected, notes for the architect. Advisory only — if it conflicts with `requirements.md`, `requirements.md` wins.
-- `done` — completion marker for PM handoff to planning
+For the full artifact listing per phase (files, writers, readers, formats, and transitions), see **[docs/phases/](phases/index.md)**:
 
-## Planning (`02_planning/`)
+- [Product Management](phases/01_product-management.md) — `01_product_management/`
+- [Architecting](phases/02_architecting.md) — `02_architecting/` and `03_research/`
+- [Planning](phases/04_planning.md) — `04_planning/`
+- [Design](phases/05_design.md) — `05_design/`
+- [Implementation](phases/06_implementation.md) — `06_implementation/`
+- [Review](phases/07_review.md) — `07_review/`
+- [Completion](phases/08_completion.md) — `08_completion/`
 
-- `architect_prompt.md` / `changes_prompt.txt` — architect prompts (for architecting phase)
-- `planner_prompt.md` — planner prompt for creating execution plans
-- `architecture.md` — technical architecture document created by architect (the "What" and "With what")
-- `plan.md` — human-readable planning overview created by planner
-- `plan_<N>.md` — executable per-unit implementation plans referenced by scheduler metadata
-- `execution_plan.json` — machine-readable schedule of ordered execution groups
-  - Each group has a unique `group_id` and an execution mode (`serial` or `parallel`)
-  - `serial` groups execute plans one at a time in order (useful for sequential integration steps)
-  - `parallel` groups execute all plans simultaneously
-  - Both modes can reference one or more named `plan_<N>.md` entries
-  - Canonical plan-entry shape is `{ "file": "plan_<N>.md", "name": "Human title" }`
-  - Plan references must be unique across groups
-  - Group ordering defines implementation wave order
-- `tasks_<N>.md` — per-plan implementation checklists; each coder receives only their assigned plan's tasks
-- `tasks.md` — optional human-readable overview summarizing all tasks (not used by scheduler)
-- `plan_meta.json` — planner workflow-intent metadata:
-  - `needs_design` (`true`/`false`) — whether to run a dedicated design handoff
-  - `needs_docs` (`true`/`false`) — informational signal that documentation updates are in scope
-  - `doc_files` (`string[]`) — planned documentation targets when docs work is in scope
-  - `review_strategy` (`object`) — risk assessment and review scope configuration:
-    - `severity` (`"low"`|`"medium"`|`"high"`) — implementation risk level: `low` for UI/CSS/text, `medium` for logic changes, `high` for security/DB/core changes
-    - `focus` (`string[]`) — specific review focus areas (e.g., `["security", "performance", "data-consistency"]`)
-  - Documentation updates must be captured explicitly in `plan.md`, each `plan_<N>.md`, and corresponding `tasks_<N>.md`; this metadata does not create a separate runtime phase
-
-Execution scheduling is strict:
-
-- `execution_plan.json` is required before implementation starts.
-- `groups[].plans[]` entries must use `{ "file": "plan_<N>.md", "name": "Human title" }` objects.
-- Implementation dispatch uses numbered prompt files (`coder_prompt_<N>.txt`) only.
-
-## Research (`03_research/`)
-
-- `code-<topic>/request.md` / `summary.md` / `detail.md` / `done` / `prompt.md`
-- `web-<topic>/request.md` / `summary.md` / `detail.md` / `done` / `prompt.md`
-
-## Design (`04_design/`)
-
-- `designer_prompt.md` / `design.md`
-
-## Implementation (`05_implementation/`)
-
-- `coder_prompt_<N>.txt` — implementing-phase prompts mapped to scheduled plan units (`plan_<N>.md`)
-- `done_*` — coder completion markers for implementing-phase scheduled plan units (`done_<N>` maps to `plan_<N>.md`)
-- `done_1` — fixing-phase completion marker after a review-requested fix run
-- `state.json` includes implementing-phase progress metadata so monitor/orchestrator can track:
-  - `implementation_group_total` — total scheduled execution groups
-  - `implementation_group_index` — current 1-based active group index (or total when implementation is complete)
-  - `implementation_group_mode` — active group mode (`serial`/`parallel`)
-  - `implementation_active_plan_ids` — active `plan_<N>` ids for the current group
-  - `implementation_completed_group_ids` — ordered list of completed `group_id` values
-
-## Review (`06_review/`)
-
-- `review_prompt.md` / `review.md` — legacy review prompt (backward compatibility)
-- `review_logic_prompt.md` — Logic & Alignment reviewer prompt (functional correctness vs plan)
-- `review_quality_prompt.md` — Quality & Style reviewer prompt (clean code, naming, standards)
-- `review_expert_prompt.md` — Deep-Dive Expert reviewer prompt (security, performance, edge cases)
-- `fix_prompt.txt` / `fix_request.md`
-
-**Reviewer Selection:** Which prompt is used depends on `plan_meta.review_strategy`:
-- Missing `review_strategy` → uses `review_logic_prompt.md` (backward compatible default)
-- `severity: low` → uses `review_quality_prompt.md`
-- `severity: medium/high` without security/performance focus → uses `review_logic_prompt.md`
-- `severity: medium/high` with security or performance in focus → uses `review_expert_prompt.md`
-
-## Completion (`08_completion/`)
-
-- `summary_prompt.md` — prompt asking reviewer to write an implementation summary
-- `summary.md` — reviewer-written implementation summary (what was done, key decisions)
-- `approval.json` — written by the native completion UI when user approves
-- `changes.md` — written by the native completion UI when user requests changes
+See also **[docs/artifacts/](artifacts/index.md)** for full schema documentation of key session artifacts.
 
 ## Key functions
 
-- `PipelineOrchestrator.run()` / `build_event_bus()` in `agentmux/workflow/orchestrator.py` — run the phase loop on top of a shared session event bus
-- `EventBus` in `agentmux/runtime/event_bus.py` — generic dispatcher plus start/stop lifecycle for dedicated event sources
-- `FileEventSource` / `FeatureEventHandler` in `agentmux/runtime/file_events.py` — normalize watchdog activity under the feature directory and publish `file.*` events
-- `CreatedFilesLogListener` / `seed_existing_files()` in `agentmux/runtime/file_events.py` — enforce created-file logging semantics (`created_files.log`, first-seen only, bootstrap coverage)
-- `InterruptionEventSource` in `agentmux/runtime/interruption_sources.py` — publish interruption events when registered tmux panes disappear
-- `WorkflowEventRouter.enter_current_phase()` in `agentmux/workflow/event_router.py` — explicitly bootstraps the active phase before steady-state event processing starts
-- `build_*_prompt()` in `agentmux/workflow/prompts.py` — loads and renders the markdown template for each phase; called lazily by handlers
-- Handler functions in `agentmux/workflow/handlers.py` — each builds and writes its prompt file just before sending to agent
+- `PipelineOrchestrator.run()` / `build_event_bus()` in `src/agentmux/workflow/orchestrator.py` — run the phase loop on top of a shared session event bus
+- `EventBus` in `src/agentmux/runtime/event_bus.py` — generic dispatcher plus start/stop lifecycle for dedicated event sources
+- `FileEventSource` / `FeatureEventHandler` in `src/agentmux/runtime/file_events.py` — normalize watchdog activity under the feature directory and publish `file.*` events
+- `CreatedFilesLogListener` / `seed_existing_files()` in `src/agentmux/runtime/file_events.py` — enforce created-file logging semantics (`created_files.log`, first-seen only, bootstrap coverage)
+- `ToolCallEventSource` in `src/agentmux/runtime/tool_events.py` — tail `tool_events.jsonl` and publish `tool.<name>` events into the EventBus; seeded at startup, then watched via watchdog
+- `InterruptionEventSource` in `src/agentmux/runtime/interruption_sources.py` — publish interruption events when registered tmux panes disappear
+- `WorkflowEventRouter.enter_current_phase()` in `src/agentmux/workflow/event_router.py` — explicitly bootstraps the active phase before steady-state event processing starts
+- `build_*_prompt()` in `src/agentmux/workflow/prompts.py` — loads and renders the markdown template for each phase; called lazily by handlers
+- Handler functions in `src/agentmux/workflow/handlers/` — each builds and writes its prompt file just before sending to agent
+
+## MCP Tool Event Protocol
+
+When agents call MCP tools (`submit_architecture`, `submit_plan`, `submit_review`, `submit_done`, `submit_research_done`, `submit_pm_done`), the submission tools read the agent-written file, validate it, and append a minimal signal entry to `tool_events.jsonl`. Validation errors are returned immediately so agents can correct their files. The tools write no workflow artifacts themselves — agents always own writing the output files.
+
+Each entry has this shape:
+
+```json
+{"tool": "<tool_name>", "timestamp": "<ISO-8601>", "payload": {...}}
+```
+
+`ToolCallEventSource` tails `tool_events.jsonl` and emits `SessionEvent(kind="tool.<name>")` events into the `EventBus`. The orchestrator persists an applied cursor in `tool_event_state.json` after each tool event is handled, so resume replays only unapplied signals. The `WorkflowEventRouter` routes tool events via `ToolSpec` to the appropriate phase handler, which materializes `.md` companions from the agent-written `.yaml` (if missing) and drives state transitions.
+
+Agents write workflow artifact YAML files directly. The MCP submission tools validate the agent-written file and signal the orchestrator to advance — they do not write files themselves.
 
 ## Workflow Events
 

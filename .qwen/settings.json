@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git reset *)",
+      "Bash(git commit *)",
+      "Bash(copilot *)",
+      "WebSearch",
+      "Bash(python3 *)",
+      "Bash(pytest *)",
+      "Bash(python *)",
+      "WebFetch(github.com)",
+      "Bash(ls *)",
+      "Bash(git add *)",
+      "Read(//home/markus/.qwen/**)"
+    ]
+  },
+  "$version": 3
+}

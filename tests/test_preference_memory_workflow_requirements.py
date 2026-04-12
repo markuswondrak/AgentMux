@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+
 from agentmux.integrations.completion import CompletionResult
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.shared.models import AgentConfig, GitHubConfig
@@ -15,7 +17,6 @@ from agentmux.workflow.handlers import (
     PlanningHandler,
     ProductManagementHandler,
 )
-from agentmux.workflow.prompts import build_architect_prompt
 from agentmux.workflow.transitions import PipelineContext
 
 
@@ -80,70 +81,45 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def _write_execution_plan(files, *, name: str = "implementation") -> None:
+def _write_yaml(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.dump(payload, default_flow_style=False), encoding="utf-8")
+
+
+def _write_plan_yaml(files, *, name: str = "implementation", **meta: object) -> None:
+    """Write plan.yaml (version 2) to disk for testing PlanningHandler."""
     files.planning_dir.mkdir(parents=True, exist_ok=True)
-    (files.planning_dir / "plan_1.md").write_text(
-        f"## Sub-plan 1: {name}\n", encoding="utf-8"
-    )
-    _write_json(
-        files.execution_plan,
-        {
-            "version": 1,
-            "groups": [
-                {
-                    "group_id": "g1",
-                    "mode": "serial",
-                    "plans": [{"file": "plan_1.md", "name": name}],
-                }
-            ],
-        },
-    )
+    data: dict[str, object] = {
+        "version": 2,
+        "plan_overview": f"# Plan\n\n{name} plan.",
+        "groups": [
+            {"group_id": "g1", "mode": "serial", "plans": [{"index": 1, "name": name}]}
+        ],
+        "subplans": [
+            {
+                "index": 1,
+                "title": name,
+                "scope": "Core implementation",
+                "owned_files": ["src/feature.py"],
+                "dependencies": "None",
+                "implementation_approach": "Implement the feature",
+                "acceptance_criteria": "Tests pass",
+                "tasks": ["Implement feature"],
+            }
+        ],
+        "review_strategy": {"severity": "medium", "focus": []},
+        "needs_design": False,
+        "needs_docs": False,
+        "doc_files": [],
+    }
+    data.update(meta)
+    _write_yaml(files.planning_dir / "plan.yaml", data)
 
 
 class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
-    def test_pm_completed_applies_approved_preferences_before_planning_transition(
+    def test_pm_completed_without_preferences_leaves_prompts_dir_untouched(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            feature_dir = Path(td) / "feature"
-            ctx, state_path = _make_ctx(feature_dir)
-
-            state = load_state(state_path)
-            state["phase"] = "product_management"
-            write_state(state_path, state)
-            _write_json(
-                ctx.files.pm_preference_proposal,
-                {
-                    "source_role": "product-manager",
-                    "approved": [
-                        {"target_role": "architect", "bullet": "Keep plans executable"}
-                    ],
-                },
-            )
-
-            handler = ProductManagementHandler()
-            event = WorkflowEvent(
-                kind="pm_completed",
-                path="01_product_management/done",
-                payload={},
-            )
-            updates, next_phase = handler.handle_event(
-                event, load_state(state_path), ctx
-            )
-
-            target = (
-                ctx.files.project_dir
-                / ".agentmux"
-                / "prompts"
-                / "agents"
-                / "architect.md"
-            )
-            self.assertTrue(target.is_file())
-            self.assertIn("- Keep plans executable", target.read_text(encoding="utf-8"))
-            self.assertEqual("architecting", next_phase)
-            self.assertEqual("pm_completed", updates.get("last_event"))
-
-    def test_pm_completed_without_proposal_file_is_prompt_extension_noop(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
             ctx, state_path = _make_ctx(feature_dir)
@@ -154,177 +130,34 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
 
             handler = ProductManagementHandler()
             event = WorkflowEvent(
-                kind="pm_completed",
-                path="01_product_management/done",
-                payload={},
+                kind="pm_done",
+                payload={"payload": {}},
             )
-            updates, next_phase = handler.handle_event(
-                event, load_state(state_path), ctx
-            )
+            handler.handle_event(event, load_state(state_path), ctx)
 
             prompts_dir = ctx.files.project_dir / ".agentmux" / "prompts" / "agents"
             self.assertFalse(prompts_dir.exists())
 
-    def test_plan_written_applies_architect_preferences_before_next_phase(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            feature_dir = Path(td) / "feature"
-            ctx, state_path = _make_ctx(feature_dir, with_designer=False)
-
-            state = load_state(state_path)
-            state["phase"] = "planning"
-            write_state(state_path, state)
-            _write_execution_plan(ctx.files)
-            _write_json(
-                ctx.files.planning_dir / "plan_meta.json", {"needs_design": False}
-            )
-            # Write required files for plan completion
-            (ctx.files.planning_dir / "plan.md").write_text(
-                "# Plan\n", encoding="utf-8"
-            )
-            (ctx.files.planning_dir / "tasks.md").write_text(
-                "# Tasks\n\n- [ ] task\n", encoding="utf-8"
-            )
-            _write_json(
-                ctx.files.architect_preference_proposal,
-                {
-                    "source_role": "architect",
-                    "approved": [
-                        {
-                            "target_role": "reviewer",
-                            "bullet": "Call out regressions first",
-                        }
-                    ],
-                },
-            )
-
-            handler = PlanningHandler()
-            event = WorkflowEvent(
-                kind="plan_written",
-                path="02_planning/plan_meta.json",
-                payload={},
-            )
-            updates, next_phase = handler.handle_event(
-                event, load_state(state_path), ctx
-            )
-
-            target = (
-                ctx.files.project_dir
-                / ".agentmux"
-                / "prompts"
-                / "agents"
-                / "reviewer.md"
-            )
-            self.assertTrue(target.is_file())
-            self.assertIn(
-                "- Call out regressions first", target.read_text(encoding="utf-8")
-            )
-            self.assertEqual("implementing", next_phase)
-            self.assertEqual("plan_written", updates.get("last_event"))
-
-    def test_plan_written_without_proposal_file_is_prompt_extension_noop(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            feature_dir = Path(td) / "feature"
-            ctx, state_path = _make_ctx(feature_dir, with_designer=False)
-
-            state = load_state(state_path)
-            state["phase"] = "planning"
-            write_state(state_path, state)
-            _write_execution_plan(ctx.files)
-            _write_json(
-                ctx.files.planning_dir / "plan_meta.json", {"needs_design": False}
-            )
-
-            handler = PlanningHandler()
-            event = WorkflowEvent(
-                kind="plan_written",
-                path="02_planning/plan_meta.json",
-                payload={},
-            )
-            updates, next_phase = handler.handle_event(
-                event, load_state(state_path), ctx
-            )
-
-            prompts_dir = ctx.files.project_dir / ".agentmux" / "prompts" / "agents"
-            self.assertFalse(prompts_dir.exists())
-
-    def test_approval_received_applies_reviewer_preferences_before_changed_file_scan(
+    def test_plan_written_without_preferences_leaves_prompts_dir_untouched(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
-            ctx, state_path = _make_ctx(feature_dir)
+            ctx, state_path = _make_ctx(feature_dir, with_designer=False)
 
             state = load_state(state_path)
-            state["phase"] = "completing"
+            state["phase"] = "planning"
             write_state(state_path, state)
-            _write_json(
-                ctx.files.completion_dir / "approval.json",
-                {
-                    "action": "approve",
-                    "commit_message": "complete",
-                    "exclude_files": [],
-                },
-            )
-            _write_json(
-                ctx.files.reviewer_preference_proposal,
-                {
-                    "source_role": "reviewer",
-                    "approved": [
-                        {"target_role": "coder", "bullet": "Prefer tight unit tests"}
-                    ],
-                },
-            )
+            _write_plan_yaml(ctx.files, needs_design=False)
 
-            target = (
-                ctx.files.project_dir / ".agentmux" / "prompts" / "agents" / "coder.md"
-            )
+            handler = PlanningHandler()
+            event = WorkflowEvent(kind="plan", payload={"payload": {}})
+            handler.handle_event(event, load_state(state_path), ctx)
 
-            def _status_with_assertions(project_dir: Path) -> str:
-                _ = project_dir
-                self.assertTrue(target.is_file())
-                self.assertIn(
-                    "- Prefer tight unit tests", target.read_text(encoding="utf-8")
-                )
-                return " M .agentmux/prompts/agents/coder.md\n"
+            prompts_dir = ctx.files.project_dir / ".agentmux" / "prompts" / "agents"
+            self.assertFalse(prompts_dir.exists())
 
-            handler = PHASE_HANDLERS.get("completing")
-            assert handler is not None
-
-            with (
-                patch(
-                    "agentmux.workflow.handlers.completing._git_status_porcelain",
-                    side_effect=_status_with_assertions,
-                ),
-                patch(
-                    "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.finalize_approval",
-                    return_value=CompletionResult(
-                        commit_hash=None,
-                        pr_url=None,
-                        cleaned_up=False,
-                        should_cleanup=False,
-                    ),
-                ) as finalize_mock,
-            ):
-                event = WorkflowEvent(
-                    kind="approval_received",
-                    path="08_completion/approval.json",
-                    payload={},
-                )
-                updates, next_phase = handler.handle_event(
-                    event, load_state(state_path), ctx
-                )
-
-            self.assertEqual({"__exit__": 0, "cleanup_feature_dir": False}, updates)
-            self.assertIsNone(next_phase)
-            self.assertEqual(
-                "complete", finalize_mock.call_args.kwargs["commit_message"]
-            )
-            self.assertIn(
-                ".agentmux/prompts/agents/coder.md",
-                finalize_mock.call_args.kwargs["changed_paths"],
-            )
-
-    def test_approval_received_without_proposal_file_is_prompt_extension_noop(
+    def test_approval_received_without_preferences_leaves_prompts_dir_untouched(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -433,174 +266,6 @@ class PreferenceMemoryWorkflowRequirementsTests(unittest.TestCase):
             self.assertEqual(
                 "feat: drafted fallback",
                 finalize_mock.call_args.kwargs["commit_message"],
-            )
-
-    def test_changes_requested_does_not_apply_reviewer_preferences(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            feature_dir = Path(td) / "feature"
-            ctx, state_path = _make_ctx(feature_dir)
-
-            state = load_state(state_path)
-            state["phase"] = "completing"
-            write_state(state_path, state)
-            _write_json(
-                ctx.files.reviewer_preference_proposal,
-                {
-                    "source_role": "reviewer",
-                    "approved": [
-                        {"target_role": "coder", "bullet": "Prefer narrow diffs"}
-                    ],
-                },
-            )
-
-            handler = PHASE_HANDLERS.get("completing")
-            assert handler is not None
-
-            event = WorkflowEvent(
-                kind="changes_requested",
-                path="08_completion/changes.md",
-                payload={},
-            )
-            updates, next_phase = handler.handle_event(
-                event, load_state(state_path), ctx
-            )
-
-            self.assertEqual("planning", next_phase)
-            self.assertEqual("changes_requested", updates.get("last_event"))
-            target = (
-                ctx.files.project_dir / ".agentmux" / "prompts" / "agents" / "coder.md"
-            )
-            self.assertFalse(target.exists())
-
-    def test_persisted_pm_preference_is_visible_in_later_architect_prompt_build(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            feature_dir = Path(td) / "feature"
-            ctx, state_path = _make_ctx(feature_dir)
-
-            state = load_state(state_path)
-            state["phase"] = "product_management"
-            write_state(state_path, state)
-            _write_json(
-                ctx.files.pm_preference_proposal,
-                {
-                    "source_role": "product-manager",
-                    "approved": [
-                        {
-                            "target_role": "architect",
-                            "bullet": "Keep plans customer-centric",
-                        }
-                    ],
-                },
-            )
-
-            handler = ProductManagementHandler()
-            event = WorkflowEvent(
-                kind="pm_completed",
-                path="01_product_management/done",
-                payload={},
-            )
-            handler.handle_event(event, load_state(state_path), ctx)
-            prompt = build_architect_prompt(ctx.files)
-
-            self.assertIn("Keep plans customer-centric", prompt)
-
-    def test_dismissed_candidates_payload_does_not_modify_prompt_extensions(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            feature_dir = Path(td) / "feature"
-            ctx, state_path = _make_ctx(feature_dir)
-
-            state = load_state(state_path)
-            state["phase"] = "product_management"
-            write_state(state_path, state)
-            _write_json(
-                ctx.files.pm_preference_proposal,
-                {
-                    "source_role": "product-manager",
-                    "approved": [],
-                },
-            )
-
-            handler = ProductManagementHandler()
-            event = WorkflowEvent(
-                kind="pm_completed",
-                path="01_product_management/done",
-                payload={},
-            )
-            handler.handle_event(event, load_state(state_path), ctx)
-
-            prompts_dir = ctx.files.project_dir / ".agentmux" / "prompts" / "agents"
-            self.assertFalse(prompts_dir.exists())
-
-    def test_approval_received_appends_reviewer_preference_once(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            feature_dir = Path(td) / "feature"
-            ctx, state_path = _make_ctx(feature_dir)
-
-            state = load_state(state_path)
-            state["phase"] = "completing"
-            write_state(state_path, state)
-            _write_json(
-                ctx.files.completion_dir / "approval.json",
-                {
-                    "action": "approve",
-                    "commit_message": "complete",
-                    "exclude_files": [],
-                },
-            )
-            _write_json(
-                ctx.files.reviewer_preference_proposal,
-                {
-                    "source_role": "reviewer",
-                    "approved": [
-                        {"target_role": "coder", "bullet": "Prefer narrow changesets"},
-                        {
-                            "target_role": "coder",
-                            "bullet": "* prefer narrow changesets",
-                        },
-                    ],
-                },
-            )
-
-            handler = PHASE_HANDLERS.get("completing")
-            assert handler is not None
-
-            with (
-                patch(
-                    "agentmux.workflow.handlers.completing._git_status_porcelain",
-                    return_value=" M .agentmux/prompts/agents/coder.md\n",
-                ),
-                patch(
-                    "agentmux.workflow.handlers.completing.COMPLETION_SERVICE.finalize_approval",
-                    return_value=CompletionResult(
-                        commit_hash=None,
-                        pr_url=None,
-                        cleaned_up=False,
-                        should_cleanup=False,
-                    ),
-                ),
-            ):
-                event = WorkflowEvent(
-                    kind="approval_received",
-                    path="08_completion/approval.json",
-                    payload={},
-                )
-                updates, next_phase = handler.handle_event(
-                    event, load_state(state_path), ctx
-                )
-
-            self.assertEqual({"__exit__": 0, "cleanup_feature_dir": False}, updates)
-            self.assertIsNone(next_phase)
-            target = (
-                ctx.files.project_dir / ".agentmux" / "prompts" / "agents" / "coder.md"
-            )
-            self.assertTrue(target.is_file())
-            self.assertEqual(
-                1,
-                target.read_text(encoding="utf-8").count("- Prefer narrow changesets"),
             )
 
 

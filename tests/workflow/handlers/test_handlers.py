@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 from agentmux.workflow.event_catalog import (
     EVENT_CHANGES_REQUESTED,
@@ -44,30 +45,22 @@ def mock_ctx(tmp_path: Path) -> MagicMock:
     ctx = MagicMock()
     ctx.files.feature_dir = tmp_path
     ctx.files.product_management_dir = tmp_path / "01_product_management"
-    ctx.files.planning_dir = tmp_path / "02_planning"
-    ctx.files.design_dir = tmp_path / "04_design"
-    ctx.files.implementation_dir = tmp_path / "05_implementation"
-    ctx.files.review_dir = tmp_path / "06_review"
+    ctx.files.architecting_dir = tmp_path / "02_architecting"
+    ctx.files.planning_dir = tmp_path / "04_planning"
+    ctx.files.design_dir = tmp_path / "05_design"
+    ctx.files.implementation_dir = tmp_path / "06_implementation"
+    ctx.files.review_dir = tmp_path / "07_review"
     ctx.files.completion_dir = tmp_path / "08_completion"
     ctx.files.research_dir = tmp_path / "research"
-    ctx.files.changes = tmp_path / "02_planning" / "changes.md"
-    ctx.files.plan = tmp_path / "02_planning" / "plan.md"
-    ctx.files.tasks = tmp_path / "02_planning" / "tasks.md"
-    ctx.files.design = tmp_path / "04_design" / "design.md"
-    ctx.files.review = tmp_path / "06_review" / "review.md"
-    ctx.files.fix_request = tmp_path / "06_review" / "fix_request.txt"
+    ctx.files.changes = tmp_path / "08_completion" / "changes.md"
+    ctx.files.plan = tmp_path / "04_planning" / "plan.md"
+    ctx.files.tasks = tmp_path / "04_planning" / "tasks.md"
+    ctx.files.design = tmp_path / "05_design" / "design.md"
+    ctx.files.review = tmp_path / "07_review" / "review.md"
+    ctx.files.fix_request = tmp_path / "07_review" / "fix_request.txt"
     ctx.files.requirements = tmp_path / "requirements.md"
     ctx.files.context = tmp_path / "context.md"
-    ctx.files.architecture = tmp_path / "02_planning" / "architecture.md"
-    ctx.files.pm_preference_proposal = (
-        tmp_path / "01_product_management" / "preference_proposal.json"
-    )
-    ctx.files.architect_preference_proposal = (
-        tmp_path / "02_planning" / "preference_proposal.json"
-    )
-    ctx.files.reviewer_preference_proposal = (
-        tmp_path / "06_review" / "preference_proposal.json"
-    )
+    ctx.files.architecture = tmp_path / "02_architecting" / "architecture.md"
     ctx.files.project_dir = tmp_path.parent
     ctx.files.relative_path = lambda p: str(p.relative_to(tmp_path))
     ctx.files.state = tmp_path / "state.json"
@@ -126,17 +119,13 @@ class TestProductManagementHandler:
     def test_handle_pm_completed(self, mock_ctx: MagicMock, empty_state: dict) -> None:
         """Test handling of pm_done marker."""
         handler = ProductManagementHandler()
-        event = WorkflowEvent(kind="pm_completed", path="01_product_management/done")
+        event = WorkflowEvent(kind="pm_done", payload={"payload": {}})
 
-        with patch(
-            "agentmux.workflow.handlers.product_management.apply_role_preferences"
-        ) as mock_apply:
-            updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
-            mock_ctx.runtime.kill_primary.assert_called_once_with("product-manager")
-            mock_apply.assert_called_once_with(mock_ctx, "product-manager")
-            assert updates == {"last_event": EVENT_PM_COMPLETED}
-            assert next_phase == "architecting"
+        mock_ctx.runtime.kill_primary.assert_called_once_with("product-manager")
+        assert updates == {"last_event": EVENT_PM_COMPLETED}
+        assert next_phase == "architecting"
 
     def test_handle_code_research_request(
         self, mock_ctx: MagicMock, empty_state: dict
@@ -144,13 +133,16 @@ class TestProductManagementHandler:
         """Test dispatching code-researcher task."""
         handler = ProductManagementHandler()
         event = WorkflowEvent(
-            kind="code_research_requested", path="03_research/code-auth/request.md"
+            kind="research_code_req",
+            payload={
+                "payload": {
+                    "topic": "auth",
+                    "context": "Need to understand auth flow",
+                    "questions": ["How does auth work?"],
+                    "scope_hints": ["src/auth/"],
+                }
+            },
         )
-
-        # Create the request file
-        research_dir = mock_ctx.files.research_dir / "code-auth"
-        research_dir.mkdir(parents=True, exist_ok=True)
-        (research_dir / "request.md").write_text("research auth")
 
         with (
             patch("agentmux.workflow.prompts.write_prompt_file") as mock_write,
@@ -163,6 +155,7 @@ class TestProductManagementHandler:
 
             updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
+            research_dir = mock_ctx.files.research_dir / "code-auth"
             mock_ctx.runtime.spawn_task.assert_called_once_with(
                 "code-researcher", "auth", research_dir
             )
@@ -176,13 +169,16 @@ class TestProductManagementHandler:
         """Test dispatching web-researcher task."""
         handler = ProductManagementHandler()
         event = WorkflowEvent(
-            kind="web_research_requested", path="03_research/web-api/request.md"
+            kind="research_web_req",
+            payload={
+                "payload": {
+                    "topic": "api",
+                    "context": "Need to understand API design",
+                    "questions": ["What are best practices?"],
+                    "scope_hints": [],
+                }
+            },
         )
-
-        # Create the request file
-        research_dir = mock_ctx.files.research_dir / "web-api"
-        research_dir.mkdir(parents=True, exist_ok=True)
-        (research_dir / "request.md").write_text("research api")
 
         with (
             patch("agentmux.workflow.prompts.write_prompt_file") as mock_write,
@@ -195,6 +191,7 @@ class TestProductManagementHandler:
 
             updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
+            research_dir = mock_ctx.files.research_dir / "web-api"
             mock_ctx.runtime.spawn_task.assert_called_once_with(
                 "web-researcher", "api", research_dir
             )
@@ -207,7 +204,8 @@ class TestProductManagementHandler:
         """Test handling code-research completion."""
         handler = ProductManagementHandler()
         event = WorkflowEvent(
-            kind="code_research_done", path="03_research/code-auth/done"
+            kind="research_done",
+            payload={"payload": {"topic": "auth", "role_type": "code"}},
         )
 
         # Setup state with dispatched task
@@ -225,7 +223,15 @@ class TestProductManagementHandler:
         """Test that already dispatched research is not re-dispatched."""
         handler = ProductManagementHandler()
         event = WorkflowEvent(
-            kind="code_research_requested", path="03_research/code-auth/request.md"
+            kind="research_code_req",
+            payload={
+                "payload": {
+                    "topic": "auth",
+                    "context": "Need to understand auth",
+                    "questions": ["How does auth work?"],
+                    "scope_hints": [],
+                }
+            },
         )
 
         # Setup state with already dispatched task
@@ -278,6 +284,7 @@ class TestPlanningHandler:
 
         # Create changes.md to trigger replan mode
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
+        mock_ctx.files.changes.parent.mkdir(parents=True, exist_ok=True)
         mock_ctx.files.changes.write_text("changes requested")
 
         with (
@@ -303,23 +310,44 @@ class TestPlanningHandler:
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
         handler = PlanningHandler()
-        event = WorkflowEvent(kind="plan_written", path="02_planning/plan.md")
+        event = WorkflowEvent(kind="plan", payload={"payload": {}})
 
-        # Create all required files
+        # Write plan.yaml (version 2)
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-        mock_ctx.files.plan.write_text("plan")
-        mock_ctx.files.tasks.write_text("tasks")
-        (mock_ctx.files.planning_dir / "plan_meta.json").write_text(
-            '{"needs_design": false}'
+        plan_data = {
+            "version": 2,
+            "plan_overview": "# Plan\n\nTest.",
+            "groups": [
+                {
+                    "group_id": "g1",
+                    "mode": "serial",
+                    "plans": [{"index": 1, "name": "Setup"}],
+                }
+            ],
+            "subplans": [
+                {
+                    "index": 1,
+                    "title": "Setup",
+                    "scope": "Core setup",
+                    "owned_files": ["src/setup.py"],
+                    "dependencies": "None",
+                    "implementation_approach": "Setup",
+                    "acceptance_criteria": "Done",
+                    "tasks": ["Setup task"],
+                }
+            ],
+            "review_strategy": {"severity": "medium", "focus": []},
+            "needs_design": False,
+            "needs_docs": False,
+            "doc_files": [],
+        }
+        (mock_ctx.files.planning_dir / "plan.yaml").write_text(
+            yaml.dump(plan_data, default_flow_style=False)
         )
-        (mock_ctx.files.planning_dir / "execution_plan.json").write_text("{}")
 
         with (
             patch("agentmux.workflow.handlers.planning.load_execution_plan"),
             patch("agentmux.workflow.handlers.planning.load_plan_meta") as mock_meta,
-            patch(
-                "agentmux.workflow.handlers.planning.apply_role_preferences"
-            ) as mock_apply,
         ):
             mock_meta.return_value = {"needs_design": False}
 
@@ -327,23 +355,46 @@ class TestPlanningHandler:
 
             assert next_phase == "implementing"
             mock_ctx.runtime.kill_primary("planner")
-            mock_apply.assert_called_once_with(mock_ctx, "planner")
 
     def test_handle_plan_written_needs_design(
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
         """Test transition to designing when needs_design is true."""
         handler = PlanningHandler()
-        event = WorkflowEvent(kind="plan_written", path="02_planning/plan.md")
+        event = WorkflowEvent(kind="plan", payload={"payload": {}})
 
-        # Create all required files
+        # Write plan.yaml (version 2)
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-        mock_ctx.files.plan.write_text("plan")
-        mock_ctx.files.tasks.write_text("tasks")
-        (mock_ctx.files.planning_dir / "plan_meta.json").write_text(
-            '{"needs_design": true}'
+        plan_data = {
+            "version": 2,
+            "plan_overview": "# Plan\n\nTest.",
+            "groups": [
+                {
+                    "group_id": "g1",
+                    "mode": "serial",
+                    "plans": [{"index": 1, "name": "Setup"}],
+                }
+            ],
+            "subplans": [
+                {
+                    "index": 1,
+                    "title": "Setup",
+                    "scope": "Core setup",
+                    "owned_files": ["src/setup.py"],
+                    "dependencies": "None",
+                    "implementation_approach": "Setup",
+                    "acceptance_criteria": "Done",
+                    "tasks": ["Setup task"],
+                }
+            ],
+            "review_strategy": {"severity": "medium", "focus": []},
+            "needs_design": True,
+            "needs_docs": False,
+            "doc_files": [],
+        }
+        (mock_ctx.files.planning_dir / "plan.yaml").write_text(
+            yaml.dump(plan_data, default_flow_style=False)
         )
-        (mock_ctx.files.planning_dir / "execution_plan.json").write_text("{}")
 
         # Add designer to agents
         mock_ctx.agents = {"designer": MagicMock()}
@@ -351,7 +402,6 @@ class TestPlanningHandler:
         with (
             patch("agentmux.workflow.handlers.planning.load_execution_plan"),
             patch("agentmux.workflow.handlers.planning.load_plan_meta") as mock_meta,
-            patch("agentmux.workflow.handlers.planning.apply_role_preferences"),
         ):
             mock_meta.return_value = {"needs_design": True}
 
@@ -362,22 +412,48 @@ class TestPlanningHandler:
     def test_deletes_changes_md_on_transition(
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
-        """Test that changes.md is deleted on plan_written transition."""
+        """Test that changes.md is deleted on plan submission."""
         handler = PlanningHandler()
-        event = WorkflowEvent(kind="plan_written", path="02_planning/plan.md")
+        event = WorkflowEvent(kind="plan", payload={"payload": {}})
 
-        # Create all required files including changes.md
+        # Write plan.yaml (version 2) and changes.md
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-        mock_ctx.files.plan.write_text("plan")
-        mock_ctx.files.tasks.write_text("tasks")
-        (mock_ctx.files.planning_dir / "plan_meta.json").write_text("{}")
-        (mock_ctx.files.planning_dir / "execution_plan.json").write_text("{}")
+        mock_ctx.files.changes.parent.mkdir(parents=True, exist_ok=True)
+        plan_data = {
+            "version": 2,
+            "plan_overview": "# Plan\n\nTest.",
+            "groups": [
+                {
+                    "group_id": "g1",
+                    "mode": "serial",
+                    "plans": [{"index": 1, "name": "Setup"}],
+                }
+            ],
+            "subplans": [
+                {
+                    "index": 1,
+                    "title": "Setup",
+                    "scope": "Core setup",
+                    "owned_files": ["src/setup.py"],
+                    "dependencies": "None",
+                    "implementation_approach": "Setup",
+                    "acceptance_criteria": "Done",
+                    "tasks": ["Setup task"],
+                }
+            ],
+            "review_strategy": {"severity": "medium", "focus": []},
+            "needs_design": False,
+            "needs_docs": False,
+            "doc_files": [],
+        }
+        (mock_ctx.files.planning_dir / "plan.yaml").write_text(
+            yaml.dump(plan_data, default_flow_style=False)
+        )
         mock_ctx.files.changes.write_text("changes")
 
         with (
             patch("agentmux.workflow.handlers.planning.load_execution_plan"),
             patch("agentmux.workflow.handlers.planning.load_plan_meta") as mock_meta,
-            patch("agentmux.workflow.handlers.planning.apply_role_preferences"),
         ):
             mock_meta.return_value = {}
 
@@ -426,7 +502,7 @@ class TestDesigningHandler:
     ) -> None:
         """Test transition on design.md creation."""
         handler = DesigningHandler()
-        event = WorkflowEvent(kind="design_written", path="04_design/design.md")
+        event = WorkflowEvent(kind="design_written", path="05_design/design.md")
 
         # Create the design file so is_ready predicate passes
         mock_ctx.files.design.parent.mkdir(parents=True, exist_ok=True)
@@ -441,6 +517,25 @@ class TestDesigningHandler:
 class TestImplementingHandler:
     """Tests for ImplementingHandler."""
 
+    @staticmethod
+    def _write_execution_plan(
+        mock_ctx: MagicMock, groups: list[dict[str, object]]
+    ) -> None:
+        """Create an execution plan and matching plan files for tests."""
+        mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.planning_dir / "execution_plan.yaml").write_text(
+            yaml.dump({"groups": groups}, default_flow_style=False)
+        )
+
+        plan_files = {
+            plan["file"]
+            for group in groups
+            for plan in group["plans"]
+            if isinstance(plan, dict) and "file" in plan
+        }
+        for plan_file in plan_files:
+            (mock_ctx.files.planning_dir / str(plan_file)).write_text(str(plan_file))
+
     def test_enter_resets_markers_and_dispatches(self, mock_ctx: MagicMock) -> None:
         """Test that enter() resets markers and dispatches first group."""
         handler = ImplementingHandler()
@@ -448,10 +543,9 @@ class TestImplementingHandler:
 
         # Create execution plan
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.planning_dir / "execution_plan.json").write_text(
-            json.dumps(
+        (mock_ctx.files.planning_dir / "execution_plan.yaml").write_text(
+            yaml.dump(
                 {
-                    "version": 1,
                     "groups": [
                         {
                             "group_id": "group1",
@@ -459,7 +553,8 @@ class TestImplementingHandler:
                             "plans": [{"file": "plan_1.md", "name": "First Plan"}],
                         }
                     ],
-                }
+                },
+                default_flow_style=False,
             )
         )
         (mock_ctx.files.planning_dir / "plan_1.md").write_text("plan 1")
@@ -489,9 +584,9 @@ class TestImplementingHandler:
     def test_handle_subplan_completed_parallel_mode(self, mock_ctx: MagicMock) -> None:
         """Test handling subplan completion in parallel mode."""
         handler = ImplementingHandler()
-        event = WorkflowEvent(kind="done_marker", path="05_implementation/done_1")
+        event = WorkflowEvent(kind="done", payload={"payload": {"subplan_index": 1}})
 
-        # Create the done marker so is_ready predicate passes
+        # Pre-create done_1 so group-completion check sees it as already done
         mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
         (mock_ctx.files.implementation_dir / "done_1").touch()
 
@@ -504,10 +599,9 @@ class TestImplementingHandler:
 
         # Create execution plan
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.planning_dir / "execution_plan.json").write_text(
-            json.dumps(
+        (mock_ctx.files.planning_dir / "execution_plan.yaml").write_text(
+            yaml.dump(
                 {
-                    "version": 1,
                     "groups": [
                         {
                             "group_id": "group1",
@@ -518,7 +612,8 @@ class TestImplementingHandler:
                             ],
                         }
                     ],
-                }
+                },
+                default_flow_style=False,
             )
         )
         (mock_ctx.files.planning_dir / "plan_1.md").write_text("plan 1")
@@ -534,7 +629,7 @@ class TestImplementingHandler:
     def test_handle_implementation_completed(self, mock_ctx: MagicMock) -> None:
         """Test transition when all implementation is complete."""
         handler = ImplementingHandler()
-        event = WorkflowEvent(kind="done_marker", path="05_implementation/done_1")
+        event = WorkflowEvent(kind="done", payload={"payload": {"subplan_index": 1}})
 
         # Setup state with all markers complete
         state = {
@@ -545,10 +640,9 @@ class TestImplementingHandler:
 
         # Create execution plan and done marker
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.planning_dir / "execution_plan.json").write_text(
-            json.dumps(
+        (mock_ctx.files.planning_dir / "execution_plan.yaml").write_text(
+            yaml.dump(
                 {
-                    "version": 1,
                     "groups": [
                         {
                             "group_id": "group1",
@@ -556,7 +650,8 @@ class TestImplementingHandler:
                             "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
                         }
                     ],
-                }
+                },
+                default_flow_style=False,
             )
         )
         (mock_ctx.files.planning_dir / "plan_1.md").write_text("plan 1")
@@ -591,10 +686,9 @@ class TestImplementingHandler:
 
         # Create execution plan
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.planning_dir / "execution_plan.json").write_text(
-            json.dumps(
+        (mock_ctx.files.planning_dir / "execution_plan.yaml").write_text(
+            yaml.dump(
                 {
-                    "version": 1,
                     "groups": [
                         {
                             "group_id": "group1",
@@ -602,7 +696,8 @@ class TestImplementingHandler:
                             "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
                         }
                     ],
-                }
+                },
+                default_flow_style=False,
             )
         )
         (mock_ctx.files.planning_dir / "plan_1.md").write_text("plan 1")
@@ -649,10 +744,9 @@ class TestImplementingHandler:
 
         # Create execution plan
         mock_ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.planning_dir / "execution_plan.json").write_text(
-            json.dumps(
+        (mock_ctx.files.planning_dir / "execution_plan.yaml").write_text(
+            yaml.dump(
                 {
-                    "version": 1,
                     "groups": [
                         {
                             "group_id": "group1",
@@ -660,7 +754,8 @@ class TestImplementingHandler:
                             "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
                         }
                     ],
-                }
+                },
+                default_flow_style=False,
             )
         )
         (mock_ctx.files.planning_dir / "plan_1.md").write_text("plan 1")
@@ -685,6 +780,295 @@ class TestImplementingHandler:
             call_kwargs = mock_send.call_args[1]
             assert call_kwargs.get("prefix_command") is None
 
+    def test_enter_resume_uses_state_single_coder_true(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Resume should dispatch the whole plan when persisted single-coder is true."""
+        handler = ImplementingHandler()
+        state = {
+            "last_event": "implementation_resumed",
+            "implementation_single_coder": True,
+        }
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        self._write_execution_plan(
+            mock_ctx,
+            [
+                {
+                    "group_id": "group1",
+                    "mode": "serial",
+                    "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
+                }
+            ],
+        )
+
+        with (
+            patch.object(handler, "_dispatch_whole_plan") as mock_whole,
+            patch.object(handler, "_dispatch_active_group") as mock_group,
+        ):
+            handler.enter(state, mock_ctx)
+
+        mock_whole.assert_called_once()
+        mock_group.assert_not_called()
+
+    def test_enter_fresh_start_logs_group_and_single_coder_mode(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Fresh starts should log the authoritative group and single-coder modes."""
+        from agentmux.shared.models import AgentConfig
+
+        handler = ImplementingHandler()
+        state = {"last_event": EVENT_PLAN_WRITTEN}
+        mock_ctx.agents = {
+            "coder": AgentConfig(
+                role="coder",
+                cli="some-cli",
+                model="some-model",
+                provider="some-provider",
+                single_coder=False,
+            )
+        }
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        self._write_execution_plan(
+            mock_ctx,
+            [
+                {
+                    "group_id": "group1",
+                    "mode": "serial",
+                    "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
+                }
+            ],
+        )
+
+        with (
+            patch("builtins.print") as mock_print,
+            patch.object(handler, "_dispatch_active_group"),
+        ):
+            handler.enter(state, mock_ctx)
+
+        mock_print.assert_called_once_with(
+            "Starting implementing phase "
+            "(fresh start, group_mode=serial, single_coder=False)."
+        )
+
+    def test_enter_resume_logs_authoritative_group_and_single_coder_mode(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Resume should log the active group mode alongside single-coder mode."""
+        handler = ImplementingHandler()
+        state = {
+            "last_event": "implementation_resumed",
+            "implementation_single_coder": True,
+            "implementation_group_mode": "parallel",
+        }
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        self._write_execution_plan(
+            mock_ctx,
+            [
+                {
+                    "group_id": "group1",
+                    "mode": "serial",
+                    "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
+                }
+            ],
+        )
+
+        with (
+            patch("builtins.print") as mock_print,
+            patch.object(handler, "_dispatch_whole_plan"),
+        ):
+            handler.enter(state, mock_ctx)
+
+        mock_print.assert_called_once_with(
+            "Resuming implementing phase "
+            "(group_mode=serial, single_coder=True, source=saved state)."
+        )
+
+    def test_enter_resume_logs_none_group_mode_when_no_active_group(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Resume should log group_mode=none when all implementation groups are done."""
+        handler = ImplementingHandler()
+        state = {
+            "last_event": "implementation_resumed",
+            "implementation_single_coder": False,
+        }
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.implementation_dir / "done_1").write_text("")
+        self._write_execution_plan(
+            mock_ctx,
+            [
+                {
+                    "group_id": "group1",
+                    "mode": "serial",
+                    "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
+                }
+            ],
+        )
+
+        with patch("builtins.print") as mock_print:
+            handler.enter(state, mock_ctx)
+
+        mock_print.assert_called_once_with(
+            "Resuming implementing phase "
+            "(group_mode=none, single_coder=False, source=saved state)."
+        )
+
+    def test_enter_resume_uses_state_single_coder_false(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Resume should dispatch the active group when persisted mode is false."""
+        from agentmux.shared.models import AgentConfig
+
+        handler = ImplementingHandler()
+        state = {
+            "last_event": "implementation_resumed",
+            "implementation_single_coder": False,
+        }
+        mock_ctx.agents = {
+            "coder": AgentConfig(
+                role="coder",
+                cli="copilot",
+                model="claude-sonnet-4.6",
+                provider="copilot",
+                single_coder=True,
+            )
+        }
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        self._write_execution_plan(
+            mock_ctx,
+            [
+                {
+                    "group_id": "group1",
+                    "mode": "serial",
+                    "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
+                }
+            ],
+        )
+
+        with (
+            patch.object(handler, "_dispatch_whole_plan") as mock_whole,
+            patch.object(handler, "_dispatch_active_group") as mock_group,
+        ):
+            handler.enter(state, mock_ctx)
+
+        mock_whole.assert_not_called()
+        mock_group.assert_called_once()
+
+    def test_enter_resume_missing_single_coder_uses_agent_config(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Resume should fall back to the current coder config when state is missing."""
+        from agentmux.shared.models import AgentConfig
+
+        handler = ImplementingHandler()
+        state = {"last_event": "implementation_resumed"}
+        mock_ctx.agents = {
+            "coder": AgentConfig(
+                role="coder",
+                cli="copilot",
+                model="claude-sonnet-4.6",
+                provider="copilot",
+                single_coder=True,
+            )
+        }
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        self._write_execution_plan(
+            mock_ctx,
+            [
+                {
+                    "group_id": "group1",
+                    "mode": "serial",
+                    "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
+                }
+            ],
+        )
+
+        with (
+            patch.object(handler, "_dispatch_whole_plan") as mock_whole,
+            patch.object(handler, "_dispatch_active_group") as mock_group,
+        ):
+            handler.enter(state, mock_ctx)
+
+        mock_whole.assert_called_once()
+        mock_group.assert_not_called()
+
+    def test_dispatch_active_group_prefers_persisted_parallel_mode(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Dispatch should use persisted group mode over the schedule when resuming."""
+        handler = ImplementingHandler()
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        schedule = [
+            {
+                "group_id": "group1",
+                "mode": "serial",
+                "plan_paths": [
+                    mock_ctx.files.planning_dir / "plan_1.md",
+                    mock_ctx.files.planning_dir / "plan_2.md",
+                ],
+                "plan_ids": ["plan_1", "plan_2"],
+                "plan_names": ["Plan 1", "Plan 2"],
+                "marker_indexes": [1, 2],
+            }
+        ]
+        state = {"implementation_group_mode": "parallel"}
+
+        with (
+            patch(
+                "agentmux.workflow.handlers.implementing.write_prompt_file"
+            ) as mock_write,
+            patch(
+                "agentmux.workflow.handlers.implementing.build_coder_subplan_prompt"
+            ) as mock_build,
+            patch("agentmux.workflow.handlers.implementing.send_to_role") as mock_send,
+        ):
+            mock_write.side_effect = [
+                Path("/mock/prompt-1.md"),
+                Path("/mock/prompt-2.md"),
+            ]
+            mock_build.return_value = "coder prompt"
+
+            handler._dispatch_active_group(
+                mock_ctx, schedule, active_group_index=0, state=state
+            )
+
+        mock_ctx.runtime.send_many.assert_called_once()
+        mock_send.assert_not_called()
+
+    def test_enter_fresh_start_persists_agent_single_coder(
+        self, mock_ctx: MagicMock
+    ) -> None:
+        """Fresh starts should persist the current coder single-coder setting."""
+        from agentmux.shared.models import AgentConfig
+
+        handler = ImplementingHandler()
+        state = {"last_event": EVENT_PLAN_WRITTEN}
+        mock_ctx.agents = {
+            "coder": AgentConfig(
+                role="coder",
+                cli="some-cli",
+                model="some-model",
+                provider="some-provider",
+                single_coder=False,
+            )
+        }
+        mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
+        self._write_execution_plan(
+            mock_ctx,
+            [
+                {
+                    "group_id": "group1",
+                    "mode": "serial",
+                    "plans": [{"file": "plan_1.md", "name": "Plan 1"}],
+                }
+            ],
+        )
+
+        with patch.object(handler, "_dispatch_active_group"):
+            updates = handler.enter(state, mock_ctx)
+
+        assert updates["implementation_single_coder"] is False
+
 
 class TestReviewingHandler:
     """Tests for ReviewingHandler."""
@@ -701,29 +1085,38 @@ class TestReviewingHandler:
             ) as mock_write,
             patch("agentmux.workflow.handlers.reviewing.send_to_role") as mock_send,
             patch(
-                "agentmux.workflow.handlers.reviewing.build_reviewer_prompt"
-            ) as mock_build,
+                "agentmux.workflow.handlers.reviewing.build_reviewer_logic_prompt"
+            ) as mock_build_logic,
             patch(
                 "agentmux.workflow.handlers.reviewing.role_display_label"
             ) as mock_label,
         ):
             mock_write.return_value = Path("/mock/prompt.md")
-            mock_build.return_value = "reviewer prompt"
+            mock_build_logic.return_value = "reviewer logic prompt"
             mock_label.return_value = "[reviewer] iteration 1"
 
             handler.enter(empty_state, mock_ctx)
 
-            mock_build.assert_called_once_with(mock_ctx.files, is_review=True)
+            mock_build_logic.assert_called_once()
             mock_send.assert_called_once()
 
     def test_handle_review_passed(self, mock_ctx: MagicMock, empty_state: dict) -> None:
         """Test that VERDICT:PASS stays in reviewing and requests summary."""
         handler = ReviewingHandler()
-        event = WorkflowEvent(kind="review_ready", path="06_review/review.md")
 
-        # Create review.md with pass verdict
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        mock_ctx.files.review.write_text("verdict: pass\n\nLooks good!")
+        (mock_ctx.files.review_dir / "review.yaml").write_text(
+            yaml.dump(
+                {
+                    "verdict": "pass",
+                    "summary": "Looks good!",
+                    "findings": [],
+                    "commit_message": "feat: all done",
+                },
+                default_flow_style=False,
+            )
+        )
+        event = WorkflowEvent(kind="review", payload={"payload": {}})
 
         updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
@@ -734,16 +1127,63 @@ class TestReviewingHandler:
         assert updates.get("awaiting_summary") is True
         assert updates.get("last_event") == EVENT_REVIEW_PASSED
 
+    def test_handle_review_yaml_pass_materializes_review_md(
+        self, mock_ctx: MagicMock, empty_state: dict
+    ) -> None:
+        """Review tool event writes both review.yaml and review.md."""
+        handler = ReviewingHandler()
+
+        mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.review_dir / "review.yaml").write_text(
+            yaml.dump(
+                {
+                    "verdict": "pass",
+                    "summary": "Looks good!",
+                    "findings": [],
+                    "commit_message": "feat: done",
+                },
+                default_flow_style=False,
+            )
+        )
+        event = WorkflowEvent(kind="review", payload={"payload": {}})
+
+        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+
+        assert next_phase is None
+        assert updates.get("awaiting_summary") is True
+        yaml_path = mock_ctx.files.review_dir / "review.yaml"
+        assert yaml_path.exists()
+        assert mock_ctx.files.review.exists()
+        assert mock_ctx.files.review.read_text(encoding="utf-8").startswith(
+            "verdict: pass"
+        )
+
     def test_handle_review_failed_under_max_iterations(
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
         """Test transition to fixing when under max iterations."""
         handler = ReviewingHandler()
-        event = WorkflowEvent(kind="review_ready", path="06_review/review.md")
 
-        # Create review.md with fail verdict
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        mock_ctx.files.review.write_text("verdict: fail\n\nNeeds fixes")
+        (mock_ctx.files.review_dir / "review.yaml").write_text(
+            yaml.dump(
+                {
+                    "verdict": "fail",
+                    "summary": "Needs fixes",
+                    "findings": [
+                        {
+                            "location": "src/example.py:10",
+                            "issue": "Missing validation",
+                            "severity": "high",
+                            "recommendation": "Add check",
+                        }
+                    ],
+                    "commit_message": "",
+                },
+                default_flow_style=False,
+            )
+        )
+        event = WorkflowEvent(kind="review", payload={"payload": {}})
 
         updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
@@ -751,20 +1191,71 @@ class TestReviewingHandler:
         assert updates["review_iteration"] == 1
         assert mock_ctx.files.fix_request.exists()
 
+    def test_handle_review_yaml_fail_creates_fix_request(
+        self, mock_ctx: MagicMock, empty_state: dict
+    ) -> None:
+        """Review tool event with fail verdict creates fix_request.txt."""
+        handler = ReviewingHandler()
+
+        mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
+        (mock_ctx.files.review_dir / "review.yaml").write_text(
+            yaml.dump(
+                {
+                    "verdict": "fail",
+                    "summary": "Needs fixes",
+                    "findings": [
+                        {
+                            "location": "src/example.py:10",
+                            "issue": "Missing validation",
+                            "severity": "high",
+                            "recommendation": "Add the missing check.",
+                        }
+                    ],
+                    "commit_message": "",
+                },
+                default_flow_style=False,
+            )
+        )
+        event = WorkflowEvent(kind="review", payload={"payload": {}})
+
+        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+
+        assert next_phase == "fixing"
+        assert updates["review_iteration"] == 1
+        assert mock_ctx.files.fix_request.exists()
+        assert mock_ctx.files.fix_request.read_text(encoding="utf-8").startswith(
+            "verdict: fail"
+        )
+
     def test_handle_review_failed_at_max_iterations(
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
         """Test transition to completing when max iterations reached."""
         handler = ReviewingHandler()
-        event = WorkflowEvent(kind="review_ready", path="06_review/review.md")
 
-        # Create review.md with fail verdict
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        mock_ctx.files.review.write_text("verdict: fail\n\nStill failing")
+        (mock_ctx.files.review_dir / "review.yaml").write_text(
+            yaml.dump(
+                {
+                    "verdict": "fail",
+                    "summary": "Still failing",
+                    "findings": [
+                        {
+                            "location": "src/example.py:10",
+                            "issue": "Persistent issue",
+                            "severity": "high",
+                            "recommendation": "Fix it",
+                        }
+                    ],
+                    "commit_message": "",
+                },
+                default_flow_style=False,
+            )
+        )
+        event = WorkflowEvent(kind="review", payload={"payload": {}})
 
         # Set state at max iterations
         state = {"review_iteration": 3}
-
         updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
         assert next_phase == "completing"
@@ -805,7 +1296,7 @@ class TestFixingHandler:
     ) -> None:
         """Test transition on done_1 marker."""
         handler = FixingHandler()
-        event = WorkflowEvent(kind="fix_done", path="05_implementation/done_1")
+        event = WorkflowEvent(kind="done", path="06_implementation/done_1")
 
         # Create the done marker so is_ready predicate passes
         mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
@@ -880,9 +1371,6 @@ class TestCompletingHandler:
             patch(
                 "agentmux.workflow.handlers.completing._parse_changed_paths"
             ) as mock_parse,
-            patch(
-                "agentmux.workflow.handlers.completing.apply_role_preferences"
-            ) as mock_apply,
         ):
             mock_instance = MagicMock()
             mock_instance.resolve_commit_message.return_value = "feat: test commit"
@@ -899,7 +1387,6 @@ class TestCompletingHandler:
 
             assert updates == {"__exit__": 0, "cleanup_feature_dir": False}
             assert next_phase is None
-            mock_apply.assert_called_once_with(mock_ctx, "reviewer")
 
     def test_handle_changes_requested(
         self, mock_ctx: MagicMock, empty_state: dict
@@ -1015,13 +1502,16 @@ class TestHandlerEdgeCases:
         """Test that handlers preserve existing state fields."""
         handler = ProductManagementHandler()
         event = WorkflowEvent(
-            kind="code_research_requested", path="03_research/code-auth/request.md"
+            kind="research_code_req",
+            payload={
+                "payload": {
+                    "topic": "auth",
+                    "context": "Need to understand auth",
+                    "questions": ["How does auth work?"],
+                    "scope_hints": [],
+                }
+            },
         )
-
-        # Create the request file
-        research_dir = mock_ctx.files.research_dir / "code-auth"
-        research_dir.mkdir(parents=True, exist_ok=True)
-        (research_dir / "request.md").write_text("research auth")
 
         # State with existing fields
         state = {
@@ -1071,27 +1561,3 @@ class TestPhaseHelpers:
         assert next_phase is None
         mock_ctx.runtime.finish_task.assert_called_once_with("code-researcher", "auth")
         mock_ctx.runtime.notify.assert_called_once()
-
-    def test_apply_role_preferences_calls_helpers(self, mock_ctx: MagicMock) -> None:
-        """Test that apply_role_preferences calls the correct helpers."""
-        from agentmux.workflow.phase_helpers import apply_role_preferences
-
-        with (
-            patch(
-                "agentmux.workflow.preference_memory.proposal_artifact_for_source"
-            ) as mock_proposal,
-            patch(
-                "agentmux.workflow.preference_memory.load_preference_proposal"
-            ) as mock_load,
-            patch(
-                "agentmux.workflow.preference_memory.apply_preference_proposal"
-            ) as mock_apply,
-        ):
-            mock_proposal.return_value = mock_ctx.files.pm_preference_proposal
-            mock_load.return_value = None  # No proposal to apply
-
-            apply_role_preferences(mock_ctx, "product-manager")
-
-            mock_proposal.assert_called_once_with(mock_ctx.files, "product-manager")
-            mock_load.assert_called_once_with(mock_ctx.files.pm_preference_proposal)
-            mock_apply.assert_not_called()  # No proposal loaded, so no apply

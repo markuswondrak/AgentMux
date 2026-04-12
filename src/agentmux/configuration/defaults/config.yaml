@@ -23,19 +23,22 @@ providers:
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__research_dispatch_code
+        mcp__agentmux__research_dispatch_web mcp__agentmux__submit_architecture
       planner:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__research_dispatch_code
+        mcp__agentmux__research_dispatch_web mcp__agentmux__submit_plan
       product-manager:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux-research__*
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__research_dispatch_code
+        mcp__agentmux__research_dispatch_web mcp__agentmux__submit_pm_done
       reviewer:
       - --permission-mode
       - acceptEdits
@@ -45,6 +48,8 @@ providers:
       coder:
       - --permission-mode
       - acceptEdits
+      - --allowedTools
+      - mcp__agentmux__submit_done
       designer:
       - --permission-mode
       - acceptEdits
@@ -53,35 +58,36 @@ providers:
       - acceptEdits
       - --allowedTools
       - Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*)
-        Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+        Bash(head:*) Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__submit_research_done
       web-researcher:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - WebFetch WebSearch Read Glob Grep Write Edit Bash(ls:*) Bash(cat:*) Bash(head:*)
-        Bash(tail:*)
+        Bash(tail:*) mcp__agentmux__submit_research_done
       reviewer_expert:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__submit_review
       reviewer_logic:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__submit_review
       reviewer_quality:
       - --permission-mode
       - acceptEdits
       - --allowedTools
       - Bash(ls:*) Bash(cat:*) Bash(find:*) Bash(grep:*) Bash(git:*) Bash(head:*)
-        Bash(tail:*) Bash(pwd:*) Bash(wc:*)
+        Bash(tail:*) Bash(pwd:*) Bash(wc:*) mcp__agentmux__submit_review
   codex:
     command: codex
     model_flag: --model
     trust_snippet: null
+    batch_subcommand: exec
     role_args:
       architect:
       - -s
@@ -142,6 +148,7 @@ providers:
     command: gemini
     model_flag: --model
     trust_snippet: Trust this folder?
+    batch_subcommand: -p
     role_args:
       architect:
       - --approval-mode
@@ -218,10 +225,27 @@ providers:
     command: copilot
     model_flag: --model
     trust_snippet: trust the files
+    batch_subcommand: -p
     single_coder: true
     default_model: claude-sonnet-4.6
     default_role_args:
     - --allow-all
-    - --reasoning-effort
-    - high
+    model_args:
+      claude-sonnet-4.6:
+      - --reasoning-effort
+      - high
+      claude-opus-4.6:
+      - --reasoning-effort
+      - high
+    role_args: {}
+  qwen:
+    command: qwen
+    model_flag: null
+    trust_snippet: null
+    batch_command:
+      verb: ""
+      mode: stdin
+    default_model: qwen3-max
+    default_role_args:
+      - --yolo
     role_args: {}
