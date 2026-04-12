@@ -382,7 +382,22 @@ class PipelineApplication:
                 )
             else:
                 selected = self.sessions.resolve_resume_target(str(args.resume))
-            return self.sessions.prepare_resumed_session(selected)
+            prepared = self.sessions.prepare_resumed_session(selected)
+
+            # Validate and restore feature branch on resume
+            state = load_state(prepared.files.state)
+            feature_branch = state.get("feature_branch")
+            if feature_branch:
+                git_manager = GitBranchManager(self.project_dir)
+                branch_state = git_manager.ensure_branch(feature_branch)
+                if not branch_state.created:
+                    self.ui.print(
+                        f"Warning: Could not create/switch to feature "
+                        f"branch {feature_branch}; "
+                        "will retry at completion."
+                    )
+
+            return prepared
 
         github = GitHubBootstrapper(
             self.project_dir, loaded.github, output=self.ui.print
@@ -430,8 +445,6 @@ class PipelineApplication:
             )
         else:
             # Track branch info in session state
-            from ..sessions.state_store import load_state, write_state
-
             state = load_state(prepared.files.state)
             state["feature_branch"] = branch_name
             state["branch_created"] = True

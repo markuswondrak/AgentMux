@@ -73,16 +73,14 @@ class CompletionService:
         Uses GitBranchManager to ensure commits always happen on the correct
         feature branch, preventing accidental commits to main.
         """
-        # Use GitBranchManager to ensure we're on the correct branch before committing
+        # Use GitBranchManager to ensure we're on the correct branch
+        # before committing. commit_on_branch() internally calls
+        # ensure_branch(), so no explicit call needed.
         git_manager = GitBranchManager(files.project_dir)
         branch_name = (
             f"{github_config.branch_prefix}{feature_slug_from_dir(files.feature_dir)}"
         )
 
-        # Ensure branch exists and we're on it BEFORE committing
-        git_manager.ensure_branch(branch_name)
-
-        # Now commit - guaranteed to be on feature branch
         commit_hash = git_manager.commit_on_branch(
             branch_name, commit_message, changed_paths
         )
