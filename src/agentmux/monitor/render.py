@@ -9,7 +9,7 @@ from pathlib import Path
 from agentmux.terminal_ui.colors import PRIMARY, SECONDARY
 from agentmux.terminal_ui.hyperlinks import OSC8_RE, file_hyperlink
 
-from ..shared.models import SESSION_DIR_NAMES, RuntimeFiles
+from ..shared.models import RuntimeFiles
 from .progress_parser import ExecutionProgress, parse_execution_progress
 from .state_reader import (
     OPTIONAL_PHASES,
@@ -494,23 +494,20 @@ def _render_agents_section(
     return lines
 
 
-def _render_research_section(width: int, state: dict, feature_dir: Path) -> list[str]:
+def _render_research_section(width: int, state: dict) -> list[str]:
     code_tasks = state.get("research_tasks", {})
     web_tasks = state.get("web_research_tasks", {})
     if not code_tasks and not web_tasks:
         return []
 
-    research_dir = feature_dir / SESSION_DIR_NAMES["research"]
-    all_tasks = [("c", topic, f"code-{topic}/done") for topic in code_tasks] + [
-        ("w", topic, f"web-{topic}/done") for topic in web_tasks
+    all_tasks = [("c", topic, str(status)) for topic, status in code_tasks.items()] + [
+        ("w", topic, str(status)) for topic, status in web_tasks.items()
     ]
-    done_count = sum(
-        1 for _, _, marker in all_tasks if (research_dir / marker).exists()
-    )
+    done_count = sum(1 for _, _, status in all_tasks if status == "done")
     rows = [_section_title(f"RESEARCH {done_count}/{len(all_tasks)}"), ""]
     pulse_on = int(time.time()) % 2 == 0
-    for type_prefix, topic, marker in all_tasks:
-        done = (research_dir / marker).exists()
+    for type_prefix, topic, status in all_tasks:
+        done = status == "done"
         slug = _truncate_text(topic, max(1, width - 7))
         if done:
             rows.append(f" {GREEN}✓{RESET} {DIM}{type_prefix}·{RESET} {slug}")
@@ -583,7 +580,7 @@ class Monitor:
             body.append("")
             body.extend(agent_rows)
 
-        research_rows = _render_research_section(width, state, self.files.feature_dir)
+        research_rows = _render_research_section(width, state)
         if research_rows:
             body.append("")
             body.extend(research_rows)

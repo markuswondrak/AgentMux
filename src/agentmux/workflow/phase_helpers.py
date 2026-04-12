@@ -122,11 +122,6 @@ def dispatch_research_task(
     if topic in tasks:
         return {}, None
 
-    # Remove stale done marker if exists
-    done_marker = ctx.files.research_dir / f"{prefix}{topic}" / "done"
-    if done_marker.exists():
-        done_marker.unlink()
-
     # Build and write prompt
     research_dir = ctx.files.research_dir / f"{prefix}{topic}"
     prompt_builder = (

@@ -25,10 +25,8 @@ _GLOBAL_FILE_PATTERNS: tuple[str, ...] = (
     "requirements.md",
     "03_research/code-*/summary.md",
     "03_research/code-*/detail.md",
-    "03_research/code-*/done",
     "03_research/web-*/summary.md",
     "03_research/web-*/detail.md",
-    "03_research/web-*/done",
 )
 
 PHASE_CATALOG: tuple[PhaseEntry, ...] = (

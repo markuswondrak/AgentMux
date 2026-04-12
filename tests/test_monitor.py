@@ -426,15 +426,11 @@ class MonitorTests(unittest.TestCase):
             )
 
             state_path.write_text(
-                (
-                    '{"phase": "planning", "research_tasks": '
-                    '{"auth-module": "dispatched"}}'
-                ),
+                ('{"phase": "planning", "research_tasks": {"auth-module": "done"}}'),
                 encoding="utf-8",
             )
             runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
             research_dir.mkdir(parents=True, exist_ok=True)
-            (research_dir / "done").write_text("", encoding="utf-8")
 
             output = self._strip_ansi(self._render(feature_dir, width=40, height=24))
 
@@ -1017,10 +1013,8 @@ class MonitorTests(unittest.TestCase):
             "04_planning/tasks.md",
             "03_research/code-*/summary.md",
             "03_research/code-*/detail.md",
-            "03_research/code-*/done",
             "03_research/web-*/summary.md",
             "03_research/web-*/detail.md",
-            "03_research/web-*/done",
             "05_design/design.md",
             "06_implementation/done_*",
             "07_review/review.md",
