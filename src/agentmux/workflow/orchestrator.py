@@ -39,6 +39,7 @@ class PipelineOrchestrator:
         self._exit_code: int | None = None
         self._exit_event: threading.Event | None = None
         self._ctx: PipelineContext | None = None
+        self._event_lock = threading.Lock()
 
     def create_context(
         self,
@@ -138,6 +139,10 @@ class PipelineOrchestrator:
         This is the main entry point for all events. It normalizes the event,
         handles interruptions specially, and routes other events to the
         appropriate phase handler via the router.
+
+        Uses _event_lock to serialise concurrent callbacks from different
+        event sources (FileEventSource, ToolCallEventSource, etc.) that
+        share the same EventBus.
         """
         if self._exit_code is not None:
             return  # Already exiting
@@ -145,26 +150,30 @@ class PipelineOrchestrator:
         if self._ctx is None:
             return  # Not initialized
 
-        # Convert to workflow event
-        wf_event = self._normalize_event(event)
+        with self._event_lock:
+            if self._exit_code is not None:
+                return  # Re-check after acquiring lock
 
-        # Handle interruption specially
-        if wf_event.kind == INTERRUPTION_EVENT_PANE_EXITED:
-            self._handle_interruption(wf_event, self._ctx)
-            return
+            # Convert to workflow event
+            wf_event = self._normalize_event(event)
 
-        # Route to phase handler
-        state = load_state(self._ctx.files.state)
-        updates, exit_code = self._router.handle(wf_event, state, self._ctx)
-        if event.kind.startswith("tool."):
-            cursor = tool_event_cursor_from_session_event(event)
-            if cursor is not None:
-                persist_tool_event_cursor(self._ctx.files.feature_dir, cursor)
+            # Handle interruption specially
+            if wf_event.kind == INTERRUPTION_EVENT_PANE_EXITED:
+                self._handle_interruption(wf_event, self._ctx)
+                return
 
-        if exit_code is not None:
-            self._exit_code = exit_code
-            if self._exit_event:
-                self._exit_event.set()
+            # Route to phase handler
+            state = load_state(self._ctx.files.state)
+            updates, exit_code = self._router.handle(wf_event, state, self._ctx)
+            if event.kind.startswith("tool."):
+                cursor = tool_event_cursor_from_session_event(event)
+                if cursor is not None:
+                    persist_tool_event_cursor(self._ctx.files.feature_dir, cursor)
+
+            if exit_code is not None:
+                self._exit_code = exit_code
+                if self._exit_event:
+                    self._exit_event.set()
 
     def _rehydrate_dispatched_research_tasks(self, ctx: PipelineContext) -> None:
         """Restart in-flight research tasks after unapplied signals have replayed.

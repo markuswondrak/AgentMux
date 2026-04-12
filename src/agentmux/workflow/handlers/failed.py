@@ -13,13 +13,18 @@ if TYPE_CHECKING:
 class FailedHandler:
     """Event-driven handler for failed phase.
 
-    This is the simplest handler - it just returns exit failure on any event.
-    No event specs — receives raw events via the legacy path so that any
-    file event triggers the exit.
+    Declares a catch-all EventSpec so that any file event triggers
+    the exit-failure response.
     """
 
     def get_event_specs(self) -> tuple[EventSpec, ...]:
-        return ()
+        return (
+            EventSpec(
+                name="any_file",
+                watch_paths=("*",),
+                is_ready=lambda p, c, s: True,
+            ),
+        )
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering failed phase.
