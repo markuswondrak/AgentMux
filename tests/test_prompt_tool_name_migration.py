@@ -10,8 +10,6 @@ VALID_TOOL_NAMES = {
     "submit_architecture",
     "submit_plan",
     "submit_review",
-    "research_dispatch_code",
-    "research_dispatch_web",
     "submit_done",
     "submit_research_done",
     "submit_pm_done",
@@ -24,8 +22,6 @@ DEPRECATED_TOOL_NAMES = {
     "agentmux_submit_subplan",
     "agentmux_submit_plan",
     "agentmux_submit_review",
-    "agentmux_research_dispatch_code",
-    "agentmux_research_dispatch_web",
 }
 
 
@@ -82,15 +78,6 @@ class PromptToolNameMigrationTests(unittest.TestCase):
         self.assertIn("submit_review", content)
         self.assertNotIn("agentmux_submit_review", content)
 
-    def test_architect_prompt_uses_unprefixed_research_tools(self) -> None:
-        """architect.md should reference unprefixed research dispatch tools."""
-        path = PROMPTS_DIR / "agents" / "architect.md"
-        content = path.read_text(encoding="utf-8")
-        self.assertIn("research_dispatch_code", content)
-        self.assertIn("research_dispatch_web", content)
-        self.assertNotIn("agentmux_research_dispatch_code", content)
-        self.assertNotIn("agentmux_research_dispatch_web", content)
-
     def test_architect_prompt_mentions_submit_research_done(self) -> None:
         """architect.md should document submit_research_done."""
         path = PROMPTS_DIR / "agents" / "architect.md"
@@ -102,15 +89,6 @@ class PromptToolNameMigrationTests(unittest.TestCase):
         path = PROMPTS_DIR / "agents" / "coder.md"
         content = path.read_text(encoding="utf-8")
         self.assertIn("submit_done", content)
-
-    def test_product_manager_prompt_uses_unprefixed_research_tools(self) -> None:
-        """product-manager.md should reference unprefixed research dispatch tools."""
-        path = PROMPTS_DIR / "agents" / "product-manager.md"
-        content = path.read_text(encoding="utf-8")
-        self.assertIn("research_dispatch_code", content)
-        self.assertIn("research_dispatch_web", content)
-        self.assertNotIn("agentmux_research_dispatch_code", content)
-        self.assertNotIn("agentmux_research_dispatch_web", content)
 
     def test_product_manager_prompt_mentions_submit_pm_done(self) -> None:
         """product-manager.md should document submit_pm_done."""
