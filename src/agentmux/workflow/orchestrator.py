@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 from contextlib import ExitStack
 
@@ -166,7 +167,13 @@ class PipelineOrchestrator:
                 self._exit_event.set()
 
     def _rehydrate_dispatched_research_tasks(self, ctx: PipelineContext) -> None:
-        """Restart in-flight research tasks after unapplied signals have replayed."""
+        """Restart in-flight research tasks after unapplied signals have replayed.
+
+        Safeguards against double-dispatch:
+        - Skips tasks whose output.log already exists (already executed).
+        - Skips tasks whose process is still alive.
+        - Only dispatches when the pane is truly missing AND no output exists.
+        """
         state = load_state(ctx.files.state)
         if state.get("phase") not in {
             "product_management",
@@ -178,6 +185,8 @@ class PipelineOrchestrator:
         parallel_panes = getattr(ctx.runtime, "parallel_panes", {})
         if not isinstance(parallel_panes, dict):
             parallel_panes = {}
+
+        state_updates: dict[str, dict] = {}
 
         for tasks_key, role, prefix in (
             ("research_tasks", "code-researcher", "code-"),
@@ -191,6 +200,7 @@ class PipelineOrchestrator:
                 for task_id in dict(parallel_panes.get(role, {}))
                 if task_id is not None
             }
+            updated_tasks = dict(tasks)
             for topic, status in tasks.items():
                 normalized_topic = str(topic).strip()
                 if not normalized_topic or str(status) != "dispatched":
@@ -198,9 +208,43 @@ class PipelineOrchestrator:
                 if normalized_topic in active_task_ids:
                     continue
                 research_dir = ctx.files.research_dir / f"{prefix}{normalized_topic}"
+
+                # Task already produced output → mark as done, don't re-dispatch
+                if (research_dir / "output.log").exists() or (
+                    research_dir / "summary.md"
+                ).exists():
+                    updated_tasks[topic] = "done"
+                    continue
+
                 if not (research_dir / "prompt.md").exists():
                     continue
+
+                # Check if the tracked process is still alive
+                pid = getattr(ctx.runtime, "_process_pids", {}).get(
+                    str(normalized_topic)
+                )
+                if pid is not None and self._process_alive(pid):
+                    continue  # Still running, don't re-dispatch
+
                 ctx.runtime.spawn_task(role, normalized_topic, research_dir)
+
+            if updated_tasks != tasks:
+                state_updates[tasks_key] = updated_tasks
+
+        if state_updates:
+            from ..sessions.state_store import write_state
+
+            state.update(state_updates)
+            write_state(ctx.files.state, state)
+
+    @staticmethod
+    def _process_alive(pid: int) -> bool:
+        """Check whether a process with the given PID is still running."""
+        try:
+            os.kill(pid, 0)
+            return True
+        except (OSError, ProcessLookupError):
+            return False
 
     def run(self, ctx: PipelineContext, keep_session: bool) -> int:
         """Run the pipeline - event-driven, no loop.

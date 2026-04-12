@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import signal
 import threading
@@ -98,6 +99,7 @@ class TmuxAgentRuntime:
         self.parallel_panes = parallel_panes or {}
         self._expected_missing_panes: set[str] = set()
         self._pane_tracking_lock = threading.RLock()
+        self._snapshot_lock = threading.Lock()
         self._process_pids: dict[str, int] = {}
         self._grace_panes: dict[str, float] = {}  # pane_id -> monotonic timestamp
         self._grace_period_seconds = 2.0
@@ -208,26 +210,32 @@ class TmuxAgentRuntime:
         target = self.feature_dir / "runtime_state.json"
         if not self.feature_dir.exists():
             return  # Directory deleted, nothing to persist
-        data = {
-            "version": SNAPSHOT_VERSION,
-            "primary": self.primary_panes,
-            "visible": self._zone.visible,
-            "parallel": {
-                role: {
-                    str(worker): pane_id
-                    for worker, pane_id in sorted(
-                        workers.items(),
-                        key=lambda item: str(item[0]),
-                    )
+        with self._snapshot_lock:
+            try:
+                data = {
+                    "version": SNAPSHOT_VERSION,
+                    "primary": self.primary_panes,
+                    "visible": self._zone.visible,
+                    "parallel": {
+                        role: {
+                            str(worker): pane_id
+                            for worker, pane_id in sorted(
+                                workers.items(),
+                                key=lambda item: str(item[0]),
+                            )
+                        }
+                        for role, workers in sorted(self.parallel_panes.items())
+                        if workers
+                    },
+                    "process_pids": self._process_pids,
                 }
-                for role, workers in sorted(self.parallel_panes.items())
-                if workers
-            },
-            "process_pids": self._process_pids,
-        }
-        tmp = target.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-        tmp.rename(target)
+                tmp = target.with_suffix(".json.tmp")
+                tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+                tmp.rename(target)
+            except OSError as e:
+                logging.getLogger(__name__).warning(
+                    "Failed to persist runtime state: %s", e
+                )
 
     def _track_process_pid(self, pane_id: str, pid: int) -> None:
         """Track the process ID for a pane."""
@@ -505,19 +513,14 @@ class TmuxAgentRuntime:
         pane_id = self.primary_panes.get(role)
         with self._expect_missing_panes([pane_id]):
             if pane_id:
-                self._zone.remove(pane_id)
+                self._cleanup_pane(pane_id)
             self.primary_panes[role] = None
-            workers = self.parallel_panes.get(role)
-            if workers:
-                remaining = {
-                    worker: worker_pane
-                    for worker, worker_pane in workers.items()
-                    if worker_pane != pane_id
-                }
-                if remaining:
-                    self.parallel_panes[role] = remaining
-                else:
-                    self.parallel_panes.pop(role, None)
+            # Also clear any parallel workers for this role
+            if role in self.parallel_panes:
+                for worker_pane_id in dict.fromkeys(self.parallel_panes[role].values()):
+                    if worker_pane_id and worker_pane_id != pane_id:
+                        self._cleanup_pane(worker_pane_id)
+                self.parallel_panes.pop(role, None)
             self._persist_snapshot()
 
     def finish_many(self, role: str) -> None:
@@ -528,7 +531,7 @@ class TmuxAgentRuntime:
         ]
         with self._expect_missing_panes(removed):
             for pane_id in removed:
-                self._zone.remove(pane_id)
+                self._cleanup_pane(pane_id)
             if role in self.parallel_panes:
                 self.parallel_panes.pop(role, None)
                 self._persist_snapshot()
@@ -601,12 +604,21 @@ class TmuxAgentRuntime:
         self._zone.hide(pane_id)
         self._persist_snapshot()
 
+    def _cleanup_pane(self, pane_id: str) -> None:
+        """Remove a pane from tracking and from the content zone.
+
+        Centralised helper that ensures the pane is removed from the zone
+        AND its PID is cleared from ``_process_pids``.
+        """
+        self._zone.remove(pane_id)
+        self._process_pids.pop(pane_id, None)
+
     def finish_task(self, role: str, task_id: str) -> None:
         workers = self.parallel_panes.get(role, {})
         pane_id = workers.get(task_id)
         with self._expect_missing_panes([pane_id]):
             if pane_id:
-                self._zone.remove(pane_id)
+                self._cleanup_pane(pane_id)
             if task_id in workers:
                 workers.pop(task_id, None)
             if not workers:
