@@ -187,6 +187,7 @@ def create_feature_files(
         "implementation_group_total": 0,
         "implementation_group_index": 0,
         "implementation_group_mode": None,
+        "implementation_single_coder": False,
         "implementation_active_plan_ids": [],
         "implementation_completed_group_ids": [],
         "updated_at": now_iso(),

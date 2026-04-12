@@ -115,6 +115,8 @@ def _set_implementation_progress(
     state: dict,
     schedule: list[dict[str, object]],
     active_group_index: int | None,
+    *,
+    single_coder: bool,
 ) -> None:
     """Set implementation progress in state."""
     group_total = len(schedule)
@@ -136,6 +138,7 @@ def _set_implementation_progress(
         ]
         return
 
+    state["implementation_single_coder"] = single_coder
     state["implementation_group_index"] = active_group_index + 1
     state["implementation_group_mode"] = str(schedule[active_group_index]["mode"])
     state["implementation_active_plan_ids"] = list(
@@ -163,26 +166,62 @@ class ImplementingHandler(BaseToolHandler):
 
         Resets markers and dispatches first group (or whole plan in single-coder mode).
         """
-        if state.get("last_event") in {
+        is_fresh_start = state.get("last_event") in {
             EVENT_PLAN_WRITTEN,
             EVENT_DESIGN_WRITTEN,
             EVENT_CHANGES_REQUESTED,
-        }:
+        }
+        if is_fresh_start:
             reset_markers(ctx.files.implementation_dir, "done_*")
         ctx.runtime.kill_primary("coder")
 
-        schedule = _build_implementation_schedule(planning_dir=ctx.files.planning_dir)
-        updates: dict[str, object] = {}
-        updates["subplan_count"] = self._total_marker_count(schedule)
-        updates["completed_subplans"] = []
+        coder = ctx.agents.get("coder")
+        if is_fresh_start or "implementation_single_coder" not in state:
+            effective_single_coder = coder is not None and coder.single_coder
+        else:
+            effective_single_coder = bool(state["implementation_single_coder"])
 
+        schedule = _build_implementation_schedule(planning_dir=ctx.files.planning_dir)
         active_group_index = _first_incomplete_group_index(
             ctx.files.implementation_dir, schedule
         )
-        _set_implementation_progress(updates, schedule, active_group_index)
+        active_group_mode = (
+            str(schedule[active_group_index]["mode"])
+            if active_group_index is not None
+            else "none"
+        )
+
+        if is_fresh_start:
+            print(
+                "Starting implementing phase "
+                "(fresh start, "
+                f"group_mode={active_group_mode}, "
+                f"single_coder={effective_single_coder})."
+            )
+        else:
+            mode_source = (
+                "saved state"
+                if "implementation_single_coder" in state
+                else "agent config"
+            )
+            print(
+                "Resuming implementing phase "
+                f"(group_mode={active_group_mode}, "
+                f"single_coder={effective_single_coder}, source={mode_source})."
+            )
+
+        updates: dict[str, object] = {}
+        updates["subplan_count"] = self._total_marker_count(schedule)
+        updates["completed_subplans"] = []
+        _set_implementation_progress(
+            updates,
+            schedule,
+            active_group_index,
+            single_coder=effective_single_coder,
+        )
 
         if active_group_index is not None:
-            if self._is_single_coder(ctx):
+            if effective_single_coder:
                 self._dispatch_whole_plan(ctx, schedule)
             else:
                 self._dispatch_active_group(ctx, schedule, active_group_index)
@@ -225,7 +264,7 @@ class ImplementingHandler(BaseToolHandler):
         updates: dict[str, object] = {"completed_subplans": sorted(completed)}
 
         # Single-coder mode: one pane handles everything — just watch for all markers
-        if self._is_single_coder(ctx):
+        if self._is_single_coder(ctx, state):
             all_marker_indexes = [
                 int(idx) for group in schedule for idx in group["marker_indexes"]
             ]
@@ -257,8 +296,13 @@ class ImplementingHandler(BaseToolHandler):
         if not _all_markers_complete(ctx.files.implementation_dir, active_group):
             # Group not complete - check if there are more pending plans to dispatch
             # This handles serial groups with multiple plans
-            if str(active_group["mode"]) == "serial":
-                self._dispatch_active_group(ctx, schedule, group_index - 1)
+            group_mode = (
+                str(state["implementation_group_mode"])
+                if "implementation_group_mode" in state
+                else str(active_group["mode"])
+            )
+            if group_mode == "serial":
+                self._dispatch_active_group(ctx, schedule, group_index - 1, state=state)
             return updates, None
 
         # Group complete - move to next group or finish
@@ -278,7 +322,12 @@ class ImplementingHandler(BaseToolHandler):
 
         if next_group_index is None:
             # All groups complete
-            _set_implementation_progress(state, schedule, active_group_index=None)
+            _set_implementation_progress(
+                state,
+                schedule,
+                active_group_index=None,
+                single_coder=self._is_single_coder(ctx, state),
+            )
             updates = {
                 "completed_subplans": [],
                 "implementation_group_index": state.get("implementation_group_index"),
@@ -296,7 +345,10 @@ class ImplementingHandler(BaseToolHandler):
 
         # Move to next group
         _set_implementation_progress(
-            state, schedule, active_group_index=next_group_index
+            state,
+            schedule,
+            active_group_index=next_group_index,
+            single_coder=self._is_single_coder(ctx, state),
         )
         updates = {
             "completed_subplans": [],
@@ -309,7 +361,7 @@ class ImplementingHandler(BaseToolHandler):
                 "implementation_completed_group_ids"
             ),
         }
-        self._dispatch_active_group(ctx, schedule, next_group_index)
+        self._dispatch_active_group(ctx, schedule, next_group_index, state=state)
         return updates, None
 
     def _dispatch_active_group(
@@ -317,6 +369,7 @@ class ImplementingHandler(BaseToolHandler):
         ctx: PipelineContext,
         schedule: list[dict[str, object]],
         active_group_index: int,
+        state: dict | None = None,
     ) -> None:
         """Dispatch prompts for the active group."""
         group = schedule[active_group_index]
@@ -365,7 +418,12 @@ class ImplementingHandler(BaseToolHandler):
                 )
             )
 
-        if str(group["mode"]) == "parallel" and len(prompt_specs) > 1:
+        group_mode = (
+            str(state["implementation_group_mode"])
+            if state is not None and "implementation_group_mode" in state
+            else str(group["mode"])
+        )
+        if group_mode == "parallel" and len(prompt_specs) > 1:
             ctx.runtime.send_many("coder", prompt_specs)
         else:
             send_to_role(
@@ -395,8 +453,10 @@ class ImplementingHandler(BaseToolHandler):
         return completed
 
     @staticmethod
-    def _is_single_coder(ctx: PipelineContext) -> bool:
+    def _is_single_coder(ctx: PipelineContext, state: dict | None = None) -> bool:
         """Return True if the coder agent uses single-coder mode (e.g. copilot)."""
+        if state is not None and "implementation_single_coder" in state:
+            return bool(state["implementation_single_coder"])
         coder = ctx.agents.get("coder")
         return coder is not None and coder.single_coder
 

@@ -30,5 +30,6 @@ agentmux resume <feature-dir-or-name>  # Resume specific session by name or path
 12. The background orchestrator explicitly re-enters the current phase before starting file/interruption sources, so resume prompt dispatch is deterministic and no longer depends on the first seeded file event
 13. `runtime_state.json` is treated as advisory recovery data for panes/PIDs, while `tool_event_state.json` persists the last applied `tool_events.jsonl` cursor so resume replays only unapplied tool signals
 14. `implementing` and `fixing` explicitly clear the primary `coder` pane before dispatch so resume never reuses an old shell after the prior coder CLI has exited
-15. After the resumed phase is entered and unapplied tool events are replayed, any still-dispatched research subtasks are restarted from their persisted `03_research/<type>-<topic>/prompt.md` directories
-16. If the prior run failed because a registered tmux agent pane disappeared, the interruption metadata in `state.json` is cleared on resume and a fresh pane is created only when the resumed phase next needs that role
+15. `implementation_single_coder` is persisted on entering the implementing phase; on resume, the handler restores this setting so the same dispatch mode (whole-plan vs per-group) is used regardless of current agent configuration
+16. After the resumed phase is entered and unapplied tool events are replayed, any still-dispatched research subtasks are restarted from their persisted `03_research/<type>-<topic>/prompt.md` directories
+17. If the prior run failed because a registered tmux agent pane disappeared, the interruption metadata in `state.json` is cleared on resume and a fresh pane is created only when the resumed phase next needs that role
