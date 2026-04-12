@@ -91,8 +91,9 @@ class PhaseHandler(Protocol):
     ``"file.created"`` / ``"file.activity"`` string), while ``event.path``
     carries the triggering file path for topic extraction etc.
 
-    Handlers that return empty specs receive raw ``WorkflowEvent`` objects
-    as before (backward-compatible fallback).
+    Empty ``get_event_specs()`` means no file events are dispatched.
+    For catch-all behaviour (e.g. terminal error handler):
+    ``EventSpec(name=..., watch_paths=('*',), ...)``.
     """
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
@@ -199,15 +200,49 @@ class WorkflowEventRouter:
         self._phases = phases
         self._entered: set[str] = set()
 
+    def _subscribes_to(self, event: WorkflowEvent, handler: Any) -> bool:
+        """Check whether a handler has declared interest in this event.
+
+        For tool.* events: match against ToolSpec.tool_names.
+        For file.created/file.activity: match path against EventSpec.watch_paths.
+
+        Does NOT evaluate is_ready — that is done in _dispatch().
+        Returns False for unknown event kinds.
+        """
+        # Tool events: match against ToolSpec
+        if event.kind.startswith("tool."):
+            get_tool_specs = getattr(handler, "get_tool_specs", None)
+            if get_tool_specs is None:
+                return False
+            bare = event.kind[len("tool.") :]
+            return any(bare in spec.tool_names for spec in get_tool_specs())
+
+        # File events: match path against EventSpec watch_paths
+        if event.kind in ("file.created", "file.activity"):
+            get_specs = getattr(handler, "get_event_specs", None)
+            if get_specs is None:
+                return False
+            path = event.path
+            if path is None:
+                return False
+            return any(
+                fnmatch.fnmatch(path, pattern)
+                for spec in get_specs()
+                for pattern in spec.watch_paths
+            )
+
+        return False
+
     def enter_current_phase(self, state: dict, ctx: PipelineContext) -> dict:
         phase_name = state.get("phase", "")
         handler = self._phases.get(phase_name)
         if handler is None or phase_name in self._entered:
             return {}
 
+        self._entered.add(phase_name)
+
         enter_updates = handler.enter(state, ctx)
         state.update(enter_updates)
-        self._entered.add(phase_name)
 
         from ..sessions.state_store import write_state
 
@@ -235,14 +270,17 @@ class WorkflowEventRouter:
         handler = self._phases.get(phase_name)
 
         if handler is None:
-            # Unknown phase - log warning, return empty
             return {}, None
 
         # Enter phase once
         if phase_name not in self._entered:
             self.enter_current_phase(state, ctx)
 
-        # Dispatch event: via specs if declared, otherwise raw
+        # Subscription filter: drop unsubscribed events early
+        if not self._subscribes_to(event, handler):
+            return {}, None
+
+        # Dispatch
         updates, next_phase = self._dispatch(event, handler, state, ctx)
 
         # Check for exit signal
@@ -254,7 +292,7 @@ class WorkflowEventRouter:
         # Apply updates
         state.update(updates)
 
-        # Phase transition?
+        # Phase transition: enter new phase explicitly (no recursive handle call)
         if next_phase is not None:
             self._entered.discard(phase_name)
             state["phase"] = next_phase
@@ -263,10 +301,8 @@ class WorkflowEventRouter:
             from ..sessions.state_store import write_state
 
             write_state(ctx.files.state, state)
-
-            # Recursively enter new phase with same event
-            # (allows immediate transition without waiting for next event)
-            return self.handle(event, state, ctx)
+            self.enter_current_phase(state, ctx)
+            return {}, None
 
         # Write state if there were updates
         if updates:
@@ -283,51 +319,34 @@ class WorkflowEventRouter:
         state: dict,
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
-        """Route a file event to the handler via specs or directly.
+        """Dispatch an event to the handler via its specs.
 
-        If the handler declares EventSpecs, evaluate them:
-        - Only ``file.created`` and ``file.activity`` events are considered.
-        - For each spec whose watch_paths matches the event path, call
-          ``is_ready``.  If ready, dispatch a logical WorkflowEvent with
-          ``kind=spec.name`` to ``handle_event`` and return.
-        - If no spec fires, return ``{}, None``.
+        Precondition: ``_subscribes_to(event, handler)`` is True.
 
-        Handlers without specs receive the raw WorkflowEvent unchanged.
+        Tool-call events (``tool.*``): match against ToolSpec and dispatch
+        a ``WorkflowEvent(kind=spec.name, payload=event.payload)``.
 
-        Tool-call events (``tool.*``) are routed via ``ToolSpec``:
-        - If the handler declares ``get_tool_specs()``, match the bare tool
-          name against each spec's ``tool_names``.  On match, dispatch a
-          ``WorkflowEvent(kind=spec.name, payload=event.payload)``.
-        - Non-matching tool names return ``{}, None``.
+        File events (``file.created`` / ``file.activity``): evaluate
+        EventSpecs — on path match + is_ready, dispatch a logical event.
         """
         # Route tool.* events via ToolSpec
         if event.kind.startswith("tool."):
-            get_tool_specs = getattr(handler, "get_tool_specs", None)
-            if get_tool_specs is not None:
-                bare_name = event.kind[len("tool.") :]
-                for spec in get_tool_specs():
-                    if bare_name in spec.tool_names:
-                        logical = WorkflowEvent(kind=spec.name, payload=event.payload)
-                        return handler.handle_event(logical, state, ctx)
+            bare_name = event.kind[len("tool.") :]
+            for spec in handler.get_tool_specs():
+                if bare_name in spec.tool_names:
+                    logical = WorkflowEvent(kind=spec.name, payload=event.payload)
+                    return handler.handle_event(logical, state, ctx)
             return {}, None
 
-        # Route file events via EventSpec or raw
-        get_specs = getattr(handler, "get_event_specs", None)
-        if get_specs is None:
-            # Legacy handler without specs — pass raw event through
-            return handler.handle_event(event, state, ctx)
-
-        specs = list(get_specs())
-        if not specs:
-            # Handler explicitly opts out of spec routing — raw event
-            return handler.handle_event(event, state, ctx)
-
+        # Route file events via EventSpec
         if event.kind not in ("file.created", "file.activity"):
             return {}, None
 
         path = event.path
         if path is None:
             return {}, None
+
+        specs = list(handler.get_event_specs())
 
         for spec in specs:
             if not any(fnmatch.fnmatch(path, p) for p in spec.watch_paths):

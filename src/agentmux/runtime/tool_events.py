@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -109,6 +110,7 @@ class ToolCallEventSource(EventSource):
         self._feature_dir = feature_dir.resolve()
         self._offset = 0
         self._observer: Any = None
+        self._read_lock = threading.Lock()
 
     def start(self, bus: EventBus) -> None:
         from .file_events import ensure_watchdog_available
@@ -183,23 +185,25 @@ class ToolCallEventSource(EventSource):
 
     def _seed_existing(self, bus: EventBus) -> None:
         """Replay pre-existing log entries from before ``start()`` was called."""
-        current_size = self._current_log_size()
-        if self._offset > current_size:
-            logger.warning(
-                "tool event cursor %s exceeds log size %s; replaying from start",
-                self._offset,
-                current_size,
-            )
-            self._offset = 0
-            persist_tool_event_cursor(self._feature_dir, 0)
-        self._read_and_emit_from_offset(bus)
+        with self._read_lock:
+            current_size = self._current_log_size()
+            if self._offset > current_size:
+                logger.warning(
+                    "tool event cursor %s exceeds log size %s; replaying from start",
+                    self._offset,
+                    current_size,
+                )
+                self._offset = 0
+                persist_tool_event_cursor(self._feature_dir, 0)
+            self._read_and_emit_from_offset(bus)
 
     def _on_modified(self, bus: EventBus) -> None:
         """Handle a watchdog modification event — emit only newly appended lines."""
-        current_size = self._current_log_size()
-        if current_size <= self._offset:
-            return
-        self._read_and_emit_from_offset(bus)
+        with self._read_lock:
+            current_size = self._current_log_size()
+            if current_size <= self._offset:
+                return
+            self._read_and_emit_from_offset(bus)
 
     def _current_log_size(self) -> int:
         """Return the current byte size of the tool-events log, or 0 if absent."""
