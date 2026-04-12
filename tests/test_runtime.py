@@ -673,5 +673,87 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual([], zone.shown)
 
 
+class UnexpectedMissingRegisteredPanesTests(unittest.TestCase):
+    """Tests for TmuxAgentRuntime.unexpected_missing_registered_panes().
+
+    The method uses a grace period (2s) so that tool-event handlers have
+    time to mark a pane as expected before the interruption fires.
+    """
+
+    def _runtime(
+        self,
+        primary_panes: dict[str, str | None] | None = None,
+    ) -> TmuxAgentRuntime:
+        import tempfile
+
+        td = tempfile.mkdtemp()
+        return TmuxAgentRuntime(
+            feature_dir=Path(td),
+            project_dir=Path("/project"),
+            session_name="session-x",
+            agents=_agents(),
+            primary_panes=primary_panes or {"coder": "%1"},
+            zone=FakeZone("session-x"),
+        )
+
+    def test_returns_empty_when_no_panes_missing(self) -> None:
+        runtime = self._runtime()
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=True):
+            self.assertEqual([], runtime.unexpected_missing_registered_panes())
+
+    def test_returns_empty_during_grace_period(self) -> None:
+        runtime = self._runtime()
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            # First call starts grace period — still within 2s → empty
+            self.assertEqual([], runtime.unexpected_missing_registered_panes())
+            # Second call still within grace period → empty
+            self.assertEqual([], runtime.unexpected_missing_registered_panes())
+
+    def test_returns_pane_after_grace_expires(self) -> None:
+        runtime = self._runtime()
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            # Start grace period
+            runtime.unexpected_missing_registered_panes()
+
+        # Backdate grace entry to simulate expiry
+        import time
+
+        runtime._grace_panes["%1"] = time.monotonic() - 3.0
+
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            result = runtime.unexpected_missing_registered_panes()
+
+        self.assertEqual(1, len(result))
+        self.assertEqual("%1", result[0].pane_id)
+        self.assertEqual("coder", result[0].role)
+        # Grace entry should be cleaned up after firing
+        self.assertNotIn("%1", runtime._grace_panes)
+
+    def test_skips_expected_missing_pane(self) -> None:
+        runtime = self._runtime()
+        runtime._expected_missing_panes.add("%1")
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            self.assertEqual([], runtime.unexpected_missing_registered_panes())
+
+    def test_grace_resets_when_pane_comes_back(self) -> None:
+        runtime = self._runtime()
+        # Pane dies → grace starts
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            runtime.unexpected_missing_registered_panes()
+        self.assertIn("%1", runtime._grace_panes)
+
+        # Pane comes back alive → grace entry cleared
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=True):
+            result = runtime.unexpected_missing_registered_panes()
+        self.assertEqual([], result)
+        self.assertNotIn("%1", runtime._grace_panes)
+
+        # Pane dies again → new grace starts (not immediate fire)
+        with patch("agentmux.runtime.tmux_pane_exists", return_value=False):
+            result = runtime.unexpected_missing_registered_panes()
+        self.assertEqual([], result)
+        self.assertIn("%1", runtime._grace_panes)
+
+
 if __name__ == "__main__":
     unittest.main()

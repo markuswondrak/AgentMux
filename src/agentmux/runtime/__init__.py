@@ -342,32 +342,30 @@ class TmuxAgentRuntime:
     def unexpected_missing_registered_panes(self) -> list[RegisteredPaneRef]:
         with self._pane_tracking_lock:
             now = time.monotonic()
-            # Clean up expired grace entries
-            expired = [
-                pid
-                for pid, ts in self._grace_panes.items()
-                if now - ts > self._grace_period_seconds
-            ]
-            for pid in expired:
-                del self._grace_panes[pid]
-
             panes = self._registered_panes_unlocked()
             result: list[RegisteredPaneRef] = []
             for pane in panes:
                 # Skip panes that are explicitly expected to be missing
                 if pane.pane_id in self._expected_missing_panes:
+                    self._grace_panes.pop(pane.pane_id, None)
                     continue
                 if not tmux_pane_exists(pane.pane_id):
                     if pane.pane_id in self._grace_panes:
-                        # Already in grace period — skip until it expires
-                        continue
-                    # Newly missing pane — start grace period so that
-                    # tool-event handlers (e.g. submit_research_done →
-                    # finish_task) have time to mark the pane as expected
-                    # before the interruption fires.
-                    self._grace_panes[pane.pane_id] = now
-                    continue
-                # Pane exists and is not expected missing — not a problem
+                        elapsed = now - self._grace_panes[pane.pane_id]
+                        if elapsed <= self._grace_period_seconds:
+                            # Still in grace period — give tool-event handlers
+                            # (e.g. submit_done → finish_task) time to mark
+                            # the pane as expected before the interruption fires.
+                            continue
+                        # Grace period expired — fire interruption
+                        del self._grace_panes[pane.pane_id]
+                        result.append(pane)
+                    else:
+                        # First detection — start grace period
+                        self._grace_panes[pane.pane_id] = now
+                else:
+                    # Pane is alive — clear any stale grace entry
+                    self._grace_panes.pop(pane.pane_id, None)
             return result
 
     def get_pane_output_log(self, pane_id: str | None) -> Path | None:
