@@ -12,6 +12,7 @@ from typing import Any
 
 import shtab
 
+from ..configuration.providers import get_known_providers
 from .application import PipelineApplication
 
 DEFAULT_CONFIG_HINT = ".agentmux/config.yaml"
@@ -139,7 +140,7 @@ COMMANDS: list[Command] = [
             Argument(
                 ("provider",),
                 nargs="?",
-                help="Provider to set up (claude, codex, gemini, opencode, copilot). "
+                help=f"Provider to set up ({', '.join(get_known_providers())}). "
                 "When supplied, runs provider-specific setup only.",
             ),
             Argument(

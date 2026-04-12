@@ -101,6 +101,28 @@ class TestInitialPhaseState(unittest.TestCase):
             self.assertIn("product_manager", state)
             self.assertFalse(state["product_manager"])
 
+    def test_initial_state_has_implementation_single_coder_false(self) -> None:
+        """Initial state should include implementation_single_coder=False."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td) / "project"
+            feature_dir = Path(td) / "feature"
+            project_dir.mkdir()
+
+            files = create_feature_files(
+                project_dir=project_dir,
+                feature_dir=feature_dir,
+                prompt="Test feature request",
+                session_name="test-session",
+                product_manager=False,
+            )
+
+            import json
+
+            state = json.loads(files.state.read_text(encoding="utf-8"))
+
+            self.assertIn("implementation_single_coder", state)
+            self.assertFalse(state["implementation_single_coder"])
+
 
 if __name__ == "__main__":
     unittest.main()

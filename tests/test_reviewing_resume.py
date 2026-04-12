@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig
 from agentmux.workflow.event_router import WorkflowEvent
@@ -103,6 +105,41 @@ class TestResumeGuard(unittest.TestCase):
             send_calls = [c for c in ctx.runtime.calls if c[0] == "send"]
             self.assertEqual([], send_calls, "no prompt should be sent on resume")
 
+    def test_resume_with_existing_review_yaml_does_not_delete_or_prompt(self) -> None:
+        """On resume, if review.yaml exists, enter() leaves it and sends no prompt."""
+        with tempfile.TemporaryDirectory() as td:
+            ctx, state_path = _make_ctx(Path(td) / "feature")
+            ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
+            (ctx.files.review_dir / "review.yaml").write_text(
+                yaml.dump(
+                    {
+                        "verdict": "fail",
+                        "summary": "Needs fixes",
+                        "findings": [
+                            {
+                                "issue": "Missing validation",
+                                "recommendation": "Add the missing check.",
+                            }
+                        ],
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            state["last_event"] = "resumed"
+            write_state(state_path, state)
+
+            handler = ReviewingHandler()
+            result = handler.enter(load_state(state_path), ctx)
+
+            self.assertEqual({}, result)
+            self.assertTrue((ctx.files.review_dir / "review.yaml").exists())
+            send_calls = [c for c in ctx.runtime.calls if c[0] == "send"]
+            self.assertEqual([], send_calls, "no prompt should be sent on resume")
+
     def test_resume_without_review_sends_prompt(self) -> None:
         """On resume, if review.md does not exist, enter() proceeds normally."""
         with tempfile.TemporaryDirectory() as td:
@@ -142,17 +179,68 @@ class TestResumeGuard(unittest.TestCase):
                 ctx.files.review.exists(), "stale review.md must be deleted"
             )
 
+    def test_fresh_entry_deletes_stale_review_yaml(self) -> None:
+        """On fresh entry, a stale review.yaml is also deleted."""
+        with tempfile.TemporaryDirectory() as td:
+            ctx, state_path = _make_ctx(Path(td) / "feature")
+            ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
+            (ctx.files.review_dir / "review.yaml").write_text(
+                yaml.dump(
+                    {
+                        "verdict": "pass",
+                        "summary": "Looks good",
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            state["last_event"] = "implementation_completed"
+            write_state(state_path, state)
+
+            handler = ReviewingHandler()
+            handler.enter(load_state(state_path), ctx)
+
+            self.assertFalse(
+                (ctx.files.review_dir / "review.yaml").exists(),
+                "stale review.yaml must be deleted",
+            )
+
 
 class TestReviewArchive(unittest.TestCase):
+    _FAIL_PAYLOAD: dict = {
+        "verdict": "fail",
+        "summary": "Issues found in implementation.",
+        "findings": [
+            {
+                "location": "src/x.py:1",
+                "issue": "missing validation",
+                "severity": "high",
+                "recommendation": "Add input validation.",
+            }
+        ],
+    }
+    _PASS_PAYLOAD: dict = {
+        "verdict": "pass",
+        "summary": "All checks pass.",
+        "findings": [],
+        "commit_message": "feat: implementation complete",
+    }
+
     def _dispatch_review(
         self,
         ctx: PipelineContext,
         state_path: Path,
-        verdict_text: str,
+        payload: dict,
         iteration: int = 0,
     ) -> tuple[dict, str | None]:
-        ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
-        ctx.files.review.write_text(verdict_text, encoding="utf-8")
+        ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
+        (ctx.files.review_dir / "review.yaml").write_text(
+            yaml.dump(payload, default_flow_style=False),
+            encoding="utf-8",
+        )
 
         state = load_state(state_path)
         state["phase"] = "reviewing"
@@ -160,17 +248,13 @@ class TestReviewArchive(unittest.TestCase):
         write_state(state_path, state)
 
         handler = ReviewingHandler()
-        event = WorkflowEvent(
-            kind="review_ready", path="06_review/review.md", payload={}
-        )
+        event = WorkflowEvent(kind="review", payload={"payload": {}})
         return handler.handle_event(event, load_state(state_path), ctx)
 
     def test_verdict_fail_creates_archive_and_keeps_review_md(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(Path(td) / "feature")
-            self._dispatch_review(
-                ctx, state_path, "verdict: fail\n- finding\n", iteration=0
-            )
+            self._dispatch_review(ctx, state_path, self._FAIL_PAYLOAD, iteration=0)
 
             archive = ctx.files.review_dir / "review_0.md"
             self.assertTrue(archive.exists(), "review_0.md archive must be created")
@@ -180,9 +264,7 @@ class TestReviewArchive(unittest.TestCase):
     def test_verdict_fail_second_iteration_archives_correctly(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(Path(td) / "feature")
-            self._dispatch_review(
-                ctx, state_path, "verdict: fail\n- finding 2\n", iteration=1
-            )
+            self._dispatch_review(ctx, state_path, self._FAIL_PAYLOAD, iteration=1)
 
             archive = ctx.files.review_dir / "review_1.md"
             self.assertTrue(archive.exists(), "review_1.md archive must be created")
@@ -190,7 +272,7 @@ class TestReviewArchive(unittest.TestCase):
     def test_verdict_pass_creates_archive_and_keeps_review_md(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(Path(td) / "feature")
-            self._dispatch_review(ctx, state_path, "verdict: pass\n", iteration=0)
+            self._dispatch_review(ctx, state_path, self._PASS_PAYLOAD, iteration=0)
 
             archive = ctx.files.review_dir / "review_0.md"
             self.assertTrue(
@@ -203,11 +285,16 @@ class TestReviewArchive(unittest.TestCase):
     def test_archive_contains_same_content_as_review_md(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(Path(td) / "feature")
-            content = "verdict: fail\n## Finding\nSomething is wrong.\n"
-            self._dispatch_review(ctx, state_path, content, iteration=2)
+            self._dispatch_review(ctx, state_path, self._FAIL_PAYLOAD, iteration=2)
 
             archive = ctx.files.review_dir / "review_2.md"
-            self.assertEqual(content, archive.read_text(encoding="utf-8"))
+            review_md = ctx.files.review_dir / "review.md"
+            self.assertTrue(archive.exists(), "archive must be created")
+            self.assertTrue(review_md.exists(), "review.md must be created")
+            self.assertEqual(
+                review_md.read_text(encoding="utf-8"),
+                archive.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

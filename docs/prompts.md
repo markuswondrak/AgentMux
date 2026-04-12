@@ -1,11 +1,12 @@
 # Prompt Templates and Rendering
 
-> Related source files: `agentmux/workflow/prompts.py`, `agentmux/runtime/tmux_control.py`, `agentmux/prompts/agents/`, `agentmux/prompts/commands/`
+> Related source file: `src/agentmux/workflow/prompts.py`
 
 ## Template directories
 
 - `agentmux/prompts/agents/` — role-level prompts (define what each agent is): `architect.md`, `planner.md`, `product-manager.md`, `reviewer.md`, `coder.md`, `code-researcher.md`, `web-researcher.md`, `designer.md`
-- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `review_logic.md`, `review_quality.md`, `review_expert.md`, `fix.md`, `summary.md`, `change.md`
+- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `fix.md`, `summary.md`, `change.md`
+- `agentmux/prompts/shared/` — reusable prompt fragments inlined via `[[shared:fragment-name]]`: `handoff-contract-architecture.md`, `handoff-contract-plan.md`, `handoff-contract-review.md`, `coder-discipline.md`, `preference-memory.md`
 
 ## Placeholder syntax
 
@@ -26,7 +27,7 @@ Render model is three-stage:
    - Resolve `[[include:path]]` / `[[include-optional:path]]` against `feature_dir`.
    - Include expansion runs after placeholder rendering, so include paths can contain placeholders (for example `[[include:[[placeholder:plan_file]]]]`).
 
-Every prompt builder provides `feature_dir` as the session directory and references workflow files with phase subpaths (for example `02_planning/plan.md`, `06_review/review.md`, `state.json`).
+Every prompt builder provides `feature_dir` as the session directory and references workflow files with phase subpaths (for example `04_planning/plan.md`, `07_review/review.md`, `state.json`).
 Builders that need project-level context (for example product manager and coder) also provide `project_dir`.
 
 ## Project-specific prompt extensions
@@ -44,30 +45,27 @@ Curly braces in project content stay literal; only `[[placeholder:...]]` markers
 
 `agentmux/prompts/context.md` is pipeline-controlled and is not project-extendable.
 
-## Preference memory artifacts
+## Preference memory
 
-Preference memory uses session-scoped proposal artifacts so agents never mutate project extensions directly:
+Preference memory lets agents carry approved style/quality preferences forward to later roles. Preferences are written directly to `.agentmux/prompts/agents/<role>.md` under a `## Approved Preferences` section — no intermediate JSON artifacts.
 
-- `01_product_management/approved_preferences.json` (product-manager approvals)
-- `02_planning/approved_preferences.json` (architect and planner approvals)
-- `08_completion/approved_preferences.json` (reviewer approvals)
+Agents pass approved preferences as an optional `preferences` parameter on the relevant submit tool call:
 
-Each proposal uses this shape:
-
-```json
-{
-  "source_role": "product-manager|architect|planner|reviewer",
-  "approved": [
-    {"target_role": "coder", "bullet": "- ..."}
-  ]
-}
+```python
+submit_review(
+    preferences=[
+        {"target_role": "coder", "bullet": "- Keep regression tests"}
+    ]
+)
 ```
 
-Application flow:
+The `preferences` parameter is supported on `submit_architecture`, `submit_pm_done`, `submit_plan`, and `submit_review`. The MCP server calls `apply_preference_entries(project_dir, preferences)` which appends bullets to `.agentmux/prompts/agents/<role>.md` (creating the file if absent) under `## Approved Preferences`. Deduplication is applied on a normalized casefold basis across all bullet lines in the file.
 
-- Agents write proposal artifacts only after explicit user approval.
-- The orchestrator applies proposals during phase transitions (`pm_completed`, `plan_written`, `approval_received`).
-- Applied preferences are appended to `.agentmux/prompts/agents/<role>.md`.
+Application flow:
+- Agents collect preference candidates during their work phase.
+- Candidates are proposed to the user via the approval dialog (`[[shared:preference-memory]]` fragment).
+- Approved entries are passed as `preferences=[...]` in the existing submit tool call.
+- `apply_preference_entries` writes bullets immediately to project prompt files.
 - Prompt builds are lazy, so newly persisted preferences are visible in subsequent prompt renders in later phases.
 
 Deduplication rules (high level):
@@ -92,13 +90,23 @@ Prompt files are built lazily by handlers just before injection, not pre-generat
 
 Startup and resume now use explicit phase bootstrap: the orchestrator re-enters the active phase before steady-state event sources start, and that phase entry is what causes the handler to build and send the current prompt. Prompt injection therefore does not depend on the first seeded `file.created` event.
 
+## Handoff contract fragments
+
+Three shared prompt fragments provide agents with MCP submission tool instructions and YAML fallback examples for non-MCP providers. They are inlined at template-load time via `[[shared:fragment-name]]`:
+
+- `handoff-contract-architecture.md` — used by `architect.md`; documents `submit_architecture` parameters and fallback `architecture.yaml` schema
+- `handoff-contract-plan.md` — used by `planner.md` and `change.md`; documents `submit_subplan` and `submit_execution_plan` parameters and fallback YAML schemas
+- `handoff-contract-review.md` — used by reviewer agent prompts; documents `submit_review` parameters and fallback `review.yaml` schema
+
+See `docs/handoff-contracts.md` for full contract details.
+
 ## Coder research handoff
 
 Coder prompt rendering injects a `Research handoff` block into `agentmux/prompts/agents/coder.md` via `[[placeholder:research_handoff]]`.
 
 Behavior contract:
 
-- Applies to `build_coder_subplan_prompt()`
+- Applies to both `build_coder_subplan_prompt()` and `build_coder_whole_plan_prompt()`
 - Scans topic directories under `03_research/` in sorted (deterministic) order
 - Includes a topic only when both `done` and `summary.md` are present
 - Lists `summary.md` as the primary reference
@@ -112,24 +120,23 @@ The coder prompt contract now requires:
 
 - TDD protocol: write tests first, run them, verify they fail (Red), then implement until tests pass (Green).
 - Strict phase order discipline: follow the active plan/sub-plan phase order and do not move to later-phase logic early.
-- Atomic execution from tasks: complete one task from your assigned `02_planning/tasks_<N>.md` at a time, validate it, and check it off before starting the next task.
+- Atomic execution from tasks: complete one task from your assigned `04_planning/tasks_<N>.md` at a time, validate it, and check it off before starting the next task.
 - Completion marker flow remains unchanged: finish all required validation first, then create the phase completion marker as the final action.
 
 ## Staged planning contract
 
 The architect/planner split is:
 
-- **Architect** (`build_architect_prompt()`) — defines the technical design: solution approach, components, interfaces, data models, cross-cutting concerns, technology choices, risks. Sole output: `02_planning/architecture.md`.
+- **Architect** (`build_architect_prompt()`) — defines the technical design: solution approach, components, interfaces, data models, cross-cutting concerns, technology choices, risks. Sole output: `02_architecting/architecture.md`.
 - **Planner** (`build_planner_prompt()`) — receives `architecture.md` and produces the full execution schedule. Sole owner of all plan files.
 
 Planner (and replanning via `build_change_prompt()`) output contract:
 
-- `02_planning/plan.md` is the human-readable overview
-- `02_planning/plan_<N>.md` files are executable implementation units
-- `02_planning/execution_plan.json` is the scheduling source of truth (ordered execution groups, each marked as `serial` or `parallel`, with explicit named plan references)
-- `02_planning/tasks_<N>.md` are per-plan implementation checklists mapped to the same work; each coder receives only their assigned plan's tasks
-- `02_planning/tasks.md` is an optional human-readable overview summarizing all tasks (not used by scheduler)
-- `02_planning/plan_meta.json` is planner workflow-intent metadata (`needs_design`, `needs_docs`, `doc_files`, `review_strategy`)
+- `04_planning/plan.md` is the human-readable overview
+- `04_planning/plan_<N>.md` files are executable implementation units
+- `04_planning/execution_plan.yaml` is the scheduling source of truth (ordered execution groups, each marked as `serial` or `parallel`, with explicit named plan references) and also contains planner workflow-intent metadata (`needs_design`, `needs_docs`, `doc_files`, `review_strategy`)
+- `04_planning/tasks_<N>.md` are per-plan implementation checklists mapped to the same work; each coder receives only their assigned plan's tasks
+- `04_planning/tasks.md` is an optional human-readable overview summarizing all tasks (not used by scheduler)
 - Documentation updates must be represented in planning artifacts (`plan.md`, `plan_<N>.md`, and corresponding `tasks_<N>.md`) rather than a dedicated post-review docs phase.
 
 Planner output requirements for execution plans include:
@@ -138,7 +145,7 @@ Planner output requirements for execution plans include:
 - Per parallel sub-plan sections for `Scope`, `Owned files/modules`, `Dependencies`, and `Isolation`
 - Explicit conflict mapping by touched files/modules plus explicit ownership for each parallel lane
 - Safety-first rule: Phase 2 parallel sub-plans are allowed only when their owned files/modules are disjoint; if two lanes would edit the same file/module, that work must be merged into one sub-plan or moved into a serial integration step
-- Shared mutable artifacts such as `02_planning/tasks.md`, prompt templates, monitor/state metadata files, and cross-cutting tests/docs should have a single Phase 2 owner unless intentionally deferred to integration
+- Shared mutable artifacts such as `04_planning/tasks.md`, prompt templates, monitor/state metadata files, and cross-cutting tests/docs should have a single Phase 2 owner unless intentionally deferred to integration
 - `Isolation` must be justified in terms of exclusive ownership, not only logical separation
 - A callout for any enabling refactor needed to preserve boundaries, plus explicit technical debt rationale when refactor work is deferred
 
@@ -147,14 +154,13 @@ Current prompt builders:
 - `build_planner_prompt()` renders planning prompts (creates plan files from `architecture.md`)
 - `build_change_prompt()` applies the same staged planning artifact contract in replanning mode
 - planning/replanning prompt contracts require:
-  - `02_planning/plan.md` as the human-readable overview
-  - `02_planning/plan_<N>.md` executable sub-plan files
-  - `02_planning/execution_plan.json` as machine-readable schedule metadata (`version`, ordered `groups`, `group_id`, `mode`, `plans`)
-  - new plans must write `groups[].plans[]` entries as `{ "file": "plan_<N>.md", "name": "<sub-plan title>" }`
-  - `02_planning/plan_meta.json` with `needs_design`, `needs_docs`, and `doc_files` (empty list when `needs_docs` is `false`)
-  - `execution_plan.json` is required before implementation scheduling starts
+  - `04_planning/plan.md` as the human-readable overview
+  - `04_planning/plan_<N>.md` executable sub-plan files
+  - `04_planning/execution_plan.yaml` as machine-readable schedule and metadata (`version`, ordered `groups`, `group_id`, `mode`, `plans`, plus `needs_design`, `needs_docs`, `doc_files`, `review_strategy`)
+  - new plans must write `groups[].plans[]` entries as `{ file: plan_<N>.md, name: "<sub-plan title>" }`
+  - `execution_plan.yaml` is required before implementation scheduling starts
 - `build_product_manager_prompt()` renders the PM analysis prompt
-- `build_coder_subplan_prompt()` renders implementing prompts for numbered `coder_prompt_<N>.txt` dispatch, including completion marker instructions and optional research handoff references
-- `build_coder_whole_plan_prompt()` renders a single combined prompt for single-coder mode, embedding all plan and tasks content inline. When the coder provider is `copilot` with `single_coder: true`, the dispatch sends a `/fleet` prefix command as keystrokes before the prompt file reference, so Copilot CLI decomposes the plan into parallel sub-agent tasks. The prompt instructs copilot to create `done_N` completion markers as each plan finishes.
+- `build_coder_subplan_prompt()` renders implementing prompts for numbered `coder_prompt_<N>.md` dispatch, including completion marker instructions and optional research handoff references
+- `build_coder_whole_plan_prompt()` renders a single combined prompt for single-coder mode by embedding all plan and tasks content inline into the unified `coder.md` template. When the coder provider is `copilot` with `single_coder: true`, the dispatch sends a `/fleet` prefix command as keystrokes before the prompt file reference, so Copilot CLI decomposes the plan into parallel sub-agent tasks. The prompt instructs copilot to create `done_N` completion markers as each plan finishes.
 - `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
 - `build_reviewer_summary_prompt()` renders the reviewer summary prompt (writes `08_completion/summary.md` after VERDICT:PASS)

@@ -183,12 +183,11 @@ class ProductManagerRequirementsTests(unittest.TestCase):
 
             self.assertIn(str(feature_dir), prompt)
             self.assertIn(str(project_dir), prompt)
-            self.assertIn("01_product_management/analysis.md", prompt)
-            self.assertIn("01_product_management/done", prompt)
+            self.assertIn("submit_pm_done", prompt)
             self.assertNotIn("04_design/design.md", prompt)
             self.assertNotIn("/frontend-design", prompt)
-            self.assertIn("needs_design: true", prompt)
-            self.assertIn("must not create design artifacts", prompt)
+            self.assertIn("Design handoff needed", prompt)
+            self.assertIn("requirements.md", prompt)
 
     def test_product_management_phase_entry_and_completion_transition(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -206,14 +205,10 @@ class ProductManagerRequirementsTests(unittest.TestCase):
                 ctx.runtime.calls[-1],
             )
 
-            (feature_dir / PRODUCT_MANAGEMENT_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PRODUCT_MANAGEMENT_DIR / "done").touch()
-
-            # Create workflow event for done file creation
+            # Create workflow event for PM done tool call
             event = WorkflowEvent(
-                kind="pm_completed",
-                path="01_product_management/done",
-                payload={},
+                kind="pm_done",
+                payload={"payload": {}},
             )
             updates, next_phase = handler.handle_event(
                 event, load_state(state_path), ctx
@@ -234,19 +229,18 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             state["research_tasks"] = {}
             write_state(state_path, state)
 
-            (feature_dir / RESEARCH_DIR / "code-market-fit").mkdir(
-                parents=True, exist_ok=True
-            )
-            (feature_dir / RESEARCH_DIR / "code-market-fit" / "request.md").write_text(
-                "analyze", encoding="utf-8"
-            )
-
             handler = ProductManagementHandler()
-            # Simulate file.created event for research request
+            # Simulate MCP tool call for research dispatch
             event = WorkflowEvent(
-                kind="code_research_requested",
-                path="03_research/code-market-fit/request.md",
-                payload={},
+                kind="research_code_req",
+                payload={
+                    "payload": {
+                        "topic": "market-fit",
+                        "context": "Analyze market fit",
+                        "questions": ["What are the requirements?"],
+                        "scope_hints": [],
+                    }
+                },
             )
             updates, next_phase = handler.handle_event(
                 event, load_state(state_path), ctx
@@ -265,12 +259,10 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             state = load_state(state_path)
             state["research_tasks"] = {"market-fit": "dispatched"}
             write_state(state_path, state)
-            (feature_dir / RESEARCH_DIR / "code-market-fit" / "done").touch()
 
             done_event = WorkflowEvent(
-                kind="code_research_done",
-                path="03_research/code-market-fit/done",
-                payload={},
+                kind="research_done",
+                payload={"payload": {"topic": "market-fit", "role_type": "code"}},
             )
             handler.handle_event(done_event, load_state(state_path), ctx)
 

@@ -6,8 +6,14 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
+import yaml
+
 from agentmux import monitor
 from agentmux.agent_labels import role_display_label
+from agentmux.monitor.progress_parser import (
+    ExecutionProgress,
+    parse_execution_progress,
+)
 from agentmux.monitor.state_reader import (
     EVENT_LABELS,
     OPTIONAL_PHASES,
@@ -23,6 +29,7 @@ def _make_test_files(feature_dir: Path) -> RuntimeFiles:
         project_dir=feature_dir.parent,
         feature_dir=feature_dir,
         product_management_dir=feature_dir / SESSION_DIR_NAMES["product_management"],
+        architecting_dir=feature_dir / SESSION_DIR_NAMES["architecting"],
         planning_dir=feature_dir / SESSION_DIR_NAMES["planning"],
         research_dir=feature_dir / SESSION_DIR_NAMES["research"],
         design_dir=feature_dir / SESSION_DIR_NAMES["design"],
@@ -32,25 +39,18 @@ def _make_test_files(feature_dir: Path) -> RuntimeFiles:
         context=feature_dir / "context.md",
         requirements=feature_dir / "requirements.md",
         plan=feature_dir / SESSION_DIR_NAMES["planning"] / "plan.md",
-        architecture=feature_dir / SESSION_DIR_NAMES["planning"] / "architecture.md",
+        architecture=feature_dir
+        / SESSION_DIR_NAMES["architecting"]
+        / "architecture.md",
         tasks=feature_dir / SESSION_DIR_NAMES["planning"] / "tasks.md",
         execution_plan=feature_dir
         / SESSION_DIR_NAMES["planning"]
-        / "execution_plan.json",
+        / "execution_plan.yaml",
         design=feature_dir / SESSION_DIR_NAMES["design"] / "design.md",
         review=feature_dir / SESSION_DIR_NAMES["review"] / "review.md",
         fix_request=feature_dir / SESSION_DIR_NAMES["review"] / "fix_request.md",
         changes=feature_dir / SESSION_DIR_NAMES["completion"] / "changes.md",
         summary=feature_dir / SESSION_DIR_NAMES["completion"] / "summary.md",
-        pm_preference_proposal=feature_dir
-        / SESSION_DIR_NAMES["product_management"]
-        / "approved_preferences.json",
-        architect_preference_proposal=feature_dir
-        / SESSION_DIR_NAMES["planning"]
-        / "approved_preferences.json",
-        reviewer_preference_proposal=feature_dir
-        / SESSION_DIR_NAMES["completion"]
-        / "approved_preferences.json",
         state=feature_dir / "state.json",
         runtime_state=feature_dir / "runtime_state.json",
         orchestrator_log=feature_dir / "orchestrator.log",
@@ -401,20 +401,20 @@ class MonitorTests(unittest.TestCase):
                 encoding="utf-8",
             )
             runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
-            (feature_dir / "02_planning").mkdir(parents=True, exist_ok=True)
-            (feature_dir / "04_design").mkdir(parents=True, exist_ok=True)
-            (feature_dir / "02_planning" / "plan.md").write_text(
+            (feature_dir / "04_planning").mkdir(parents=True, exist_ok=True)
+            (feature_dir / "05_design").mkdir(parents=True, exist_ok=True)
+            (feature_dir / "04_planning" / "plan.md").write_text(
                 "# plan\n", encoding="utf-8"
             )
-            (feature_dir / "04_design" / "design.md").write_text(
+            (feature_dir / "05_design" / "design.md").write_text(
                 "# design\n", encoding="utf-8"
             )
 
             output = self._strip_ansi(self._render(feature_dir, width=15, height=24))
 
             self.assertNotIn(" DOCUMENTS", output)
-            self.assertNotIn("02_planning", output)
-            self.assertNotIn("04_design", output)
+            self.assertNotIn("04_planning", output)
+            self.assertNotIn("05_design", output)
 
     def test_render_research_section_uses_numbered_research_directory(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -426,15 +426,11 @@ class MonitorTests(unittest.TestCase):
             )
 
             state_path.write_text(
-                (
-                    '{"phase": "planning", "research_tasks": '
-                    '{"auth-module": "dispatched"}}'
-                ),
+                ('{"phase": "planning", "research_tasks": {"auth-module": "done"}}'),
                 encoding="utf-8",
             )
             runtime_state_path.write_text('{"primary": {}}', encoding="utf-8")
             research_dir.mkdir(parents=True, exist_ok=True)
-            (research_dir / "done").write_text("", encoding="utf-8")
 
             output = self._strip_ansi(self._render(feature_dir, width=40, height=24))
 
@@ -524,10 +520,18 @@ class MonitorTests(unittest.TestCase):
             (planning_dir / "plan_2.md").write_text(
                 "## Sub-plan 2: API wiring\n", encoding="utf-8"
             )
-            (planning_dir / "execution_plan.json").write_text(
-                (
-                    '{"version": 1, "groups": [{"group_id": "g1", "mode": "parallel", '
-                    '"plans": [{"file": "plan_2.md", "name": "API wiring"}]}]}'
+            (planning_dir / "execution_plan.yaml").write_text(
+                yaml.dump(
+                    {
+                        "groups": [
+                            {
+                                "group_id": "g1",
+                                "mode": "parallel",
+                                "plans": [{"file": "plan_2.md", "name": "API wiring"}],
+                            }
+                        ],
+                    },
+                    default_flow_style=False,
                 ),
                 encoding="utf-8",
             )
@@ -665,8 +669,8 @@ class MonitorTests(unittest.TestCase):
                 "\n".join(
                     [
                         "2026-03-21 11:20:06  context.md",
-                        "2026-03-21 11:20:07  02_planning/architect_prompt.md",
-                        "2026-03-21 11:20:08  02_planning/plan.md",
+                        "2026-03-21 11:20:07  02_architecting/architect_prompt.md",
+                        "2026-03-21 11:20:08  04_planning/plan.yaml",
                         "2026-03-21 11:20:10  03_research/code-auth/request.md",
                         "2026-03-21 11:20:11  03_research/code-auth/summary.md",
                     ]
@@ -689,7 +693,7 @@ class MonitorTests(unittest.TestCase):
                 )
 
             self.assertIn("11:20 > planning", output)
-            self.assertIn("11:20 + 02_planning/plan.md", output)
+            self.assertIn("11:20 + 04_planning/plan.yaml", output)
             self.assertIn("11:20 + 03_research/code-auth/summary.md", output)
             self.assertIn("11:20 > implementing", output)
             self.assertNotIn("context.md", output)
@@ -697,10 +701,10 @@ class MonitorTests(unittest.TestCase):
             self.assertNotIn("code-auth/request.md", output)
             self.assertLess(
                 output.index("11:20 > planning"),
-                output.index("11:20 + 02_planning/plan.md"),
+                output.index("11:20 + 04_planning/plan.yaml"),
             )
             self.assertLess(
-                output.index("11:20 + 02_planning/plan.md"),
+                output.index("11:20 + 04_planning/plan.yaml"),
                 output.index("11:20 > implementing"),
             )
 
@@ -712,7 +716,7 @@ class MonitorTests(unittest.TestCase):
             files.state.write_text('{"phase": "planning"}', encoding="utf-8")
             files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
             files.created_files_log.write_text(
-                "2026-03-21 11:20:08  06_review/review.md\n",
+                "2026-03-21 11:20:08  07_review/review.md\n",
                 encoding="utf-8",
             )
 
@@ -730,7 +734,7 @@ class MonitorTests(unittest.TestCase):
                 )
 
             self.assertIn(" LOG", output)
-            self.assertIn("11:20 + 06_review/review.md", output)
+            self.assertIn("11:20 + 07_review/review.md", output)
 
     def test_render_failed_state_shows_clean_failure_classification_and_cause(
         self,
@@ -799,7 +803,7 @@ class MonitorTests(unittest.TestCase):
             files.state.write_text('{"phase": "planning"}', encoding="utf-8")
             files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
             files.created_files_log.write_text(
-                "2026-03-21 11:20:08  02_planning/plan.md\n",
+                "2026-03-21 11:20:08  04_planning/plan.yaml\n",
                 encoding="utf-8",
             )
 
@@ -816,8 +820,8 @@ class MonitorTests(unittest.TestCase):
 
             # Raw output should contain OSC 8 hyperlink sequences
             self.assertIn("\033]8;;file://", output)
-            # Should contain the absolute path to the file
-            self.assertIn("02_planning/plan.md", output)
+            # Should contain the path to the file
+            self.assertIn("04_planning/plan.yaml", output)
 
     def test_render_phase_log_entries_do_not_contain_osc8_hyperlinks(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -830,7 +834,7 @@ class MonitorTests(unittest.TestCase):
                 "2026-03-21 11:20:05  planning\n", encoding="utf-8"
             )
             files.created_files_log.write_text(
-                "2026-03-21 11:20:08  02_planning/plan.md\n",
+                "2026-03-21 11:20:08  04_planning/plan.yaml\n",
                 encoding="utf-8",
             )
 
@@ -854,7 +858,7 @@ class MonitorTests(unittest.TestCase):
                     phase_line = line
                 # Look for file entry line by checking for the relative path in the line
                 # (accounting for OSC 8 escape sequences that may wrap it)
-                if "02_planning/plan.md" in line and "+ " in line:
+                if "04_planning/plan.yaml" in line and "+ " in line:
                     file_line = line
 
             # Phase events should NOT contain OSC 8
@@ -871,7 +875,7 @@ class MonitorTests(unittest.TestCase):
             files.state.write_text('{"phase": "planning"}', encoding="utf-8")
             files.runtime_state.write_text('{"primary": {}}', encoding="utf-8")
             files.created_files_log.write_text(
-                "2026-03-21 11:20:08  02_planning/plan.md\n",
+                "2026-03-21 11:20:08  04_planning/plan.yaml\n",
                 encoding="utf-8",
             )
 
@@ -892,7 +896,7 @@ class MonitorTests(unittest.TestCase):
             self.assertNotIn("\033]8;;", stripped)
             self.assertNotIn("\033\\", stripped)
             # But should still contain the visible path text
-            self.assertIn("02_planning/plan.md", stripped)
+            self.assertIn("04_planning/plan.yaml", stripped)
 
     def test_render_shows_session_name_in_footer(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -1005,19 +1009,16 @@ class MonitorTests(unittest.TestCase):
 
         expected = {
             "requirements.md",
-            "01_product_management/analysis.md",
-            "02_planning/plan.md",
-            "02_planning/tasks.md",
+            "04_planning/plan.yaml",
+            "04_planning/tasks.md",
             "03_research/code-*/summary.md",
             "03_research/code-*/detail.md",
-            "03_research/code-*/done",
             "03_research/web-*/summary.md",
             "03_research/web-*/detail.md",
-            "03_research/web-*/done",
-            "04_design/design.md",
-            "05_implementation/done_*",
-            "06_review/review.md",
-            "06_review/fix_request.md",
+            "05_design/design.md",
+            "06_implementation/done_*",
+            "07_review/review.md",
+            "07_review/fix_request.md",
             "08_completion/changes.md",
             "08_completion/approval.json",
         }
@@ -1151,6 +1152,154 @@ class MonitorTests(unittest.TestCase):
                 len(lines),
                 f"Expected {height} lines, got {len(lines)}",
             )
+
+
+class ExecutionProgressParserTests(unittest.TestCase):
+    """Direct unit tests for parse_execution_progress()."""
+
+    def test_known_field_names(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 3,
+                "completed_groups": 1,
+                "active_group_index": 1,
+                "active_group_mode": "serial",
+                "active_plan_ids": ["plan_2"],
+                "groups": [{"id": "g1"}, {"id": "g2"}, {"id": "g3"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        self.assertIsInstance(result, ExecutionProgress)
+        assert result is not None
+        self.assertEqual(result.total, 3)
+        self.assertEqual(result.completed, 1)
+        self.assertEqual(result.active_index, 1)
+        self.assertEqual(result.active_group, "g2")
+        self.assertEqual(result.active_mode, "serial")
+        self.assertEqual(result.active_plan_ids, ["plan_2"])
+        self.assertEqual(result.completed_group_ids, ["g1"])
+        self.assertEqual(result.queued_group_ids, ["g3"])
+
+    def test_alternative_field_names(self) -> None:
+        state = {
+            "implementation_group_total": 3,
+            "implementation_group_index": 2,
+            "implementation_group_mode": "parallel",
+            "implementation_active_plan_ids": ["plan_2", "plan_3"],
+            "implementation_completed_group_ids": ["group_1"],
+        }
+        result = parse_execution_progress(state)
+        self.assertIsInstance(result, ExecutionProgress)
+        assert result is not None
+        self.assertEqual(result.total, 3)
+        self.assertEqual(result.completed, 1)
+        self.assertEqual(result.active_index, 1)
+        self.assertEqual(result.active_mode, "parallel")
+        self.assertEqual(result.active_plan_ids, ["plan_2", "plan_3"])
+
+    def test_active_index_zero_based_stays(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 2,
+                "completed_groups": 0,
+                "active_group_index": 0,
+                "groups": [{"id": "g1"}, {"id": "g2"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        self.assertEqual(result.active_index, 0)
+
+    def test_active_index_one_based_converted(self) -> None:
+        """active_group_index=1 stays 1 (0-based).
+
+        Only implementation_group_index is 1-based.
+        """
+        state = {
+            "execution_progress": {
+                "total_groups": 3,
+                "completed_groups": 0,
+                "active_group_index": 1,
+                "groups": [{"id": "g1"}, {"id": "g2"}, {"id": "g3"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        self.assertEqual(result.active_index, 1)
+
+    def test_active_index_one_based_for_implementation_group_index(self) -> None:
+        state = {
+            "implementation_group_total": 3,
+            "implementation_group_index": 2,
+            "groups": [{"id": "g1"}, {"id": "g2"}, {"id": "g3"}],
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        self.assertEqual(result.active_index, 1)
+
+    def test_none_when_no_signal(self) -> None:
+        state = {"phase": "implementing"}
+        result = parse_execution_progress(state)
+        self.assertIsNone(result)
+
+    def test_none_when_empty_state(self) -> None:
+        result = parse_execution_progress({})
+        self.assertIsNone(result)
+
+    def test_none_when_total_zero(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 0,
+                "completed_groups": 0,
+                "groups": [],
+            }
+        }
+        result = parse_execution_progress(state)
+        self.assertIsNone(result)
+
+    def test_completed_from_list_length(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 4,
+                "completed_groups": ["g1", "g2"],
+                "active_group_index": 2,
+                "groups": [{"id": "g1"}, {"id": "g2"}, {"id": "g3"}, {"id": "g4"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        self.assertEqual(result.completed, 2)
+
+    def test_scheduled_execution_progress(self) -> None:
+        state = {
+            "phase": "implementing",
+            "staged_execution": {
+                "total_groups": 2,
+                "completed_groups": 0,
+                "active_group_index": 0,
+                "active_group_mode": "parallel",
+                "active_plan_ids": ["plan_1", "plan_2"],
+                "groups": [{"id": "stage1"}, {"id": "stage2"}],
+            },
+        }
+        result = parse_execution_progress(state)
+        self.assertIsInstance(result, ExecutionProgress)
+        assert result is not None
+        self.assertEqual(result.total, 2)
+        self.assertEqual(result.active_group, "stage1")
+        self.assertEqual(result.active_mode, "parallel")
+
+    def test_frozen_dataclass_is_immutable(self) -> None:
+        state = {
+            "execution_progress": {
+                "total_groups": 1,
+                "groups": [{"id": "g1"}],
+            }
+        }
+        result = parse_execution_progress(state)
+        assert result is not None
+        with self.assertRaises(AttributeError):
+            result.total = 99  # type: ignore[misc]
 
 
 if __name__ == "__main__":

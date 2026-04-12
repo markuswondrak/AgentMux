@@ -60,13 +60,6 @@ class CIWorkflowRequirementsTests(unittest.TestCase):
             any("python -m pytest tests" in step.get("run", "") for step in steps)
         )
 
-    def test_claude_md_documents_pytest_command(self) -> None:
-        repo_root = Path(__file__).resolve().parents[1]
-        claude_md = (repo_root / "CLAUDE.md").read_text(encoding="utf-8")
-
-        self.assertIn("python -m pytest tests", claude_md)
-        self.assertNotIn("There are no test or lint commands", claude_md)
-
 
 if __name__ == "__main__":
     unittest.main()

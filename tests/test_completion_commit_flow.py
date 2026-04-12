@@ -511,6 +511,71 @@ class CompletionCommitFlowTests(unittest.TestCase):
             self.assertEqual(0, updates.get("review_iteration"))
             self.assertEqual([], updates.get("completed_subplans"))
 
+    def test_finalize_approval_calls_ensure_branch_exactly_once_via_commit_on_branch(
+        self,
+    ) -> None:
+        """finalize_approval() should call ensure_branch() exactly once,
+        via the internal call inside commit_on_branch(). There should be
+        no redundant explicit ensure_branch() call.
+
+        Since commit_on_branch is mocked here (its internal ensure_branch
+        is not visible), we expect the explicit ensure_branch call count
+        to be 0 after the redundant call is removed.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td) / "feature"
+            project_dir = feature_dir.parent
+            project_dir.mkdir(parents=True, exist_ok=True)
+            files = create_feature_files(project_dir, feature_dir, "test", "session-x")
+
+            service = CompletionService()
+            call_order: list[str] = []
+
+            def track_ensure(*args, **kwargs):
+                call_order.append("ensure_branch")
+
+            def track_commit(*args, **kwargs):
+                call_order.append("commit_on_branch")
+                return "abc123"
+
+            with (
+                patch.object(
+                    GitBranchManager,
+                    "ensure_branch",
+                    side_effect=track_ensure,
+                ),
+                patch.object(
+                    GitBranchManager,
+                    "commit_on_branch",
+                    side_effect=track_commit,
+                ),
+                patch.object(
+                    GitBranchManager,
+                    "push_branch",
+                    return_value=True,
+                ),
+            ):
+                service.finalize_approval(
+                    files=files,
+                    github_config=GitHubConfig(),
+                    gh_available=False,
+                    issue_number=None,
+                    commit_message="feat: test commit",
+                    changed_paths=["file1.py"],
+                )
+
+            # After removing the redundant explicit ensure_branch call,
+            # ensure_branch should NOT be called explicitly here.
+            # commit_on_branch is mocked so its internal ensure_branch is not visible.
+            # Expected: 0 explicit ensure_branch calls.
+            self.assertEqual(
+                0,
+                call_order.count("ensure_branch"),
+                f"ensure_branch called {call_order.count('ensure_branch')} times, "
+                f"expected 0 (no explicit call; commit_on_branch is mocked). "
+                f"Call order: {call_order}",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

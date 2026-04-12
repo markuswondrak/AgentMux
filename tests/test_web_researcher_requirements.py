@@ -174,7 +174,7 @@ class WebResearcherRequirementsTests(unittest.TestCase):
 
             self.assertIn("03_research/web-<topic>/summary.md", prompt)
             self.assertIn("03_research/web-<topic>/detail.md", prompt)
-            self.assertIn("agentmux_research_dispatch_web", prompt)
+            self.assertIn("research_dispatch_web", prompt)
 
     def test_planning_handle_web_task_requested_spawns_researcher_and_updates_state(
         self,
@@ -187,40 +187,30 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             state["phase"] = "planning"
             write_state(state_path, state)
 
-            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(
-                parents=True, exist_ok=True
-            )
-            (
-                feature_dir / RESEARCH_DIR / "web-openai-models" / "request.md"
-            ).write_text(
-                "investigate models",
-                encoding="utf-8",
-            )
-            stale_done = feature_dir / RESEARCH_DIR / "web-openai-models" / "done"
-            stale_done.touch()
-
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="web_research_requested",
-                path="03_research/web-openai-models/request.md",
-                payload={},
+                kind="research_web_req",
+                payload={
+                    "payload": {
+                        "topic": "openai-models",
+                        "context": "Investigate OpenAI models API",
+                        "questions": ["What models are available?"],
+                        "scope_hints": [],
+                    }
+                },
             )
             updates, next_phase = handler.handle_event(
                 event, load_state(state_path), ctx
             )
 
             self.assertIsNone(next_phase)
-            self.assertFalse(stale_done.exists())
-            # spawn_task now receives the research directory
+            # spawn_task receives the research directory
             self.assertEqual(
                 ("spawn_task", "web-researcher", "openai-models", "web-openai-models"),
                 ctx.runtime.calls[-1],
             )
-            self.assertTrue(
-                (
-                    feature_dir / RESEARCH_DIR / "web-openai-models" / "prompt.md"
-                ).exists()
-            )
+            research_dir = feature_dir / RESEARCH_DIR / "web-openai-models"
+            self.assertTrue((research_dir / "request.md").exists())
             self.assertEqual(
                 "dispatched", updates.get("web_research_tasks", {}).get("openai-models")
             )
@@ -236,16 +226,10 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             state["phase"] = "planning"
             state["web_research_tasks"] = {"openai-models": "dispatched"}
             write_state(state_path, state)
-            (feature_dir / RESEARCH_DIR / "web-openai-models").mkdir(
-                parents=True, exist_ok=True
-            )
-            (feature_dir / RESEARCH_DIR / "web-openai-models" / "done").touch()
-
             handler = PlanningHandler()
             event = WorkflowEvent(
-                kind="web_research_done",
-                path="03_research/web-openai-models/done",
-                payload={},
+                kind="research_done",
+                payload={"payload": {"topic": "openai-models", "role_type": "web"}},
             )
             updates, next_phase = handler.handle_event(
                 event, load_state(state_path), ctx

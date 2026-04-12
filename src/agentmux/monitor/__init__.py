@@ -12,15 +12,32 @@ from pathlib import Path
 
 from ..configuration import infer_project_dir, load_layered_config
 from ..sessions.state_store import load_runtime_files
+from ..shared.models import RuntimeFiles
 from ..terminal_ui.layout import MONITOR_WIDTH
 from . import render as render_module  # noqa: F401
 from .render import _ANSI_RE as _ANSI_RE
 from .render import RESET as RESET
 from .render import WHITE as WHITE
-from .render import render as render
+from .render import Monitor as Monitor
 from .state_reader import PIPELINE_STATES as PIPELINE_STATES
 from .state_reader import get_role_states as get_role_states
 from .state_reader import load_state
+from .state_reader import tmux_session_exists as tmux_session_exists
+
+
+def render(
+    session_name: str,
+    files: RuntimeFiles,
+    agents: dict[str, dict[str, str]],
+    width: int,
+    height: int,
+    start_time: float,
+    log_path: Path | None = None,
+) -> str:
+    """Render a monitor frame for the given session state."""
+    mon = Monitor(session_name, files, agents)
+    mon._start_time = start_time
+    return mon.render(width, height)
 
 
 def append_status_change(
@@ -59,14 +76,25 @@ def main() -> None:
         for role, agent in loaded.agents.items()
     }
 
-    start_time = time.time()
+    monitor = Monitor(args.session_name, files, agents)
     prev_status: str | None = None
+    session_lost_count = 0
 
     sys.stdout.write("\033[?25l")
     sys.stdout.flush()
 
     try:
         while True:
+            # Check whether the tmux session still exists
+            if not tmux_session_exists(args.session_name):
+                session_lost_count += 1
+                # Give it 2 consecutive failures to avoid race conditions
+                # during session teardown
+                if session_lost_count >= 2:
+                    break
+            else:
+                session_lost_count = 0
+
             width, height = os.get_terminal_size()
             if width != MONITOR_WIDTH:
                 own_pane = os.environ.get("TMUX_PANE", "")
@@ -83,15 +111,7 @@ def main() -> None:
                         check=False,
                     )
                     width, height = os.get_terminal_size()
-            output = render(
-                session_name=args.session_name,
-                files=files,
-                agents=agents,
-                width=width,
-                height=height,
-                start_time=start_time,
-                log_path=files.status_log,
-            )
+            output = monitor.render(width, height)
             sys.stdout.write("\033[H\033[2J" + output)
             sys.stdout.flush()
             state = load_state(files.state)

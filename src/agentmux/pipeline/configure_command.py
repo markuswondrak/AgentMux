@@ -6,9 +6,10 @@ from pathlib import Path
 import yaml
 
 from ..configuration import load_layered_config
+from ..configuration.providers import get_known_providers
 from ..integrations.opencode_agents import OpenCodeAgentConfigurator
 from ..shared.models import OPENCODE_AGENT_ROLES as ROLES
-from .init_command import KNOWN_PROVIDERS, _select, _text, detect_clis
+from .init_command import _select, _text, detect_clis
 
 
 def run_configure(
@@ -43,8 +44,8 @@ def run_configure(
         raise SystemExit(1)
 
     # Guard condition 2: Provider must be known (if specified)
-    if provider is not None and provider not in KNOWN_PROVIDERS:
-        known_list = ", ".join(KNOWN_PROVIDERS)
+    if provider is not None and provider not in get_known_providers():
+        known_list = ", ".join(get_known_providers())
         print(
             f"Unknown provider '{provider}'. Known providers: {known_list}",
             file=sys.stderr,
@@ -153,9 +154,9 @@ def _handle_interactive_mode(
         detected = detect_clis()
         available = [p for p, present in detected.items() if present]
         if not available:
+            known = ", ".join(get_known_providers())
             print(
-                "No supported provider CLI detected. "
-                "Install one of: claude, codex, gemini, opencode, copilot.",
+                f"No supported provider CLI detected. Install one of: {known}.",
                 file=sys.stderr,
             )
             raise SystemExit(1)

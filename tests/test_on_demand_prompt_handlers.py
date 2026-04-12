@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -96,7 +95,7 @@ def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
     files.architecture.parent.mkdir(parents=True, exist_ok=True)
     files.architecture.write_text("# Architecture", encoding="utf-8")
 
-    architect_prompt = feature_dir / "02_planning" / "architect_prompt.md"
+    architect_prompt = feature_dir / "02_architecting" / "architect_prompt.md"
     architect_prompt.parent.mkdir(parents=True, exist_ok=True)
     architect_prompt.write_text("architect prompt", encoding="utf-8")
     agents = {
@@ -117,7 +116,7 @@ def _make_ctx(feature_dir: Path) -> tuple[PipelineContext, Path]:
 def _write_execution_plan(
     feature_dir: Path, plans: list[tuple[int, str]], *, mode: str
 ) -> None:
-    planning_dir = feature_dir / "02_planning"
+    planning_dir = feature_dir / "04_planning"
     planning_dir.mkdir(parents=True, exist_ok=True)
     (planning_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
     for index, name in plans:
@@ -129,10 +128,11 @@ def _write_execution_plan(
             f"# Tasks for plan {index}\n\n- [ ] execute sub-plan {index}\n",
             encoding="utf-8",
         )
-    (planning_dir / "execution_plan.json").write_text(
-        json.dumps(
+    import yaml
+
+    (planning_dir / "execution_plan.yaml").write_text(
+        yaml.dump(
             {
-                "version": 1,
                 "groups": [
                     {
                         "group_id": "g1",
@@ -143,7 +143,8 @@ def _write_execution_plan(
                         ],
                     }
                 ],
-            }
+            },
+            default_flow_style=False,
         ),
         encoding="utf-8",
     )
@@ -169,7 +170,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             updated.update(updates)
 
             self.assertTrue(
-                (ctx.files.implementation_dir / "coder_prompt_1.txt").exists()
+                (ctx.files.implementation_dir / "coder_prompt_1.md").exists()
             )
             self.assertEqual(
                 [
@@ -177,7 +178,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
                     (
                         "send",
                         "coder",
-                        "coder_prompt_1.txt",
+                        "coder_prompt_1.md",
                         "[coder] implementation",
                         None,
                     ),
@@ -214,7 +215,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
                     (
                         "send_many",
                         "coder",
-                        ["coder_prompt_1.txt", "coder_prompt_2.txt"],
+                        ["coder_prompt_1.md", "coder_prompt_2.md"],
                     ),
                 ],
                 ctx.runtime.calls,
@@ -222,8 +223,8 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             self.assertEqual(
                 [
                     [
-                        (1, "coder_prompt_1.txt", "[coder] A"),
-                        (2, "coder_prompt_2.txt", "[coder] B"),
+                        (1, "coder_prompt_1.md", "[coder] A"),
+                        (2, "coder_prompt_2.md", "[coder] B"),
                     ]
                 ],
                 ctx.runtime.parallel_specs,
@@ -258,11 +259,9 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             self.assertEqual("parallel", state.get("implementation_group_mode"))
 
             ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
-            (ctx.files.implementation_dir / "done_1").write_text("", encoding="utf-8")
             event = WorkflowEvent(
-                kind="done_marker",
-                path="05_implementation/done_1",
-                payload={},
+                kind="done",
+                payload={"payload": {"subplan_index": 1}},
             )
             updates, next_phase = handler.handle_event(event, state, ctx)
             state.update(updates)
@@ -275,7 +274,7 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
                     (
                         "send_many",
                         "coder",
-                        ["coder_prompt_1.txt", "coder_prompt_2.txt"],
+                        ["coder_prompt_1.md", "coder_prompt_2.md"],
                     ),
                     ("hide_task", "coder", 1),
                 ],
@@ -319,11 +318,11 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             handler = FixingHandler()
             handler.enter(load_state(state_path), ctx)
 
-            self.assertTrue((ctx.files.review_dir / "fix_prompt.txt").exists())
+            self.assertTrue((ctx.files.review_dir / "fix_prompt.md").exists())
             self.assertEqual(
                 [
                     ("kill_primary", "coder"),
-                    ("send", "coder", "fix_prompt.txt", "[coder] fix 1", None),
+                    ("send", "coder", "fix_prompt.md", "[coder] fix 1", None),
                 ],
                 ctx.runtime.calls,
             )

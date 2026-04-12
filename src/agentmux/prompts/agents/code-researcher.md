@@ -17,7 +17,7 @@ Your job:
 2. Investigate relevant code and documentation in the project directory.
 3. Write `03_research/code-[[placeholder:topic]]/summary.md` for the architect (see format below).
 4. Write `03_research/code-[[placeholder:topic]]/detail.md` for designer/coder agents (see format below).
-5. FINAL STEP ONLY — create the completion marker file `03_research/code-[[placeholder:topic]]/done` in the session directory and leave it empty.
+5. FINAL STEP ONLY — call `mcp__agentmux__submit_research_done(topic="[[placeholder:topic]]", type="code")` to signal completion to the orchestrator.
 
 ## Output format
 
@@ -37,7 +37,6 @@ Your job:
 
 Constraints:
 - Communicate only through files in the session directory.
-- Do not update `state.json`.
-- Do not write anything to the marker file; create it as an empty file.
-- Do not ask questions. If information is missing or unclear, make reasonable assumptions and document them in your summary.
+- Do not invent facts.
+- Do not ask questions. If the scope is unclear, use your best judgment and document your interpretation.
 - Only write files in the session directory. Do not create or modify any files in the project directory.

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from ..sessions.state_store import now_iso, read_json_resilient, write_state
+from ..sessions.state_store import now_iso, write_state
 from .transitions import PipelineContext
+
+if TYPE_CHECKING:
+    from .event_router import WorkflowEvent
 
 
 def validate_last_event(value: str) -> None:
@@ -56,7 +60,22 @@ def reset_markers(feature_dir: Path, pattern: str) -> None:
 
 
 def load_plan_meta(planning_dir: Path) -> dict[str, object]:
-    return read_json_resilient(planning_dir / "plan_meta.json", {})
+    import yaml
+
+    path = planning_dir / "execution_plan.yaml"
+    if not path.exists():
+        return {}
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return {}
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    meta_keys = {"needs_design", "needs_docs", "doc_files", "review_strategy"}
+    return {k: v for k, v in data.items() if k in meta_keys}
 
 
 # =============================================================================
@@ -103,11 +122,6 @@ def dispatch_research_task(
     if topic in tasks:
         return {}, None
 
-    # Remove stale done marker if exists
-    done_marker = ctx.files.research_dir / f"{prefix}{topic}" / "done"
-    if done_marker.exists():
-        done_marker.unlink()
-
     # Build and write prompt
     research_dir = ctx.files.research_dir / f"{prefix}{topic}"
     prompt_builder = (
@@ -125,6 +139,54 @@ def dispatch_research_task(
     # Update state
     tasks[topic] = "dispatched"
     return {tasks_key: tasks}, None
+
+
+def handle_research_request(
+    role: str,
+    event: WorkflowEvent,
+    state: dict,
+    ctx: PipelineContext,
+) -> tuple[dict, str | None]:
+    """Extract payload, write request.md, and dispatch a research task.
+
+    Shared by all handlers that respond to research_code_req / research_web_req
+    tool events. The only difference per call site is the role string.
+
+    Args:
+        role: "code-researcher" or "web-researcher"
+        event: The incoming WorkflowEvent (payload["payload"] is the MCP payload)
+        state: Current state dict (read-only)
+        ctx: Pipeline context
+
+    Returns:
+        Tuple of (state_updates, None) — never transitions phase
+    """
+    payload = event.payload.get("payload", {})
+    topic = payload.get("topic", "")
+    if not topic:
+        return {}, None
+
+    prefix = "code-" if role == "code-researcher" else "web-"
+    req_dir = ctx.files.research_dir / f"{prefix}{topic}"
+    req_dir.mkdir(parents=True, exist_ok=True)
+    req_path = req_dir / "request.md"
+    if not req_path.exists():
+        questions = payload.get("questions", [])
+        scope_hints = payload.get("scope_hints", [])
+        content = (
+            f"# Research Request: {topic}\n\n"
+            f"## Context\n{payload.get('context', '')}\n\n"
+            f"## Questions\n"
+            + "\n".join(f"- {q}" for q in questions)
+            + (
+                "\n\n## Scope Hints\n" + "\n".join(f"- {h}" for h in scope_hints)
+                if scope_hints
+                else ""
+            )
+        )
+        req_path.write_text(content, encoding="utf-8")
+
+    return dispatch_research_task(role, topic, state, ctx)
 
 
 def notify_research_complete(
@@ -175,36 +237,56 @@ def notify_research_complete(
     return {tasks_key: tasks}, None
 
 
-def apply_role_preferences(ctx: PipelineContext, role: str) -> None:
-    """Apply approved preferences for a role if they exist.
+def handle_research_done(
+    event: WorkflowEvent,
+    state: dict,
+    ctx: PipelineContext,
+    notify_target: str,
+) -> tuple[dict, str | None]:
+    """Handle research completion via tool event.
+
+    Shared by all handlers that respond to research_done tool events.
+    The only difference per call site is the notify_target string.
 
     Args:
-        ctx: Pipeline context with files
-        role: Role name (e.g., "architect", "product-manager", "reviewer")
-    """
-    from .preference_memory import (
-        apply_preference_proposal,
-        load_preference_proposal,
-        proposal_artifact_for_source,
-    )
+        event: The incoming WorkflowEvent (payload["payload"] is the MCP payload)
+        state: Current state dict (read-only)
+        ctx: Pipeline context
+        notify_target: Role to notify (e.g., "architect", "planner", "product-manager")
 
-    proposal_path = proposal_artifact_for_source(ctx.files, role)
-    proposal = load_preference_proposal(proposal_path)
-    if proposal:
-        apply_preference_proposal(ctx.files.project_dir, proposal)
+    Returns:
+        Tuple of (state_updates, None) — never transitions phase
+    """
+    payload = event.payload.get("payload", {})
+    topic = payload.get("topic", "")
+    role = research_role_from_payload(payload)
+    if not topic or role is None:
+        return {}, None
+
+    return notify_research_complete(role, topic, state, ctx, notify_target)
+
+
+def research_role_from_payload(payload: dict) -> str | None:
+    """Map research-done payloads to the corresponding researcher role."""
+    role_type = str(payload.get("role_type") or payload.get("type") or "").strip()
+    if role_type == "code":
+        return "code-researcher"
+    if role_type == "web":
+        return "web-researcher"
+    return None
 
 
 def select_reviewer_type(plan_meta: dict) -> str:
     """Select the appropriate reviewer type based on plan_meta review_strategy.
 
     Args:
-        plan_meta: The plan_meta dictionary from 02_planning/plan_meta.json
+        plan_meta: The plan_meta dictionary from 02_planning/execution_plan.yaml
 
     Returns:
         One of "logic" | "quality" | "expert"
 
     Rules:
-        - Missing review_strategy -> "logic" (backward compat default)
+        - Missing review_strategy -> "logic" (default)
         - low severity -> "quality"
         - medium severity + no security/performance in focus -> "logic"
         - medium severity + security OR performance in focus -> "expert"

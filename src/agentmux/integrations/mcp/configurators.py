@@ -30,6 +30,21 @@ def _persistent_local_server(server: McpServerSpec) -> dict[str, object]:
     }
 
 
+def _copilot_local_server(server: McpServerSpec) -> dict[str, object]:
+    """Build a Copilot CLI-compatible local MCP server entry.
+
+    Copilot CLI uses 'command' as a string and 'args' as a separate array,
+    unlike OpenCode which uses 'command' as a list.
+    See: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers
+    """
+    return {
+        "type": "local",
+        "command": _python_command(),
+        "args": ["-m", server.module],
+        "enabled": True,
+    }
+
+
 def _toml_quote(value: str) -> str:
     escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
     return f'"{escaped}"'
@@ -92,18 +107,20 @@ class PersistentMcpConfigurator(ABC):
     ) -> str:
         path = self.config_path(project_dir)
         return (
-            f"Warning: Missing MCP config for {self.provider} ({roles_label}) "
-            f"at {path}. "
-            "Research MCP tools will be unavailable until configured."
+            f"Warning: Agentmux MCP server not configured for {self.provider} "
+            f"({roles_label}) at {path}. "
+            "The pipeline will not function — run 'agentmux init' to configure."
         )
 
     def configured_message(self, server: McpServerSpec, project_dir: Path) -> str:
         path = self.config_path(project_dir)
-        return f"Configured MCP research tools for {self.provider} at {path}."
+        return f"Configured agentmux MCP tools for {self.provider} at {path}."
 
     def skipped_message(self, server: McpServerSpec) -> str:
         return (
-            f"Skipped MCP setup for {self.provider}; research will fall back to files."
+            f"Warning: Skipped agentmux MCP setup for {self.provider}. "
+            "The pipeline will not function without it — "
+            "re-run 'agentmux init' to configure."
         )
 
 
@@ -148,8 +165,8 @@ class ClaudeConfigurator(JsonMcpConfigurator):
     ) -> str:
         path = self.config_path(project_dir)
         return (
-            f"Configure project MCP research tools for claude ({roles_label}) "
-            f"at {path}?"
+            f"Agentmux requires its MCP server for claude ({roles_label}) "
+            f"to coordinate agents. Install at {path}?"
         )
 
 
@@ -182,8 +199,8 @@ class GeminiConfigurator(JsonMcpConfigurator):
     ) -> str:
         path = self.config_path(project_dir)
         return (
-            f"Configure project MCP research tools for gemini ({roles_label}) "
-            f"at {path}?"
+            f"Agentmux requires its MCP server for gemini ({roles_label}) "
+            f"to coordinate agents. Install at {path}?"
         )
 
 
@@ -212,8 +229,8 @@ class OpenCodeConfigurator(JsonMcpConfigurator):
     ) -> str:
         path = self.config_path(project_dir)
         return (
-            f"Configure project MCP research tools for opencode ({roles_label}) "
-            f"at {path}?"
+            f"Agentmux requires its MCP server for opencode ({roles_label}) "
+            f"to coordinate agents. Install at {path}?"
         )
 
 
@@ -250,20 +267,90 @@ class CodexConfigurator(PersistentMcpConfigurator):
     ) -> str:
         path = self.config_path(project_dir)
         return (
-            f"Codex configures MCP servers in {path}. "
-            f"Configure agentmux-research for codex ({roles_label}) there?"
+            f"Agentmux requires its MCP server for codex ({roles_label}) "
+            f"to coordinate agents. Install at {path}?"
         )
 
     def configured_message(self, server: McpServerSpec, project_dir: Path) -> str:
         path = self.config_path(project_dir)
-        return f"Configured codex MCP research tools at {path}."
+        return f"Configured agentmux MCP tools for codex at {path}."
+
+
+class QwenConfigurator(JsonMcpConfigurator):
+    provider = "qwen"
+
+    def config_path(self, project_dir: Path) -> Path:
+        _ = project_dir
+        return Path.home() / ".qwen" / "settings.json"
+
+    def has_server(self, server: McpServerSpec, project_dir: Path) -> bool:
+        data = self._load_json(project_dir)
+        servers = data.get("mcpServers", {})
+        return isinstance(servers, dict) and server.name in servers
+
+    def install(self, server: McpServerSpec, project_dir: Path) -> None:
+        data = self._load_json(project_dir)
+        servers = data.get("mcpServers")
+        if not isinstance(servers, dict):
+            servers = {}
+        servers[server.name] = _persistent_stdio_server(server)
+        data["mcpServers"] = servers
+        self._write_json(data, project_dir)
+
+    def prompt_message(
+        self, server: McpServerSpec, project_dir: Path, roles_label: str
+    ) -> str:
+        path = self.config_path(project_dir)
+        return (
+            f"Agentmux requires its MCP server for qwen ({roles_label}) "
+            f"to coordinate agents. Install at {path}?"
+        )
+
+
+class CopilotConfigurator(JsonMcpConfigurator):
+    """Installs agentmux MCP server into GitHub Copilot CLI config.
+
+    Config path: ~/.copilot/mcp-config.json
+    Source: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers
+    """
+
+    provider = "copilot"
+
+    def config_path(self, project_dir: Path) -> Path:
+        _ = project_dir
+        return Path.home() / ".copilot" / "mcp-config.json"
+
+    def has_server(self, server: McpServerSpec, project_dir: Path) -> bool:
+        data = self._load_json(project_dir)
+        servers = data.get("mcpServers", {})
+        return isinstance(servers, dict) and server.name in servers
+
+    def install(self, server: McpServerSpec, project_dir: Path) -> None:
+        data = self._load_json(project_dir)
+        servers = data.get("mcpServers")
+        if not isinstance(servers, dict):
+            servers = {}
+        servers[server.name] = _copilot_local_server(server)
+        data["mcpServers"] = servers
+        self._write_json(data, project_dir)
+
+    def prompt_message(
+        self, server: McpServerSpec, project_dir: Path, roles_label: str
+    ) -> str:
+        path = self.config_path(project_dir)
+        return (
+            f"Agentmux requires its MCP server for copilot ({roles_label}) "
+            f"to coordinate agents. Install at {path}?"
+        )
 
 
 CONFIGURATORS: dict[str, PersistentMcpConfigurator] = {
     "claude": ClaudeConfigurator(),
     "codex": CodexConfigurator(),
+    "copilot": CopilotConfigurator(),
     "gemini": GeminiConfigurator(),
     "opencode": OpenCodeConfigurator(),
+    "qwen": QwenConfigurator(),
 }
 
 
@@ -334,7 +421,10 @@ def _server_entry_matches(
         return False
 
     # Compare to what would be generated
-    expected_entry = _persistent_stdio_server(server)
+    if isinstance(configurator, CopilotConfigurator):
+        expected_entry = _copilot_local_server(server)
+    else:
+        expected_entry = _persistent_stdio_server(server)
 
     # Compare relevant fields (type, command, args)
     if existing_entry.get("type") != expected_entry.get("type"):

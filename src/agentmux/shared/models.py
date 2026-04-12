@@ -1,11 +1,27 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
-from typing import Any
 
 from .phase_catalog import SESSION_DIR_NAMES as SESSION_DIR_NAMES  # noqa: F401
+
+
+class BatchCommandMode(Enum):
+    """How the prompt file is passed to a batch-mode agent."""
+
+    POSITIONAL = "positional"  # prompt file as last positional arg
+    FLAG = "flag"  # prompt file directly after a flag (e.g. -p)
+    STDIN = "stdin"  # prompt file via stdin redirect (< prompt.md)
+
+
+@dataclass(frozen=True)
+class BatchCommand:
+    """Describes how to invoke a batch-mode agent."""
+
+    verb: str = ""  # Subcommand or empty for stdin-only CLIs (no subcommand)
+    mode: BatchCommandMode = BatchCommandMode.POSITIONAL
+
 
 PROMPT_AGENT_ROLES: tuple[str, ...] = (
     "architect",
@@ -37,13 +53,6 @@ OPENCODE_AGENT_ROLES: tuple[str, ...] = (
 
 BATCH_AGENT_ROLES: frozenset[str] = frozenset({"code-researcher", "web-researcher"})
 
-PREFERENCE_PROPOSAL_SOURCES: tuple[str, ...] = (
-    "product-manager",
-    "architect",
-    "planner",
-    "reviewer",
-)
-
 
 @dataclass(frozen=True)
 class AgentConfig:
@@ -55,7 +64,7 @@ class AgentConfig:
     env: dict[str, str] | None = None
     trust_snippet: str | None = None
     provider: str | None = None
-    batch_subcommand: str | None = None
+    batch_command: BatchCommand | None = None
     single_coder: bool = False
 
 
@@ -85,6 +94,7 @@ class RuntimeFiles:
     project_dir: Path
     feature_dir: Path
     product_management_dir: Path
+    architecting_dir: Path
     planning_dir: Path
     research_dir: Path
     design_dir: Path
@@ -102,9 +112,6 @@ class RuntimeFiles:
     fix_request: Path
     changes: Path
     summary: Path
-    pm_preference_proposal: Path
-    architect_preference_proposal: Path
-    reviewer_preference_proposal: Path
     state: Path
     runtime_state: Path
     orchestrator_log: Path
@@ -127,91 +134,13 @@ def tasks_file_for_plan(planning_dir: Path, plan_index: int) -> Path:
     while the global tasks.md remains available as an optional overview.
 
     Args:
-        planning_dir: The 02_planning directory path.
+        planning_dir: The 04_planning directory path.
         plan_index: The sub-plan index (1-based for first sub-plan).
 
     Returns:
         The path to the per-plan tasks file (e.g., tasks_1.md).
     """
     return planning_dir / f"tasks_{plan_index}.md"
-
-
-def _require_string(payload: dict[str, Any], key: str) -> str:
-    value = payload.get(key)
-    if not isinstance(value, str):
-        raise ValueError(f"`{key}` must be a string.")
-    stripped = value.strip()
-    if not stripped:
-        raise ValueError(f"`{key}` must not be empty.")
-    return stripped
-
-
-@dataclass(frozen=True)
-class PreferenceProposalEntry:
-    target_role: str
-    bullet: str
-
-    @classmethod
-    def from_dict(cls, payload: Any) -> PreferenceProposalEntry:
-        if not isinstance(payload, dict):
-            raise ValueError("Approved preference entries must be JSON objects.")
-        target_role = _require_string(payload, "target_role")
-        if target_role not in set(PROMPT_AGENT_ROLES):
-            raise ValueError(
-                "Approved preference entries must target one of "
-                f"{', '.join(PROMPT_AGENT_ROLES)}."
-            )
-        bullet = _require_string(payload, "bullet")
-        return cls(target_role=target_role, bullet=bullet)
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "target_role": self.target_role,
-            "bullet": self.bullet,
-        }
-
-
-@dataclass(frozen=True)
-class PreferenceProposal:
-    source_role: str
-    approved: tuple[PreferenceProposalEntry, ...]
-
-    @classmethod
-    def from_dict(cls, payload: Any) -> PreferenceProposal:
-        if not isinstance(payload, dict):
-            raise ValueError("Preference proposal payload must be a JSON object.")
-        source_role = _require_string(payload, "source_role")
-        if source_role not in set(PREFERENCE_PROPOSAL_SOURCES):
-            raise ValueError(
-                "Preference proposal source must be one of "
-                f"{', '.join(PREFERENCE_PROPOSAL_SOURCES)}."
-            )
-        approved_raw = payload.get("approved")
-        if not isinstance(approved_raw, list):
-            raise ValueError("Preference proposal `approved` must be a list.")
-        approved = tuple(
-            PreferenceProposalEntry.from_dict(item) for item in approved_raw
-        )
-        return cls(
-            source_role=source_role,
-            approved=approved,
-        )
-
-    @classmethod
-    def from_json(cls, raw_json: str) -> PreferenceProposal:
-        try:
-            payload = json.loads(raw_json)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                "Preference proposal file must contain valid JSON."
-            ) from exc
-        return cls.from_dict(payload)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "source_role": self.source_role,
-            "approved": [entry.to_dict() for entry in self.approved],
-        }
 
 
 @dataclass(frozen=True)

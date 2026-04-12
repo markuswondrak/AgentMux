@@ -1,7 +1,7 @@
 """Integration test for event-driven workflow.
 
-This test simulates a complete workflow using file events to verify
-the event-driven architecture works end-to-end.
+This test simulates a complete workflow using MCP tool events to verify
+the tool-event-driven architecture works end-to-end.
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ class FakeRuntime:
 
 
 class TestEventDrivenWorkflowIntegration(unittest.TestCase):
-    """Integration test simulating complete workflow with events."""
+    """Integration test simulating complete workflow with tool events."""
 
     def _make_ctx(self, feature_dir: Path) -> tuple[PipelineContext, Path]:
         """Create pipeline context and state path."""
@@ -87,6 +87,7 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
         files.plan.write_text("# Plan\n", encoding="utf-8")
         files.tasks.parent.mkdir(parents=True, exist_ok=True)
         files.tasks.write_text("# Tasks\n", encoding="utf-8")
+        files.architecture.parent.mkdir(parents=True, exist_ok=True)
         files.architecture.write_text("# Architecture\n", encoding="utf-8")
 
         agents = {
@@ -110,8 +111,8 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
         )
         return ctx, files.state
 
-    def _write_execution_plan(self, ctx: PipelineContext) -> None:
-        """Write a simple execution plan."""
+    def _write_plan_files(self, ctx: PipelineContext) -> None:
+        """Write plan_1.md and tasks_1.md so coder prompts can be built."""
         planning_dir = ctx.files.planning_dir
         planning_dir.mkdir(parents=True, exist_ok=True)
         (planning_dir / "plan_1.md").write_text(
@@ -120,24 +121,9 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
         (planning_dir / "tasks_1.md").write_text(
             "# Tasks for plan 1\n\n- [ ] task\n", encoding="utf-8"
         )
-        (planning_dir / "execution_plan.json").write_text(
-            json.dumps(
-                {
-                    "version": 1,
-                    "groups": [
-                        {
-                            "group_id": "g1",
-                            "mode": "serial",
-                            "plans": [{"file": "plan_1.md", "name": "implementation"}],
-                        }
-                    ],
-                }
-            ),
-            encoding="utf-8",
-        )
 
     def test_full_workflow_with_events(self):
-        """Simulate a complete workflow using file events."""
+        """Simulate a complete workflow using MCP tool events."""
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
             ctx, state_path = self._make_ctx(feature_dir)
@@ -145,97 +131,130 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
             # Create router
             router = WorkflowEventRouter(PHASE_HANDLERS)
 
-            # 1. Start in product_management phase
+            # 1. Start in product_management phase — pm submits done via MCP tool
             state = load_state(state_path)
             state["phase"] = "product_management"
             write_state(state_path, state)
 
-            # Write the done marker that the event represents
-            pm_dir = feature_dir / "01_product_management"
-            pm_dir.mkdir(parents=True, exist_ok=True)
-            (pm_dir / "done").touch()
-
             event = WorkflowEvent(
-                kind="file.created", path="01_product_management/done"
+                kind="tool.submit_pm_done",
+                payload={"payload": {}},
             )
-            updates, next_phase = router.handle(event, load_state(state_path), ctx)
+            updates, _ = router.handle(event, load_state(state_path), ctx)
 
             # Verify transition to architecting
             state = load_state(state_path)
             self.assertEqual("architecting", state["phase"])
-            self.assertEqual("pm_completed", state["last_event"])
+            self.assertEqual("pm_completed", state.get("last_event"))
 
-            # 2. Create architecture.md to trigger transition to planning
+            # 2. Architect writes architecture.md then submits via MCP tool
             ctx.files.planning_dir.mkdir(parents=True, exist_ok=True)
-            ctx.files.architecture.write_text("# Test Architecture\n", encoding="utf-8")
+            (ctx.files.planning_dir / "architecture.md").write_text(
+                "# Architecture\n\nSimple layered architecture.\n", encoding="utf-8"
+            )
 
             event = WorkflowEvent(
-                kind="file.created", path="02_planning/architecture.md"
+                kind="tool.submit_architecture",
+                payload={"payload": {}},
             )
-            updates, next_phase = router.handle(event, load_state(state_path), ctx)
+            updates, _ = router.handle(event, load_state(state_path), ctx)
 
             # Verify transition to planning
             state = load_state(state_path)
             self.assertEqual("planning", state["phase"])
-            self.assertEqual("architecture_written", state["last_event"])
 
-            # 3. Create plan files to trigger transition to implementing
-            ctx.files.plan.write_text("# Test Plan\n", encoding="utf-8")
-            ctx.files.tasks.write_text("# Tasks\n- [ ] task\n", encoding="utf-8")
-            (ctx.files.planning_dir / "plan_meta.json").write_text(
-                json.dumps({"needs_design": False}), encoding="utf-8"
+            # 3. Planner writes plan.yaml and submits via single MCP tool call
+            import yaml as _yaml
+
+            plan_data = {
+                "version": 2,
+                "plan_overview": "Single-phase implementation",
+                "groups": [
+                    {
+                        "group_id": "g1",
+                        "mode": "serial",
+                        "plans": [{"index": 1, "name": "Implementation"}],
+                    }
+                ],
+                "subplans": [
+                    {
+                        "index": 1,
+                        "title": "Implementation",
+                        "scope": "Implement the feature",
+                        "owned_files": ["src/feature.py"],
+                        "dependencies": "None",
+                        "implementation_approach": "Write the code",
+                        "acceptance_criteria": "Tests pass",
+                        "tasks": ["Implement feature", "Write tests"],
+                    }
+                ],
+                "review_strategy": {"severity": "medium", "focus": []},
+                "needs_design": False,
+                "needs_docs": False,
+                "doc_files": [],
+            }
+            (ctx.files.planning_dir / "plan.yaml").write_text(
+                _yaml.safe_dump(plan_data), encoding="utf-8"
             )
-            self._write_execution_plan(ctx)
-
-            # Handle plan creation
-            event = WorkflowEvent(kind="file.created", path="02_planning/plan.md")
-            router.handle(event, load_state(state_path), ctx)
-
-            event = WorkflowEvent(kind="file.created", path="02_planning/tasks.md")
-            router.handle(event, load_state(state_path), ctx)
 
             event = WorkflowEvent(
-                kind="file.created", path="02_planning/plan_meta.json"
+                kind="tool.submit_plan",
+                payload={"payload": {}},
             )
-            updates, next_phase = router.handle(event, load_state(state_path), ctx)
+            updates, _ = router.handle(event, load_state(state_path), ctx)
 
             # Verify transition to implementing
             state = load_state(state_path)
             self.assertEqual("implementing", state["phase"])
             self.assertEqual("plan_written", state["last_event"])
 
-            # 4. Create done marker to trigger transition to reviewing
+            # 4. Coder submits done via MCP tool
             ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
-            (ctx.files.implementation_dir / "done_1").touch()
 
-            event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
-            updates, next_phase = router.handle(event, load_state(state_path), ctx)
+            event = WorkflowEvent(
+                kind="tool.submit_done",
+                payload={"payload": {"subplan_index": 1}},
+            )
+            updates, _ = router.handle(event, load_state(state_path), ctx)
 
             # Verify transition to reviewing
             state = load_state(state_path)
             self.assertEqual("reviewing", state["phase"])
             self.assertEqual("implementation_completed", state["last_event"])
 
-            # 5. Create review.md with pass verdict — reviewer asked for summary
+            # 5. Reviewer writes review.yaml then submits via MCP tool
             ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
-            ctx.files.review.write_text("verdict: pass\n", encoding="utf-8")
+            (ctx.files.review_dir / "review.yaml").write_text(
+                _yaml.safe_dump(
+                    {
+                        "verdict": "pass",
+                        "summary": "All checks pass, implementation is solid.",
+                        "findings": [],
+                        "commit_message": "feat: implement feature",
+                    }
+                ),
+                encoding="utf-8",
+            )
 
-            event = WorkflowEvent(kind="file.created", path="06_review/review.md")
-            updates, next_phase = router.handle(event, load_state(state_path), ctx)
+            event = WorkflowEvent(
+                kind="tool.submit_review",
+                payload={"payload": {}},
+            )
+            updates, _ = router.handle(event, load_state(state_path), ctx)
 
             # Still in reviewing, awaiting summary from reviewer
             state = load_state(state_path)
             self.assertEqual("reviewing", state["phase"])
             self.assertTrue(state.get("awaiting_summary"))
 
-            # 5b. Reviewer writes summary — kill reviewer + transition to completing
+            # 5b. Reviewer writes summary.md — triggers summary_ready EventSpec
             ctx.files.summary.parent.mkdir(parents=True, exist_ok=True)
             ctx.files.summary.write_text(
                 "## Summary\nImplemented the feature.\n", encoding="utf-8"
             )
 
             event = WorkflowEvent(kind="file.created", path="08_completion/summary.md")
-            updates, next_phase = router.handle(event, load_state(state_path), ctx)
+            updates, _ = router.handle(event, load_state(state_path), ctx)
 
             # Verify transition to completing
             state = load_state(state_path)
@@ -249,9 +268,11 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
             )
 
             # Mock the completion service to avoid git operations
-            with patch(
-                "agentmux.workflow.handlers.completing.CompletionService.finalize_approval"
-            ) as mock_finalize:
+            cs_path = (
+                "agentmux.workflow.handlers.completing"
+                ".CompletionService.finalize_approval"
+            )
+            with patch(cs_path) as mock_finalize:
                 mock_finalize.return_value = MagicMock(
                     commit_hash="abc123",
                     pr_url=None,
@@ -267,26 +288,29 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
             self.assertEqual(0, exit_code)
 
     def test_workflow_handles_research_tasks(self):
-        """Test that research tasks are properly dispatched and completed."""
+        """Test research tasks dispatched and completed via tool events."""
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
             ctx, state_path = self._make_ctx(feature_dir)
 
             router = WorkflowEventRouter(PHASE_HANDLERS)
 
-            # Start in planning phase
+            # Start in architecting phase (research is dispatched from architecting)
             state = load_state(state_path)
-            state["phase"] = "planning"
+            state["phase"] = "architecting"
             write_state(state_path, state)
 
-            # Create research request
-            research_dir = ctx.files.research_dir / "code-auth"
-            research_dir.mkdir(parents=True, exist_ok=True)
-            (research_dir / "request.md").write_text("research auth", encoding="utf-8")
-
-            # Handle research request
+            # Architect dispatches code research via MCP tool
             event = WorkflowEvent(
-                kind="file.created", path="03_research/code-auth/request.md"
+                kind="tool.research_dispatch_code",
+                payload={
+                    "payload": {
+                        "topic": "auth",
+                        "context": "Need to understand authentication flow",
+                        "questions": ["How does the auth module work?"],
+                        "scope_hints": ["src/auth/"],
+                    }
+                },
             )
 
             with (
@@ -299,18 +323,25 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
                 mock_build.return_value = "research prompt"
                 updates, next_phase = router.handle(event, load_state(state_path), ctx)
 
-            # Verify research task was dispatched
+            # Verify research task was dispatched and request.md was written
             self.assertIn("research_tasks", updates)
             self.assertEqual("dispatched", updates["research_tasks"].get("auth"))
+            req_path = ctx.files.research_dir / "code-auth" / "request.md"
+            self.assertTrue(req_path.exists())
 
-            # Simulate research completion
+            # Simulate research completion via MCP tool
             state = load_state(state_path)
             state["research_tasks"] = {"auth": "dispatched"}
             write_state(state_path, state)
-            (research_dir / "done").touch()
 
             event = WorkflowEvent(
-                kind="file.created", path="03_research/code-auth/done"
+                kind="tool.submit_research_done",
+                payload={
+                    "payload": {
+                        "topic": "auth",
+                        "role_type": "code",
+                    }
+                },
             )
             updates, next_phase = router.handle(event, load_state(state_path), ctx)
 
@@ -318,9 +349,9 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
             self.assertIn("research_tasks", updates)
             self.assertEqual("done", updates["research_tasks"].get("auth"))
 
-            # Verify planner was notified
+            # Verify architect was notified
             self.assertTrue(
-                any("planner" in role for role, _ in ctx.runtime.notifications)
+                any("architect" in role for role, _ in ctx.runtime.notifications)
             )
 
 

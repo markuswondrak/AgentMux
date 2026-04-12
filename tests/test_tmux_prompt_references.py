@@ -6,18 +6,19 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
-from agentmux.runtime.tmux_control import (
-    MONITOR_MAX_WIDTH,
-    MONITOR_MIN_WIDTH,
+from agentmux.runtime.content_zone import (
     ContentZone,
     _enforce_monitor_min_width,
-    create_agent_pane,
-    send_prompt,
     set_pane_identity,
-    tmux_new_session,
-    tmux_pane_exists,
 )
+from agentmux.runtime.pane_io import send_prompt
+from agentmux.runtime.tmux_control import (
+    create_agent_pane,
+    tmux_new_session,
+)
+from agentmux.runtime.tmux_core import tmux_pane_exists
 from agentmux.shared.models import AgentConfig
+from agentmux.terminal_ui.layout import MONITOR_MAX_WIDTH, MONITOR_MIN_WIDTH
 
 
 class TmuxPromptReferencesTests(unittest.TestCase):
@@ -28,11 +29,9 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             sent: list[str] = []
 
             with (
+                patch("agentmux.runtime.pane_io.tmux_pane_exists", return_value=True),
                 patch(
-                    "agentmux.runtime.tmux_control.tmux_pane_exists", return_value=True
-                ),
-                patch(
-                    "agentmux.runtime.tmux_control.send_text",
+                    "agentmux.runtime.pane_io.send_text",
                     side_effect=lambda _pane, text: sent.append(text),
                 ),
             ):
@@ -146,10 +145,10 @@ class TmuxPromptReferencesTests(unittest.TestCase):
 
         with (
             patch(
-                "agentmux.runtime.tmux_control._find_control_pane", return_value="%0"
+                "agentmux.runtime.content_zone._find_control_pane", return_value="%0"
             ),
             patch(
-                "agentmux.runtime.tmux_control.run_command",
+                "agentmux.runtime.content_zone.run_command",
                 side_effect=fake_run_command,
             ),
         ):
@@ -177,10 +176,10 @@ class TmuxPromptReferencesTests(unittest.TestCase):
 
         with (
             patch(
-                "agentmux.runtime.tmux_control._find_control_pane", return_value="%0"
+                "agentmux.runtime.content_zone._find_control_pane", return_value="%0"
             ),
             patch(
-                "agentmux.runtime.tmux_control.run_command",
+                "agentmux.runtime.content_zone.run_command",
                 side_effect=fake_run_command,
             ),
         ):
@@ -192,21 +191,21 @@ class TmuxPromptReferencesTests(unittest.TestCase):
         )
 
     def test_content_zone_show_reapplies_monitor_min_width(self) -> None:
-        with patch("agentmux.runtime.tmux_control.tmux_pane_exists", return_value=True):
+        with patch("agentmux.runtime.content_zone.tmux_pane_exists", return_value=True):
             zone = ContentZone("session-x", placeholder="%9")
 
         with (
-            patch("agentmux.runtime.tmux_control.tmux_pane_exists", return_value=True),
+            patch("agentmux.runtime.content_zone.tmux_pane_exists", return_value=True),
             patch(
-                "agentmux.runtime.tmux_control.run_command",
+                "agentmux.runtime.content_zone.run_command",
                 return_value=CompletedProcess(
                     args=[], returncode=0, stdout="", stderr=""
                 ),
             ),
             patch(
-                "agentmux.runtime.tmux_control._enforce_monitor_min_width"
+                "agentmux.runtime.content_zone._enforce_monitor_min_width"
             ) as width_mock,
-            patch("agentmux.runtime.tmux_control._log_layout", return_value=None),
+            patch("agentmux.runtime.content_zone._log_layout", return_value=None),
         ):
             zone.show("%1")
 
@@ -220,25 +219,25 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             commands.append(list(args))
             return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
-        with patch("agentmux.runtime.tmux_control.tmux_pane_exists", return_value=True):
+        with patch("agentmux.runtime.content_zone.tmux_pane_exists", return_value=True):
             zone = ContentZone("session-x", visible=["%1"], placeholder="%9")
 
         with (
-            patch("agentmux.runtime.tmux_control.tmux_pane_exists", return_value=True),
+            patch("agentmux.runtime.content_zone.tmux_pane_exists", return_value=True),
             patch(
-                "agentmux.runtime.tmux_control._pane_in_window",
+                "agentmux.runtime.content_zone._pane_in_window",
                 side_effect=lambda pane_id, window_name: (
                     window_name == "pipeline" and pane_id != "%9"
                 ),
             ),
             patch(
-                "agentmux.runtime.tmux_control.run_command",
+                "agentmux.runtime.content_zone.run_command",
                 side_effect=fake_run_command,
             ),
             patch(
-                "agentmux.runtime.tmux_control._enforce_monitor_min_width"
+                "agentmux.runtime.content_zone._enforce_monitor_min_width"
             ) as width_mock,
-            patch("agentmux.runtime.tmux_control._log_layout", return_value=None),
+            patch("agentmux.runtime.content_zone._log_layout", return_value=None),
         ):
             zone.show_parallel(["%1", "%2", "%3"])
 
@@ -264,27 +263,27 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             commands.append(list(args))
             return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
-        with patch("agentmux.runtime.tmux_control.tmux_pane_exists", return_value=True):
+        with patch("agentmux.runtime.content_zone.tmux_pane_exists", return_value=True):
             zone = ContentZone(
                 "session-x", visible=["%1", "%2", "%3"], placeholder="%9"
             )
 
         with (
-            patch("agentmux.runtime.tmux_control.tmux_pane_exists", return_value=True),
+            patch("agentmux.runtime.content_zone.tmux_pane_exists", return_value=True),
             patch(
-                "agentmux.runtime.tmux_control._pane_in_window",
+                "agentmux.runtime.content_zone._pane_in_window",
                 side_effect=lambda pane_id, window_name: (
                     window_name == "pipeline" and pane_id != "%9"
                 ),
             ),
             patch(
-                "agentmux.runtime.tmux_control.run_command",
+                "agentmux.runtime.content_zone.run_command",
                 side_effect=fake_run_command,
             ),
             patch(
-                "agentmux.runtime.tmux_control._enforce_monitor_min_width"
+                "agentmux.runtime.content_zone._enforce_monitor_min_width"
             ) as width_mock,
-            patch("agentmux.runtime.tmux_control._log_layout", return_value=None),
+            patch("agentmux.runtime.content_zone._log_layout", return_value=None),
         ):
             zone.hide("%2")
 
@@ -311,7 +310,7 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
         with patch(
-            "agentmux.runtime.tmux_control.run_command", side_effect=fake_run_command
+            "agentmux.runtime.content_zone.run_command", side_effect=fake_run_command
         ):
             set_pane_identity("%7", role="coder", display_label="API wiring")
 
@@ -351,9 +350,12 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             patch(
                 "agentmux.runtime.tmux_control.accept_trust_prompt", return_value=None
             ),
-            patch("agentmux.runtime.tmux_control.time.sleep", return_value=None),
             patch(
                 "agentmux.runtime.tmux_control.run_command",
+                side_effect=fake_run_command,
+            ),
+            patch(
+                "agentmux.runtime.content_zone.run_command",
                 side_effect=fake_run_command,
             ),
         ):
@@ -378,7 +380,7 @@ class TmuxPromptReferencesTests(unittest.TestCase):
 
     def test_tmux_pane_exists_returns_false_for_dead_pane(self) -> None:
         with patch(
-            "agentmux.runtime.tmux_control.run_command",
+            "agentmux.runtime.tmux_core.run_command",
             return_value=CompletedProcess(
                 args=[], returncode=0, stdout="%1 1\n", stderr=""
             ),
@@ -387,7 +389,7 @@ class TmuxPromptReferencesTests(unittest.TestCase):
 
     def test_tmux_pane_exists_returns_true_for_live_pane(self) -> None:
         with patch(
-            "agentmux.runtime.tmux_control.run_command",
+            "agentmux.runtime.tmux_core.run_command",
             return_value=CompletedProcess(
                 args=[], returncode=0, stdout="%1 0\n", stderr=""
             ),

@@ -25,45 +25,42 @@ _GLOBAL_FILE_PATTERNS: tuple[str, ...] = (
     "requirements.md",
     "03_research/code-*/summary.md",
     "03_research/code-*/detail.md",
-    "03_research/code-*/done",
     "03_research/web-*/summary.md",
     "03_research/web-*/detail.md",
-    "03_research/web-*/done",
 )
 
 PHASE_CATALOG: tuple[PhaseEntry, ...] = (
     PhaseEntry(
         "product_management",
         "01_product_management",
-        monitor_file_patterns=("01_product_management/analysis.md",),
     ),
-    PhaseEntry("architecting", "02_planning"),  # architecture.md not in monitor log
+    PhaseEntry("architecting", "02_architecting"),  # architecture.md not in monitor log
     PhaseEntry(
         "planning",
-        "02_planning",
-        monitor_file_patterns=("02_planning/plan.md", "02_planning/tasks.md"),
+        "04_planning",
+        monitor_file_patterns=("04_planning/plan.yaml", "04_planning/tasks.md"),
     ),
     PhaseEntry(
         "designing",
-        "04_design",
+        "05_design",
         optional=True,
-        monitor_file_patterns=("04_design/design.md",),
+        monitor_file_patterns=("05_design/design.md",),
     ),
     PhaseEntry(
         "implementing",
-        "05_implementation",
-        monitor_file_patterns=("05_implementation/done_*",),
+        "06_implementation",
+        monitor_file_patterns=("06_implementation/done_*",),
     ),
     PhaseEntry(
         "reviewing",
-        "06_review",
-        monitor_file_patterns=("06_review/review.md", "06_review/fix_request.md"),
+        "07_review",
+        monitor_file_patterns=("07_review/review.md", "07_review/fix_request.md"),
     ),
     PhaseEntry(
         "fixing",
-        "05_implementation",
+        "06_implementation",
         optional=True,
-        monitor_file_patterns=("05_implementation/done_*",),
+        monitor_file_patterns=("06_implementation/done_*",),
     ),
     PhaseEntry(
         "completing",
@@ -87,9 +84,9 @@ SESSION_DIR_NAMES: dict[str, str] = {
 }
 # Aliases used in _make_runtime_files() and other direct directory lookups.
 SESSION_DIR_NAMES["research"] = "03_research"
-SESSION_DIR_NAMES["design"] = "04_design"
-SESSION_DIR_NAMES["implementation"] = "05_implementation"
-SESSION_DIR_NAMES["review"] = "06_review"
+SESSION_DIR_NAMES["design"] = "05_design"
+SESSION_DIR_NAMES["implementation"] = "06_implementation"
+SESSION_DIR_NAMES["review"] = "07_review"
 SESSION_DIR_NAMES["completion"] = "08_completion"
 
 # Phases hidden in the monitor unless they are the current active phase.

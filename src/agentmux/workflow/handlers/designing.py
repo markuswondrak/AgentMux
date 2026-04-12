@@ -21,7 +21,7 @@ def _file_exists(path: str, ctx: PipelineContext, state: dict) -> bool:
 _SPECS = (
     EventSpec(
         name="design_written",
-        watch_paths=("04_design/design.md",),
+        watch_paths=("05_design/design.md",),
         is_ready=_file_exists,
     ),
 )

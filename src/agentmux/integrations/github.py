@@ -6,7 +6,10 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
+
+import yaml
 
 from ..shared.models import GitHubConfig
 
@@ -29,10 +32,33 @@ def check_gh_authenticated() -> bool:
     return True
 
 
-def fetch_issue(issue_ref: str) -> dict[str, str]:
+def _format_issue_comments(comments: list[dict]) -> str:
+    """Format GitHub issue comments into a readable markdown section.
+
+    Returns an empty string when there are no comments.
+    """
+    if not comments:
+        return ""
+
+    parts = ["## Issue Comments\n"]
+    for comment in comments:
+        author = comment.get("author", {}).get("login", "Unknown")
+        created_at = comment.get("createdAt", "")
+        body = comment.get("body", "").strip()
+
+        header = f"### {author}"
+        if created_at:
+            header += f" ({created_at})"
+
+        parts.append(f"{header}\n\n{body}\n")
+
+    return "\n".join(parts)
+
+
+def fetch_issue(issue_ref: str) -> dict[str, Any]:
     try:
         result = subprocess.run(
-            ["gh", "issue", "view", issue_ref, "--json", "title,body"],
+            ["gh", "issue", "view", issue_ref, "--json", "title,body,comments"],
             capture_output=True,
             text=True,
             check=True,
@@ -59,7 +85,7 @@ def fetch_issue(issue_ref: str) -> dict[str, str]:
     body = str(payload.get("body", ""))
     if not title:
         raise RuntimeError(f"GitHub issue '{issue_ref}' returned an empty title.")
-    return {"title": title, "body": body}
+    return {"title": title, "body": body, "comments": payload.get("comments", [])}
 
 
 def extract_issue_number(issue_ref: str) -> str:
@@ -89,6 +115,7 @@ class IssueBootstrap:
     slug_source: str
     issue_number: str
     gh_available: bool = True
+    comments_text: str = ""
 
 
 class GitHubBootstrapper:
@@ -144,10 +171,17 @@ class GitHubBootstrapper:
                 f"{stderr}"
             )
 
+        comments_text = _format_issue_comments(payload.get("comments", []))
+
+        body_text = payload["body"].strip() or payload["title"]
+        if comments_text:
+            body_text = f"{body_text}\n\n{comments_text}"
+
         return IssueBootstrap(
-            prompt_text=payload["body"].strip() or payload["title"],
+            prompt_text=body_text,
             slug_source=payload["title"],
             issue_number=issue_number,
+            comments_text=comments_text,
         )
 
 
@@ -197,16 +231,26 @@ def _extract_review_verdict(review_text: str) -> str:
     return review_text.strip().splitlines()[0] if review_text.strip() else ""
 
 
+def _read_plan_overview(feature_dir: Path) -> str:
+    """Read plan overview from plan.yaml (source of truth), falling back to plan.md."""
+    plan_yaml_path = feature_dir / "04_planning" / "plan.yaml"
+    if plan_yaml_path.exists():
+        try:
+            data = yaml.safe_load(plan_yaml_path.read_text(encoding="utf-8")) or {}
+            overview = data.get("plan_overview", "")
+            if overview:
+                return str(overview)
+        except Exception:
+            pass
+    return _read_text(feature_dir / "04_planning" / "plan.md")
+
+
 def assemble_pr_body(feature_dir: Path, issue_number: str | None) -> str:
     requirements_text = _read_text(feature_dir / "requirements.md")
-    plan_text = _read_first_available(
-        [
-            feature_dir / "02_planning" / "plan.md",
-        ]
-    )
+    plan_text = _read_plan_overview(feature_dir)
     review_text = _read_first_available(
         [
-            feature_dir / "06_review" / "review.md",
+            feature_dir / "07_review" / "review.md",
         ]
     )
 

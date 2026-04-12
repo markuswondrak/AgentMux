@@ -86,47 +86,15 @@ class V2ConfigIntegrationTests(unittest.TestCase):
                 self.assertEqual(loaded.agents["architect"].model, "opus")
                 self.assertEqual(loaded.agents["coder"].model, "gpt-5.3-codex")
 
-    def test_legacy_v1_config_produces_clear_error_message(self) -> None:
-        """Test: Legacy v1 config produces clear error message."""
-        with tempfile.TemporaryDirectory() as td:
-            project_dir = Path(td)
-
-            # Create a legacy v1 config (without version or with profile)
-            legacy_config = {
-                "defaults": {"provider": "claude"},
-                "roles": {
-                    "architect": {"profile": "max"},  # v1 uses profile
-                },
-            }
-
-            config_path = project_dir / ".agentmux" / "config.yaml"
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(json.dumps(legacy_config), encoding="utf-8")
-
-            # Should raise ValueError with helpful message
-            with patch(
-                "agentmux.configuration.USER_CONFIG_PATH", Path(td) / "nonexistent.yaml"
-            ):
-                with self.assertRaises(ValueError) as exc:
-                    load_layered_config(project_dir)
-
-                error_msg = str(exc.exception)
-                self.assertIn("Legacy config detected", error_msg)
-                self.assertIn("version: 2", error_msg)
-                self.assertIn("Rename 'launchers:' to 'providers:'", error_msg)
-                self.assertIn(
-                    "Replace 'profile: <name>' with 'model: <model-name>'", error_msg
-                )
-
     def test_v2_config_with_profile_key_produces_error(self) -> None:
-        """Test: Using profile key in v2 config produces error."""
+        """Test: Using profile key in config produces error."""
         with tempfile.TemporaryDirectory() as td:
             cfg_path = Path(td) / "config.json"
             cfg = {
                 "version": 2,
                 "defaults": {"provider": "claude"},
                 "roles": {
-                    "architect": {"profile": "max"},  # profile not allowed in v2
+                    "architect": {"profile": "max"},  # profile not allowed
                 },
             }
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
@@ -134,7 +102,7 @@ class V2ConfigIntegrationTests(unittest.TestCase):
             with self.assertRaises(ValueError) as exc:
                 load_explicit_config(cfg_path)
 
-            self.assertIn("Profiles are removed in v2", str(exc.exception))
+            self.assertIn("Profiles are not supported", str(exc.exception))
 
     def test_custom_provider_in_project_config_works(self) -> None:
         """Test: Custom provider defined in project config works."""
@@ -179,62 +147,6 @@ class V2ConfigIntegrationTests(unittest.TestCase):
                 self.assertEqual(loaded.agents["coder"].cli, "kimi")
                 self.assertEqual(loaded.agents["coder"].model, "kimi-2.5")
                 self.assertEqual(loaded.agents["coder"].model_flag, "--model-name")
-
-    def test_v2_config_size_reduction(self) -> None:
-        """Test: Config file is ~50% smaller for typical use cases."""
-        # Simulate a typical v1 config (with profiles section)
-        v1_config_lines = [
-            "version: 1",
-            "defaults:",
-            "  provider: claude",
-            "  profile: standard",
-            "profiles:",
-            "  claude:",
-            "    max:",
-            "      model: opus",
-            "    standard:",
-            "      model: sonnet",
-            "    low:",
-            "      model: haiku",
-            "  codex:",
-            "    max:",
-            "      model: gpt-5.4",
-            "    standard:",
-            "      model: gpt-5.3-codex",
-            "    low:",
-            "      model: gpt-5.1-codex-mini",
-            "roles:",
-            "  architect:",
-            "    profile: max",
-            "  coder:",
-            "    provider: codex",
-            "    profile: standard",
-        ]
-
-        # Equivalent v2 config
-        v2_config_lines = [
-            "version: 2",
-            "defaults:",
-            "  provider: claude",
-            "  model: sonnet",
-            "roles:",
-            "  architect:",
-            "    model: opus",
-            "  coder:",
-            "    provider: codex",
-            "    model: gpt-5.3-codex",
-        ]
-
-        v1_size = sum(len(line) for line in v1_config_lines)
-        v2_size = sum(len(line) for line in v2_config_lines)
-
-        # v2 should be at least 40% smaller
-        reduction = (v1_size - v2_size) / v1_size
-        self.assertGreater(
-            reduction,
-            0.40,
-            f"Config size reduction is only {reduction:.0%}, expected >40%",
-        )
 
     def test_direct_model_selection_without_profiles(self) -> None:
         """Test: User can specify model directly without profile mappings."""

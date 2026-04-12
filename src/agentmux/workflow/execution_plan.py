@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
+import yaml
 
 _PLAN_FILE_RE = re.compile(r"^plan_\d+\.md$")
 _GROUP_MODES = {"serial", "parallel"}
@@ -24,7 +25,6 @@ class ExecutionGroup:
 
 @dataclass(frozen=True)
 class ExecutionPlan:
-    version: int
     groups: list[ExecutionGroup]
 
 
@@ -33,21 +33,17 @@ def _error(path: Path, message: str) -> RuntimeError:
 
 
 def load_execution_plan(planning_dir: Path) -> ExecutionPlan:
-    path = planning_dir / "execution_plan.json"
+    path = planning_dir / "execution_plan.yaml"
     if not path.is_file():
         raise _error(path, "is required.")
 
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise _error(path, "must contain valid JSON.") from exc
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise _error(path, "must contain valid YAML.") from exc
 
     if not isinstance(payload, dict):
-        raise _error(path, "must be a JSON object.")
-
-    version = payload.get("version")
-    if version != 1:
-        raise _error(path, "version must be 1.")
+        raise _error(path, "must be a YAML mapping.")
 
     groups_raw = payload.get("groups")
     if not isinstance(groups_raw, list) or not groups_raw:
@@ -107,7 +103,7 @@ def load_execution_plan(planning_dir: Path) -> ExecutionPlan:
                 raise _error(
                     path,
                     f"groups[{index}].plans[{plan_index}] must match 'plan_<N>.md' "
-                    "and stay in 02_planning/.",
+                    "and stay in 04_planning/.",
                 )
             if plan_ref in seen_plan_refs:
                 raise _error(
@@ -127,4 +123,4 @@ def load_execution_plan(planning_dir: Path) -> ExecutionPlan:
 
         groups.append(ExecutionGroup(group_id=group_id, mode=mode_raw, plans=plans))
 
-    return ExecutionPlan(version=version, groups=groups)
+    return ExecutionPlan(groups=groups)

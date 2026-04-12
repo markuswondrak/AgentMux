@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import threading
+from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .event_bus import EventBus, SessionEvent
@@ -14,7 +16,20 @@ INTERRUPTION_EVENT_PANE_EXITED = "interruption.pane_exited"
 
 
 def _log(msg: str) -> None:
-    print(f"[ORCH] {msg}")
+    ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    print(f"[ORCH {ts}] {msg}")
+
+
+def _read_log_tail(log_path: Path, max_lines: int = 20) -> str | None:
+    """Read the last N lines of a log file, returning None if unavailable."""
+    try:
+        if not log_path.exists():
+            return None
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        tail = lines[-max_lines:] if len(lines) > max_lines else lines
+        return "\n".join(tail).strip() or None
+    except OSError:
+        return None
 
 
 class InterruptionEventSource:
@@ -55,6 +70,21 @@ class InterruptionEventSource:
                 continue
             self._reported.add(event_key)
             is_expected = self._runtime.is_expected_missing_pane(pane.pane_id)
+
+            # Try to read the tail of the output log for diagnostics
+            log_path = self._runtime.get_pane_output_log(pane.pane_id)
+            log_tail = _read_log_tail(log_path) if log_path else None
+            if log_tail:
+                _log(f"  output.log tail:\n{log_tail}")
+
+            message = (
+                f"Agent pane {pane.label} was closed or exited "
+                "(for example via Ctrl-C)."
+            )
+            extra_info = ""
+            if log_tail:
+                extra_info = f"\n\nLast lines of output.log:\n{log_tail}"
+
             _log(
                 f"Interruption: pane_exited role={pane.role} scope={pane.scope} "
                 f"task_id={pane.task_id} pane_id={pane.pane_id} expected={is_expected}"
@@ -70,10 +100,7 @@ class InterruptionEventSource:
                         "task_id": pane.task_id,
                         "pane_id": pane.pane_id,
                         "label": pane.label,
-                        "message": (
-                            f"Agent pane {pane.label} was closed or exited "
-                            "(for example via Ctrl-C)."
-                        ),
+                        "message": message + extra_info,
                     },
                 )
             )

@@ -19,6 +19,7 @@ from agentmux.terminal_ui.console import ConsoleUI
 from agentmux.workflow.interruptions import InterruptionService
 from agentmux.workflow.phase_registry import resolve_phase_startup_role
 
+ARCHITECTING_DIR = SESSION_DIR_NAMES["architecting"]
 PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 IMPLEMENTATION_DIR = SESSION_DIR_NAMES["implementation"]
 REVIEW_DIR = SESSION_DIR_NAMES["review"]
@@ -111,7 +112,7 @@ class ResumeCliAndSessionTests(unittest.TestCase):
 
 
 class InferResumePhaseTests(unittest.TestCase):
-    def _write_json(self, path: Path, text: str) -> None:
+    def _write_yaml(self, path: Path, text: str) -> None:
         path.write_text(text, encoding="utf-8")
 
     def test_non_failed_phase_returns_as_is(self) -> None:
@@ -130,7 +131,8 @@ class InferResumePhaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "architecture.md").write_text(
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             state = {"phase": "failed"}
@@ -140,14 +142,19 @@ class InferResumePhaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "architecture.md").write_text(
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             (feature_dir / PLANNING_DIR / "plan.md").write_text(
                 "# Plan", encoding="utf-8"
             )
-            self._write_json(
-                feature_dir / PLANNING_DIR / "plan_meta.json", '{"needs_design": true}'
+            (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
+            )
+            self._write_yaml(
+                feature_dir / PLANNING_DIR / "execution_plan.yaml",
+                "needs_design: true\n",
             )
             state = {"phase": "failed"}
             self.assertEqual("designing", infer_resume_phase(feature_dir, state))
@@ -160,11 +167,15 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "architecture.md").write_text(
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             (feature_dir / PLANNING_DIR / "plan.md").write_text(
                 "# Plan", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
             )
             (feature_dir / REVIEW_DIR / "fix_request.md").write_text(
                 "fix this", encoding="utf-8"
@@ -178,11 +189,15 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "architecture.md").write_text(
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             (feature_dir / PLANNING_DIR / "plan.md").write_text(
                 "# Plan", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
             )
             (feature_dir / REVIEW_DIR / "fix_request.md").write_text(
                 "fix this", encoding="utf-8"
@@ -198,11 +213,15 @@ class InferResumePhaseTests(unittest.TestCase):
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "architecture.md").write_text(
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             (feature_dir / PLANNING_DIR / "plan.md").write_text(
                 "# Plan", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
             )
             (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
                 "", encoding="utf-8"
@@ -215,11 +234,15 @@ class InferResumePhaseTests(unittest.TestCase):
             feature_dir = Path(td)
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "architecture.md").write_text(
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             (feature_dir / PLANNING_DIR / "plan.md").write_text(
                 "# Plan", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
             )
             (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
                 "", encoding="utf-8"
@@ -235,18 +258,20 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "architecture.md").write_text(
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             (feature_dir / PLANNING_DIR / "plan.md").write_text(
                 "# Plan", encoding="utf-8"
             )
-            self._write_json(
-                feature_dir / PLANNING_DIR / "plan_meta.json",
-                (
-                    '{"needs_design": false, "needs_docs": true, '
-                    '"doc_files": ["docs/file-protocol.md"]}'
-                ),
+            (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
+            )
+            self._write_yaml(
+                feature_dir / PLANNING_DIR / "execution_plan.yaml",
+                "needs_design: false\nneeds_docs: true\n"
+                "doc_files:\n- docs/file-protocol.md\n",
             )
             (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
                 "", encoding="utf-8"
@@ -265,15 +290,19 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
-            (feature_dir / PLANNING_DIR / "architecture.md").write_text(
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             (feature_dir / PLANNING_DIR / "plan.md").write_text(
                 "# Plan", encoding="utf-8"
             )
-            self._write_json(
-                feature_dir / PLANNING_DIR / "plan_meta.json",
-                '{"needs_design": false, "needs_docs": false, "doc_files": []}',
+            (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
+            )
+            self._write_yaml(
+                feature_dir / PLANNING_DIR / "execution_plan.yaml",
+                "needs_design: false\nneeds_docs: false\ndoc_files: []\n",
             )
             (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
                 "", encoding="utf-8"
@@ -284,7 +313,37 @@ class InferResumePhaseTests(unittest.TestCase):
             state = {"phase": "failed", "subplan_count": 1}
             self.assertEqual("completing", infer_resume_phase(feature_dir, state))
 
-    def test_removes_dispatched_research_tasks_from_state(self) -> None:
+    def test_failed_review_yaml_pass_resumes_completing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / IMPLEMENTATION_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / REVIEW_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "plan.md").write_text(
+                "# Plan", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
+            )
+            self._write_yaml(
+                feature_dir / PLANNING_DIR / "execution_plan.yaml",
+                "needs_design: false\nneeds_docs: false\ndoc_files: []\n",
+            )
+            (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
+                "", encoding="utf-8"
+            )
+            (feature_dir / REVIEW_DIR / "review.yaml").write_text(
+                "verdict: pass\nsummary: Looks good\n",
+                encoding="utf-8",
+            )
+            state = {"phase": "failed", "subplan_count": 1}
+            self.assertEqual("completing", infer_resume_phase(feature_dir, state))
+
+    def test_preserves_dispatched_research_tasks_for_resume_rehydration(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             state = {
@@ -293,8 +352,10 @@ class InferResumePhaseTests(unittest.TestCase):
                 "web_research_tasks": {"x": "dispatched", "y": "done"},
             }
             infer_resume_phase(feature_dir, state)
-            self.assertEqual({"b": "done"}, state["research_tasks"])
-            self.assertEqual({"y": "done"}, state["web_research_tasks"])
+            self.assertEqual({"a": "dispatched", "b": "done"}, state["research_tasks"])
+            self.assertEqual(
+                {"x": "dispatched", "y": "done"}, state["web_research_tasks"]
+            )
 
 
 class ResumeStartupRoleTests(unittest.TestCase):
@@ -323,14 +384,17 @@ class ResumeStartupRoleTests(unittest.TestCase):
             feature_dir = Path(td)
             planning_dir = feature_dir / PLANNING_DIR
             planning_dir.mkdir(parents=True, exist_ok=True)
-            (planning_dir / "plan_meta.json").write_text(
-                json.dumps(
+            import yaml
+
+            (planning_dir / "execution_plan.yaml").write_text(
+                yaml.dump(
                     {
                         "review_strategy": {
                             "severity": "high",
                             "focus": ["security"],
                         }
-                    }
+                    },
+                    default_flow_style=False,
                 ),
                 encoding="utf-8",
             )
@@ -399,9 +463,11 @@ class ResumeApplicationFlowTests(unittest.TestCase):
             (feature_dir / "01_product_management" / "done").write_text(
                 "", encoding="utf-8"
             )
-            planning_dir = feature_dir / "02_planning"
+            planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
-            (planning_dir / "architecture.md").write_text(
+            architecting_dir = feature_dir / ARCHITECTING_DIR
+            architecting_dir.mkdir(parents=True, exist_ok=True)
+            (architecting_dir / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             initial_state = {
@@ -475,8 +541,12 @@ class ResumeApplicationFlowTests(unittest.TestCase):
             )
             self.assertEqual("planning", updated_state["phase"])
             self.assertEqual("resumed", updated_state["last_event"])
-            self.assertEqual({"b": "done"}, updated_state["research_tasks"])
-            self.assertEqual({"y": "done"}, updated_state["web_research_tasks"])
+            self.assertEqual(
+                {"a": "dispatched", "b": "done"}, updated_state["research_tasks"]
+            )
+            self.assertEqual(
+                {"x": "dispatched", "y": "done"}, updated_state["web_research_tasks"]
+            )
 
     def test_run_resume_non_failed_planning_state_uses_planner_initial_role(
         self,
@@ -494,7 +564,9 @@ class ResumeApplicationFlowTests(unittest.TestCase):
             )
             planning_dir = feature_dir / PLANNING_DIR
             planning_dir.mkdir(parents=True, exist_ok=True)
-            (planning_dir / "architecture.md").write_text(
+            architecting_dir = feature_dir / ARCHITECTING_DIR
+            architecting_dir.mkdir(parents=True, exist_ok=True)
+            (architecting_dir / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
             )
             write_state(
@@ -991,6 +1063,250 @@ class ProjectDirInferenceTests(unittest.TestCase):
                 project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
             )
             self.assertEqual(project_dir, infer_project_dir(feature_dir))
+
+
+class ResumeBranchValidationTests(unittest.TestCase):
+    """Tests for branch validation when resuming a session.
+
+    When resuming, the _prepare_session() method should read feature_branch
+    from the saved state and call git_manager.ensure_branch() if present.
+    """
+
+    def _make_base_state(self, feature_dir: Path) -> dict:
+        return {
+            "feature_dir": str(feature_dir),
+            "phase": "failed",
+            "last_event": "run_failed",
+            "product_manager": True,
+            "subplan_count": 0,
+            "review_iteration": 0,
+            "research_tasks": {},
+            "web_research_tasks": {},
+            "updated_at": "2026-01-01T12:00:00+01:00",
+            "updated_by": "pipeline",
+        }
+
+    def _make_loaded_config(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            session_name="multi-agent-mvp",
+            max_review_iterations=3,
+            github=GitHubConfig(),
+            agents={
+                "architect": _agent("architect"),
+                "planner": _agent("planner"),
+                "product-manager": _agent("product-manager"),
+            },
+        )
+
+    def test_resume_with_feature_branch_calls_ensure_branch(self) -> None:
+        """Resume with feature_branch in state should call ensure_branch()."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            app = application.PipelineApplication(project_dir)
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            )
+            feature_dir.mkdir(parents=True)
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            state = self._make_base_state(feature_dir)
+            state["feature_branch"] = "feature/demo-branch"
+            state["branch_created"] = True
+            write_state(feature_dir / "state.json", state)
+
+            loaded = self._make_loaded_config()
+
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.GitBranchManager"
+                ) as git_manager_mock,
+            ):
+                git_manager_instance = git_manager_mock.return_value
+                git_manager_instance.ensure_branch.return_value = SimpleNamespace(
+                    created=True
+                )
+
+                result = app.run_resume(session="20260101-120000-demo")
+
+                self.assertEqual(0, result)
+                git_manager_mock.assert_called_once_with(project_dir)
+                git_manager_instance.ensure_branch.assert_called_once_with(
+                    "feature/demo-branch"
+                )
+
+    def test_resume_without_feature_branch_does_not_call_ensure_branch(
+        self,
+    ) -> None:
+        """Resume without feature_branch in state should NOT call ensure_branch()."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            app = application.PipelineApplication(project_dir)
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            )
+            feature_dir.mkdir(parents=True)
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            state = self._make_base_state(feature_dir)
+            # No feature_branch key
+            write_state(feature_dir / "state.json", state)
+
+            loaded = self._make_loaded_config()
+
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.GitBranchManager"
+                ) as git_manager_mock,
+            ):
+                result = app.run_resume(session="20260101-120000-demo")
+
+                self.assertEqual(0, result)
+                git_manager_mock.assert_not_called()
+
+    def test_resume_with_failed_ensure_branch_prints_warning_no_abort(
+        self,
+    ) -> None:
+        """Resume with feature_branch where ensure_branch returns created=False
+        should print a warning but NOT abort the session."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            messages: list[str] = []
+            app = application.PipelineApplication(
+                project_dir, ui=ConsoleUI(output_fn=messages.append)
+            )
+            feature_dir = (
+                project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
+            )
+            feature_dir.mkdir(parents=True)
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            state = self._make_base_state(feature_dir)
+            state["feature_branch"] = "feature/demo-branch"
+            state["branch_created"] = True
+            write_state(feature_dir / "state.json", state)
+
+            loaded = self._make_loaded_config()
+
+            with (
+                patch.object(app, "ensure_dependencies", return_value=None),
+                patch(
+                    "agentmux.pipeline.application.load_layered_config",
+                    return_value=loaded,
+                ),
+                patch(
+                    "agentmux.pipeline.application.tmux_session_exists",
+                    return_value=False,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.ensure_project_config",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.McpAgentPreparer.prepare_feature_agents",
+                    return_value=loaded.agents,
+                ),
+                patch(
+                    "agentmux.pipeline.application.TmuxRuntimeFactory.create",
+                    return_value=object(),
+                ),
+                patch.object(
+                    app,
+                    "_start_background_orchestrator",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.subprocess.run",
+                    return_value=None,
+                ),
+                patch(
+                    "agentmux.pipeline.application.GitBranchManager"
+                ) as git_manager_mock,
+            ):
+                git_manager_instance = git_manager_mock.return_value
+                git_manager_instance.ensure_branch.return_value = SimpleNamespace(
+                    created=False
+                )
+
+                result = app.run_resume(session="20260101-120000-demo")
+
+                self.assertEqual(0, result)
+                git_manager_instance.ensure_branch.assert_called_once_with(
+                    "feature/demo-branch"
+                )
+                # Verify warning was printed
+                self.assertTrue(
+                    any(
+                        "Could not create/switch to feature branch" in msg
+                        for msg in messages
+                    ),
+                    f"Expected warning message, got: {messages}",
+                )
 
 
 if __name__ == "__main__":

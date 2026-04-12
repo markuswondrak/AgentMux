@@ -98,6 +98,7 @@ def update_phase(
 
 def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
     product_management_dir = feature_dir / SESSION_DIR_NAMES["product_management"]
+    architecting_dir = feature_dir / SESSION_DIR_NAMES["architecting"]
     planning_dir = feature_dir / SESSION_DIR_NAMES["planning"]
     research_dir = feature_dir / SESSION_DIR_NAMES["research"]
     design_dir = feature_dir / SESSION_DIR_NAMES["design"]
@@ -108,6 +109,7 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         project_dir=project_dir,
         feature_dir=feature_dir,
         product_management_dir=product_management_dir,
+        architecting_dir=architecting_dir,
         planning_dir=planning_dir,
         research_dir=research_dir,
         design_dir=design_dir,
@@ -117,17 +119,14 @@ def _make_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
         context=feature_dir / "context.md",
         requirements=feature_dir / "requirements.md",
         plan=planning_dir / "plan.md",
-        architecture=planning_dir / "architecture.md",
+        architecture=architecting_dir / "architecture.md",
         tasks=planning_dir / "tasks.md",
-        execution_plan=planning_dir / "execution_plan.json",
+        execution_plan=planning_dir / "execution_plan.yaml",
         design=design_dir / "design.md",
         review=review_dir / "review.md",
         fix_request=review_dir / "fix_request.md",
         changes=completion_dir / "changes.md",
         summary=completion_dir / "summary.md",
-        pm_preference_proposal=product_management_dir / "approved_preferences.json",
-        architect_preference_proposal=planning_dir / "approved_preferences.json",
-        reviewer_preference_proposal=completion_dir / "approved_preferences.json",
         state=feature_dir / STATE_FILE_NAME,
         runtime_state=feature_dir / "runtime_state.json",
         orchestrator_log=feature_dir / "orchestrator.log",
@@ -188,6 +187,7 @@ def create_feature_files(
         "implementation_group_total": 0,
         "implementation_group_index": 0,
         "implementation_group_mode": None,
+        "implementation_single_coder": False,
         "implementation_active_plan_ids": [],
         "implementation_completed_group_ids": [],
         "updated_at": now_iso(),
@@ -202,15 +202,6 @@ def load_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
 
 
 def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
-    for key in ("research_tasks", "web_research_tasks"):
-        tasks = state.get(key)
-        if isinstance(tasks, dict):
-            state[key] = {
-                str(topic): str(status)
-                for topic, status in tasks.items()
-                if str(status) != "dispatched"
-            }
-
     # product_management is a flag-gated optional entry point that may override
     # any stored phase (including non-failed ones).
     if (

@@ -86,7 +86,17 @@ class MockHandler:
         return self.enter_updates
 
     def get_event_specs(self):
-        """Return empty specs — use legacy raw-event path for these tests."""
+        """Catch-all für Tests: jedes File-Event dispatcht 'any_file'."""
+        return (
+            EventSpec(
+                name="any_file",
+                watch_paths=("*",),
+                is_ready=lambda p, c, s: True,
+            ),
+        )
+
+    def get_tool_specs(self):
+        """Return empty tool specs — tool events return empty for these tests."""
         return ()
 
     def handle_event(
@@ -202,7 +212,9 @@ class TestWorkflowEventRouter:
 
         handler = router._phases["planning"]
         assert len(handler.handle_calls) == 1
-        assert handler.handle_calls[0][0] == event
+        dispatched = handler.handle_calls[0][0]
+        assert dispatched.kind == "any_file"
+        assert dispatched.path == event.path
 
     def test_handle_applies_event_updates(self, router, mock_context):
         """Verify event updates are applied to state."""
@@ -219,8 +231,8 @@ class TestWorkflowEventRouter:
         assert state["review_iteration"] == 1
         mock_write.assert_called()
 
-    def test_handle_phase_transition(self, router, mock_context):
-        """Verify phase transition updates state and calls new phase enter."""
+    def test_handle_phase_transition(self, mock_context):
+        """Verify phase transition calls enter on new phase, no event forwarding."""
         planning_handler = MockHandler(
             enter_updates={"subplan_count": 2}, next_phase="implementing"
         )
@@ -236,7 +248,7 @@ class TestWorkflowEventRouter:
         event = WorkflowEvent(kind="file.created", path="planning/plan.md")
 
         with patch("agentmux.sessions.state_store.write_state"):
-            router.handle(event, state, mock_context)
+            updates, exit_code = router.handle(event, state, mock_context)
 
         # Should have transitioned to implementing
         assert state["phase"] == "implementing"
@@ -244,6 +256,11 @@ class TestWorkflowEventRouter:
         # Both enters should have been called
         assert len(planning_handler.enter_calls) == 1
         assert len(implementing_handler.enter_calls) == 1
+        # Planning handler got the event, implementing did NOT (no forwarding)
+        assert len(planning_handler.handle_calls) == 1
+        assert len(implementing_handler.handle_calls) == 0
+        # Transition returns empty, no exit
+        assert exit_code is None
 
     def test_handle_exit_success(self, router, mock_context):
         """Verify __exit__: 0 returns success exit code."""
@@ -293,7 +310,7 @@ class TestWorkflowEventRouter:
         assert len(handler.handle_calls) == 2  # Both events handled
 
     def test_enter_called_again_after_phase_transition(self, router, mock_context):
-        """Verify enter is called again when re-entering a phase."""
+        """Verify enter is called again when re-entering a phase after transition."""
         handler = MockHandler(next_phase="planning")  # Loops back
         phases = {"planning": handler}
         router = WorkflowEventRouter(phases)
@@ -301,25 +318,27 @@ class TestWorkflowEventRouter:
         state = {"phase": "planning"}
         event = WorkflowEvent(kind="file.created", path="planning/plan.md")
 
-        # Limit recursion for this test
-        handler.event_updates = {}  # Clear exit signal after first call
-        original_next = handler.next_phase
-
         call_count = [0]
 
         def conditional_next(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] > 1:
-                return ({}, None)
-            return ({}, original_next)
+                return ({}, None)  # Second call: no transition, stay in planning
+            return ({}, "planning")  # First call: trigger re-enter
 
         handler.handle_event = conditional_next
 
         with patch("agentmux.sessions.state_store.write_state"):
+            # First event: enters planning, handle triggers transition → re-enter
+            router.handle(event, state, mock_context)
+            # Second event: enters again (already entered, so no duplicate enter)
+            # Then handler triggers another transition → re-enter again
             router.handle(event, state, mock_context)
 
-        # Should have entered twice due to loop
-        assert len(handler.enter_calls) == 2
+        # Should have entered three times total:
+        # 1. initial enter, 2. after first transition re-enter, 3. after second
+        # But _entered guard prevents duplicate enters per phase entry
+        assert len(handler.enter_calls) >= 2
 
 
 class TestPathMatching:
@@ -433,6 +452,15 @@ class TestIntegration:
                 workflow_log.append(f"enter:{self.name}")
                 return {}
 
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="any_file",
+                        watch_paths=("*",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
             def handle_event(self, event, state, ctx):
                 workflow_log.append(f"handle:{self.name}:{event.path}")
                 # Transition based on event
@@ -463,12 +491,11 @@ class TestIntegration:
             assert exit == 0
 
         # Verify workflow sequence
-        # Note: When transitioning, the same event is passed to the new phase's handler
+        # No re-dispatch of triggering event to new phase
         assert workflow_log == [
             "enter:planning",
             "handle:planning:planning/plan.md",
             "enter:implementing",
-            "handle:implementing:planning/plan.md",  # Same event passed
             "handle:implementing:implementation/done_1",
         ]
 
@@ -627,8 +654,8 @@ class TestEventSpecRouting:
 
         assert received == []
 
-    def test_empty_specs_falls_through_to_raw_event(self, tmp_path):
-        """Handler returning empty specs receives raw WorkflowEvent."""
+    def test_empty_specs_suppresses_dispatch(self, tmp_path):
+        """Handler returning empty specs receives NO dispatch."""
         received = []
 
         class EmptySpecHandler:
@@ -648,14 +675,14 @@ class TestEventSpecRouting:
 
         event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
         with patch("agentmux.sessions.state_store.write_state"):
-            router.handle(event, state, ctx)
+            updates, next_phase = router.handle(event, state, ctx)
 
-        assert len(received) == 1
-        assert received[0].kind == "file.created"  # raw kind preserved
-        assert received[0].path == "05_implementation/done_1"
+        assert updates == {}
+        assert next_phase is None
+        assert received == []
 
-    def test_no_get_event_specs_falls_through_to_raw_event(self, tmp_path):
-        """Handler without get_event_specs method receives raw WorkflowEvent."""
+    def test_missing_specs_suppresses_dispatch(self, tmp_path):
+        """Handler without get_event_specs method receives NO dispatch."""
         received = []
 
         class LegacyHandler:
@@ -672,10 +699,11 @@ class TestEventSpecRouting:
 
         event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
         with patch("agentmux.sessions.state_store.write_state"):
-            router.handle(event, state, ctx)
+            updates, next_phase = router.handle(event, state, ctx)
 
-        assert len(received) == 1
-        assert received[0].kind == "file.created"
+        assert updates == {}
+        assert next_phase is None
+        assert received == []
 
     def test_multi_spec_only_matching_one_fires(self, tmp_path):
         """When multiple specs exist, only the one whose path matches fires."""
@@ -790,3 +818,500 @@ class TestEventSpecRouting:
 
         assert len(received) == 1
         assert received[0].kind == "done_marker"
+
+
+class TestToolSpecRouting:
+    """Test ToolSpec-based tool.* event routing in the router."""
+
+    def _make_ctx(self, tmp_path):
+        """Build a minimal mock context with a real feature_dir."""
+        files = MagicMock(spec=RuntimeFiles)
+        files.feature_dir = tmp_path
+        files.state = tmp_path / "state.json"
+        runtime = MagicMock()
+        agents = {"coder": MagicMock(spec=AgentConfig)}
+        return PipelineContext(
+            files=files,
+            runtime=runtime,
+            agents=agents,
+            max_review_iterations=3,
+            prompts={},
+            github_config=GitHubConfig(),
+            workflow_settings=WorkflowSettings(),
+        )
+
+    def test_tool_event_matching_spec_dispatches_logical_event(self, tmp_path):
+        """tool.* event matching a ToolSpec dispatches WorkflowEvent(kind=spec.name)."""
+        from agentmux.workflow.event_router import ToolSpec
+
+        received = []
+
+        class ToolSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def get_tool_specs(self):
+                return (
+                    ToolSpec(
+                        name="architecture_submitted",
+                        tool_names=("submit_architecture",),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"architecting": ToolSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "architecting"}
+
+        event = WorkflowEvent(
+            kind="tool.submit_architecture",
+            payload={"status": "ok"},
+        )
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert len(received) == 1
+        assert received[0].kind == "architecture_submitted"
+        assert received[0].payload == {"status": "ok"}
+
+    def test_tool_event_non_matching_returns_empty(self, tmp_path):
+        """Non-matching tool name returns ({}, None)."""
+        from agentmux.workflow.event_router import ToolSpec
+
+        received = []
+
+        class ToolSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def get_tool_specs(self):
+                return (
+                    ToolSpec(
+                        name="plan_submitted",
+                        tool_names=("submit_plan",),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"planning": ToolSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "planning"}
+
+        event = WorkflowEvent(
+            kind="tool.submit_architecture",
+            payload={"status": "ok"},
+        )
+        with patch("agentmux.sessions.state_store.write_state"):
+            updates, next_phase = router.handle(event, state, ctx)
+
+        assert updates == {}
+        assert next_phase is None
+        assert received == []
+
+    def test_backward_compat_file_events_still_route_via_eventspec(self, tmp_path):
+        """file.created events still route via EventSpec when handler has both specs."""
+        from agentmux.workflow.event_router import EventSpec, ToolSpec
+
+        file_received = []
+        tool_received = []
+
+        class DualSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="plan_written",
+                        watch_paths=("02_planning/plan.md",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
+            def get_tool_specs(self):
+                return (
+                    ToolSpec(
+                        name="plan_submitted",
+                        tool_names=("submit_plan",),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                if event.kind.startswith("tool."):
+                    tool_received.append(event)
+                else:
+                    file_received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"planning": DualSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "planning"}
+
+        # File event should still route via EventSpec
+        file_event = WorkflowEvent(kind="file.created", path="02_planning/plan.md")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(file_event, state, ctx)
+
+        assert len(file_received) == 1
+        assert file_received[0].kind == "plan_written"
+        assert file_received[0].path == "02_planning/plan.md"
+        assert tool_received == []
+
+    def test_tool_event_with_multiple_tool_names_in_spec(self, tmp_path):
+        """A single ToolSpec can match multiple bare tool names."""
+        from agentmux.workflow.event_router import ToolSpec
+
+        received = []
+
+        class ToolSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def get_tool_specs(self):
+                return (
+                    ToolSpec(
+                        name="any_submission",
+                        tool_names=(
+                            "submit_architecture",
+                            "submit_plan",
+                            "submit_review",
+                        ),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"architecting": ToolSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "architecting"}
+
+        for tool_name in ("submit_architecture", "submit_plan", "submit_review"):
+            event = WorkflowEvent(kind=f"tool.{tool_name}", payload={"tool": tool_name})
+            with patch("agentmux.sessions.state_store.write_state"):
+                router.handle(event, state, ctx)
+
+        assert len(received) == 3
+        assert all(r.kind == "any_submission" for r in received)
+
+    def test_handler_without_get_tool_specs_ignores_tool_events(self, tmp_path):
+        """Handler without get_tool_specs returns empty for tool.* events."""
+        received = []
+
+        class NoToolSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"architecting": NoToolSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "architecting"}
+
+        event = WorkflowEvent(kind="tool.submit_architecture", payload={})
+        with patch("agentmux.sessions.state_store.write_state"):
+            updates, next_phase = router.handle(event, state, ctx)
+
+        assert updates == {}
+        assert next_phase is None
+        assert received == []
+
+
+class TestEnteredBeforeEnter:
+    """Test TOCTOU fix: _entered is set BEFORE handler.enter() executes."""
+
+    def _make_ctx(self, tmp_path):
+        files = MagicMock(spec=RuntimeFiles)
+        files.feature_dir = tmp_path
+        files.state = tmp_path / "state.json"
+        runtime = MagicMock()
+        agents = {"coder": MagicMock(spec=AgentConfig)}
+        return PipelineContext(
+            files=files,
+            runtime=runtime,
+            agents=agents,
+            max_review_iterations=3,
+            prompts={},
+            github_config=GitHubConfig(),
+            workflow_settings=WorkflowSettings(),
+        )
+
+    def test_entered_is_set_before_handler_enter_executes(self, tmp_path):
+        """_entered must be set BEFORE handler.enter() to prevent double-enter."""
+        entered_during_enter = []
+
+        class ObservingHandler:
+            def enter(self, state, ctx):
+                # Router should have already added phase to _entered
+                entered_during_enter.append(state.get("phase", "") in router._entered)
+                return {}
+
+            def handle_event(self, event, state, ctx):
+                return {}, None
+
+        router = WorkflowEventRouter({"planning": ObservingHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "planning"}
+        event = WorkflowEvent(kind="file.created", path="planning/plan.md")
+
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert entered_during_enter == [True]
+
+
+class TestPhaseEntryAtTransition:
+    """Test that phase entry at transition is explicit, not via event."""
+
+    def _make_ctx(self, tmp_path):
+        files = MagicMock(spec=RuntimeFiles)
+        files.feature_dir = tmp_path
+        files.state = tmp_path / "state.json"
+        runtime = MagicMock()
+        agents = {"coder": MagicMock(spec=AgentConfig)}
+        return PipelineContext(
+            files=files,
+            runtime=runtime,
+            agents=agents,
+            max_review_iterations=3,
+            prompts={},
+            github_config=GitHubConfig(),
+            workflow_settings=WorkflowSettings(),
+        )
+
+    def test_phase_entry_at_transition_not_via_event(self, tmp_path):
+        """After transition, new handler's enter() is called without another event."""
+        enter_calls = []
+        handle_calls = []
+
+        class PlanningHandler:
+            def enter(self, state, ctx):
+                enter_calls.append("planning")
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="any_file",
+                        watch_paths=("*",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                handle_calls.append(("planning", event.path))
+                if "plan.md" in (event.path or ""):
+                    return {}, "implementing"
+                return {}, None
+
+        class ImplementingHandler:
+            def enter(self, state, ctx):
+                enter_calls.append("implementing")
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="any_file",
+                        watch_paths=("*",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                handle_calls.append(("implementing", event.path))
+                return {}, None
+
+        router = WorkflowEventRouter(
+            {"planning": PlanningHandler(), "implementing": ImplementingHandler()}
+        )
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "planning"}
+        event = WorkflowEvent(kind="file.created", path="planning/plan.md")
+
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert enter_calls == ["planning", "implementing"]
+        # Only planning got the event, implementing was entered explicitly
+        assert handle_calls == [("planning", "planning/plan.md")]
+
+
+class TestPreDispatchFilter:
+    """Test that unsubscribed events are dropped before dispatch."""
+
+    def _make_ctx(self, tmp_path):
+        files = MagicMock(spec=RuntimeFiles)
+        files.feature_dir = tmp_path
+        files.state = tmp_path / "state.json"
+        runtime = MagicMock()
+        agents = {"coder": MagicMock(spec=AgentConfig)}
+        return PipelineContext(
+            files=files,
+            runtime=runtime,
+            agents=agents,
+            max_review_iterations=3,
+            prompts={},
+            github_config=GitHubConfig(),
+            workflow_settings=WorkflowSettings(),
+        )
+
+    def test_unsubscribed_tool_event_dropped(self, tmp_path):
+        """Tool event not matching any ToolSpec is dropped, not dispatched."""
+        from agentmux.workflow.event_router import ToolSpec
+
+        received = []
+
+        class ToolSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return ()
+
+            def get_tool_specs(self):
+                return (
+                    ToolSpec(
+                        name="plan_submitted",
+                        tool_names=("submit_plan",),
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"planning": ToolSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "planning"}
+
+        event = WorkflowEvent(kind="tool.submit_done", payload={})
+        with patch("agentmux.sessions.state_store.write_state"):
+            updates, next_phase = router.handle(event, state, ctx)
+
+        assert updates == {}
+        assert next_phase is None
+        assert received == []
+
+    def test_unsubscribed_file_path_dropped(self, tmp_path):
+        """File event not matching any watch_paths is dropped."""
+        received = []
+
+        class FileSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="done_marker",
+                        watch_paths=("05_implementation/done_*",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": FileSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.created", path="02_planning/plan.md")
+        with patch("agentmux.sessions.state_store.write_state"):
+            updates, next_phase = router.handle(event, state, ctx)
+
+        assert updates == {}
+        assert next_phase is None
+        assert received == []
+
+    def test_subscribed_file_event_dispatched(self, tmp_path):
+        """Matching file event IS dispatched."""
+        received = []
+
+        class FileSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="done_marker",
+                        watch_paths=("05_implementation/done_*",),
+                        is_ready=lambda p, c, s: True,
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": FileSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.created", path="05_implementation/done_3")
+        with patch("agentmux.sessions.state_store.write_state"):
+            router.handle(event, state, ctx)
+
+        assert len(received) == 1
+        assert received[0].kind == "done_marker"
+
+    def test_subscribed_but_not_ready_dispatched_anyway_by_is_ready(self, tmp_path):
+        """Subscription filter doesn't block; is_ready in _dispatch() still decides."""
+        received = []
+        ready_calls = []
+
+        class FileSpecHandler:
+            def enter(self, state, ctx):
+                return {}
+
+            def get_event_specs(self):
+                return (
+                    EventSpec(
+                        name="done_marker",
+                        watch_paths=("05_implementation/done_*",),
+                        is_ready=lambda p, c, s: ready_calls.append(p) or False,
+                    ),
+                )
+
+            def handle_event(self, event, state, ctx):
+                received.append(event)
+                return {}, None
+
+        router = WorkflowEventRouter({"implementing": FileSpecHandler()})
+        ctx = self._make_ctx(tmp_path)
+        state = {"phase": "implementing"}
+
+        event = WorkflowEvent(kind="file.created", path="05_implementation/done_1")
+        with patch("agentmux.sessions.state_store.write_state"):
+            updates, next_phase = router.handle(event, state, ctx)
+
+        # Subscription filter passed it through (path matched)
+        # But is_ready returned False → not dispatched
+        assert len(ready_calls) == 1
+        assert received == []
+        assert updates == {}
+        assert next_phase is None

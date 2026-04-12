@@ -17,6 +17,7 @@ from .configurators import (
     CONFIGURATORS,
     ClaudeConfigurator,
     CodexConfigurator,
+    CopilotConfigurator,
     GeminiConfigurator,
     JsonMcpConfigurator,
     OpenCodeConfigurator,
@@ -25,38 +26,32 @@ from .configurators import (
 
 # Models
 from .models import (
+    DEFAULT_MCP_ROLES,
+    DEFAULT_MCP_SERVERS,
     DEFAULT_RESEARCH_ROLES,
     DEFAULT_RESEARCH_SERVERS,
+    ROLE_TOOLS,
     McpServerSpec,
 )
+
+# Preparer
+from .preparer import McpAgentPreparer, ensure_mcp_config
 
 # Runtime
 from .runtime import cleanup_mcp, create_runtime_mcp_config, setup_mcp
 
-# Backward-compat alias for renamed function
-_create_runtime_mcp_config = create_runtime_mcp_config
-
-# Preparer
-# Re-export OPENCODE_AGENT_ROLES from shared.models for backward compatibility
-from ...shared.models import OPENCODE_AGENT_ROLES as OPENCODE_AGENT_ROLES
-
-# OpenCode agent configurator (separate domain, re-exported for backward compat)
-from ..opencode_agents import (
-    OPENCODE_AGENT_PERSONAS as OPENCODE_AGENT_PERSONAS,
-)
-from ..opencode_agents import (
-    OpenCodeAgentConfigurator as OpenCodeAgentConfigurator,
-)
-from .preparer import McpAgentPreparer, ensure_mcp_config
-
 __all__ = [
     # Models
+    "DEFAULT_MCP_ROLES",
+    "DEFAULT_MCP_SERVERS",
     "DEFAULT_RESEARCH_ROLES",
     "DEFAULT_RESEARCH_SERVERS",
+    "ROLE_TOOLS",
     "McpServerSpec",
     # Configurators
     "ClaudeConfigurator",
     "CodexConfigurator",
+    "CopilotConfigurator",
     "CONFIGURATORS",
     "GeminiConfigurator",
     "JsonMcpConfigurator",
@@ -69,6 +64,4 @@ __all__ = [
     # Preparer
     "ensure_mcp_config",
     "McpAgentPreparer",
-    # Backward compat
-    "OPENCODE_AGENT_ROLES",
 ]

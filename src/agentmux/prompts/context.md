@@ -22,9 +22,7 @@ pipeline handles through its file protocol. Use the file protocol instead.
 ## Rules
 
 - Communicate through files in this directory only.
-- Do not modify `state.json` — the orchestrator owns it.
 - Keep changes aligned with `requirements.md` and the active plan.
-- If `state.json` contains an `issue_number`, the GitHub issue has already been fetched by the pipeline and its content is in `requirements.md`. Do not re-fetch it.
 
 ## Session
 

@@ -16,7 +16,8 @@ from ..integrations.github import GitHubBootstrapper
 from ..integrations.mcp import McpAgentPreparer
 from ..runtime import TmuxRuntimeFactory
 from ..runtime.file_events import ensure_watchdog_available
-from ..runtime.tmux_control import list_agentmux_sessions, tmux_session_exists
+from ..runtime.tmux_control import tmux_kill_session
+from ..runtime.tmux_core import list_agentmux_sessions, tmux_session_exists
 from ..sessions import (
     PreparedSession,
     PromptInput,
@@ -193,6 +194,8 @@ class PipelineApplication:
             return self.orchestrator.run(ctx, args.keep_session)
         except KeyboardInterrupt:
             self._cleanup_runtime_processes(runtime)
+            if tmux_session_exists(runtime.session_name):
+                tmux_kill_session(runtime.session_name)
             report = self.interruptions.build_canceled(
                 feature_dir,
                 "The background orchestrator received Ctrl-C.",
@@ -203,6 +206,8 @@ class PipelineApplication:
             return 130
         except Exception as exc:
             self._cleanup_runtime_processes(runtime)
+            if tmux_session_exists(runtime.session_name):
+                tmux_kill_session(runtime.session_name)
             report = self.interruptions.build_failed(
                 feature_dir,
                 self.interruptions.summarize_exception(
@@ -377,7 +382,22 @@ class PipelineApplication:
                 )
             else:
                 selected = self.sessions.resolve_resume_target(str(args.resume))
-            return self.sessions.prepare_resumed_session(selected)
+            prepared = self.sessions.prepare_resumed_session(selected)
+
+            # Validate and restore feature branch on resume
+            state = load_state(prepared.files.state)
+            feature_branch = state.get("feature_branch")
+            if feature_branch:
+                git_manager = GitBranchManager(self.project_dir)
+                branch_state = git_manager.ensure_branch(feature_branch)
+                if not branch_state.created:
+                    self.ui.print(
+                        f"Warning: Could not create/switch to feature "
+                        f"branch {feature_branch}; "
+                        "will retry at completion."
+                    )
+
+            return prepared
 
         github = GitHubBootstrapper(
             self.project_dir, loaded.github, output=self.ui.print
@@ -425,8 +445,6 @@ class PipelineApplication:
             )
         else:
             # Track branch info in session state
-            from ..sessions.state_store import load_state, write_state
-
             state = load_state(prepared.files.state)
             state["feature_branch"] = branch_name
             state["branch_created"] = True
@@ -530,6 +548,8 @@ class PipelineApplication:
             )
         except KeyboardInterrupt:
             self._cleanup_processes(feature_dir, session_name, agents)
+            if tmux_session_exists(session_name):
+                tmux_kill_session(session_name)
             report = self.interruptions.build_canceled(
                 feature_dir,
                 "The pipeline launcher received Ctrl-C.",

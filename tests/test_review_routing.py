@@ -159,9 +159,11 @@ class TestReviewRoutingIntegration:
             "needs_docs": False,
             "doc_files": [],
         }
-        import json
+        import yaml
 
-        (planning_dir / "plan_meta.json").write_text(json.dumps(plan_meta))
+        (planning_dir / "execution_plan.yaml").write_text(
+            yaml.dump(plan_meta, default_flow_style=False)
+        )
 
         # Verify routing defaults to logic
         from agentmux.workflow.phase_helpers import load_plan_meta, select_reviewer_type
@@ -172,7 +174,7 @@ class TestReviewRoutingIntegration:
 
     def test_planning_to_reviewing_transition_with_various_plan_meta(self, tmp_path):
         """Test transition with various plan_meta configurations."""
-        import json
+        import yaml
 
         from agentmux.workflow.phase_helpers import load_plan_meta, select_reviewer_type
 
@@ -187,7 +189,9 @@ class TestReviewRoutingIntegration:
             planning_dir = tmp_path / f"02_planning_{idx}_{expected_type}"
             planning_dir.mkdir(parents=True)
             plan_meta = {"review_strategy": review_strategy}
-            (planning_dir / "plan_meta.json").write_text(json.dumps(plan_meta))
+            (planning_dir / "execution_plan.yaml").write_text(
+                yaml.dump(plan_meta, default_flow_style=False)
+            )
 
             loaded_meta = load_plan_meta(planning_dir)
             reviewer_type = select_reviewer_type(loaded_meta)

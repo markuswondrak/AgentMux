@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,12 +15,9 @@ from agentmux.workflow.event_catalog import (
     EVENT_IMPLEMENTATION_COMPLETED,
     EVENT_PLAN_WRITTEN,
 )
-from agentmux.workflow.event_router import (
-    EventSpec,
-    WorkflowEvent,
-    extract_subplan_index,
-)
+from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.execution_plan import load_execution_plan
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
@@ -46,7 +44,7 @@ def _plan_index_from_name(plan_name: str) -> int:
 
 
 def _build_implementation_schedule(*, planning_dir: Path) -> list[dict[str, object]]:
-    """Build implementation schedule from execution_plan.json."""
+    """Build implementation schedule from execution_plan.yaml."""
     execution_plan = load_execution_plan(planning_dir)
 
     schedule: list[dict[str, object]] = []
@@ -71,7 +69,7 @@ def _build_implementation_schedule(*, planning_dir: Path) -> list[dict[str, obje
 
     if len(all_indexes) != len(set(all_indexes)):
         raise RuntimeError(
-            "execution_plan.json must not reuse plan files across groups."
+            "execution_plan.yaml must not reuse plan files across groups."
         )
     if all_indexes:
         max_index = max(all_indexes)
@@ -79,7 +77,7 @@ def _build_implementation_schedule(*, planning_dir: Path) -> list[dict[str, obje
         if missing_indexes:
             missing_csv = ", ".join(str(index) for index in missing_indexes)
             raise RuntimeError(
-                f"execution_plan.json plan indexes must be contiguous "
+                f"execution_plan.yaml plan indexes must be contiguous "
                 f"from 1..{max_index}; missing: {missing_csv}."
             )
     return schedule
@@ -117,6 +115,8 @@ def _set_implementation_progress(
     state: dict,
     schedule: list[dict[str, object]],
     active_group_index: int | None,
+    *,
+    single_coder: bool,
 ) -> None:
     """Set implementation progress in state."""
     group_total = len(schedule)
@@ -138,6 +138,7 @@ def _set_implementation_progress(
         ]
         return
 
+    state["implementation_single_coder"] = single_coder
     state["implementation_group_index"] = active_group_index + 1
     state["implementation_group_mode"] = str(schedule[active_group_index]["mode"])
     state["implementation_active_plan_ids"] = list(
@@ -148,62 +149,102 @@ def _set_implementation_progress(
     ]
 
 
-class ImplementingHandler:
+class ImplementingHandler(BaseToolHandler):
     """Event-driven handler for implementing phase."""
+
+    def _get_tool_handlers(self) -> tuple[ToolHandlerEntry, ...]:
+        return (
+            ToolHandlerEntry(
+                name="done",
+                tool_names=("submit_done",),
+                handler=lambda s, e, st, c: s._handle_done(e, st, c),
+            ),
+        )
 
     def enter(self, state: dict, ctx: PipelineContext) -> dict:
         """Called when entering implementing phase.
 
         Resets markers and dispatches first group (or whole plan in single-coder mode).
         """
-        if state.get("last_event") in {
+        is_fresh_start = state.get("last_event") in {
             EVENT_PLAN_WRITTEN,
             EVENT_DESIGN_WRITTEN,
             EVENT_CHANGES_REQUESTED,
-        }:
+        }
+        if is_fresh_start:
             reset_markers(ctx.files.implementation_dir, "done_*")
         ctx.runtime.kill_primary("coder")
 
-        schedule = _build_implementation_schedule(planning_dir=ctx.files.planning_dir)
-        updates: dict[str, object] = {}
-        updates["subplan_count"] = self._total_marker_count(schedule)
-        updates["completed_subplans"] = []
+        coder = ctx.agents.get("coder")
+        if is_fresh_start or "implementation_single_coder" not in state:
+            effective_single_coder = coder is not None and coder.single_coder
+        else:
+            effective_single_coder = bool(state["implementation_single_coder"])
 
+        schedule = _build_implementation_schedule(planning_dir=ctx.files.planning_dir)
         active_group_index = _first_incomplete_group_index(
             ctx.files.implementation_dir, schedule
         )
-        _set_implementation_progress(updates, schedule, active_group_index)
+        active_group_mode = (
+            str(schedule[active_group_index]["mode"])
+            if active_group_index is not None
+            else "none"
+        )
+
+        if is_fresh_start:
+            print(
+                "Starting implementing phase "
+                "(fresh start, "
+                f"group_mode={active_group_mode}, "
+                f"single_coder={effective_single_coder})."
+            )
+        else:
+            mode_source = (
+                "saved state"
+                if "implementation_single_coder" in state
+                else "agent config"
+            )
+            print(
+                "Resuming implementing phase "
+                f"(group_mode={active_group_mode}, "
+                f"single_coder={effective_single_coder}, source={mode_source})."
+            )
+
+        updates: dict[str, object] = {}
+        updates["subplan_count"] = self._total_marker_count(schedule)
+        updates["completed_subplans"] = []
+        _set_implementation_progress(
+            updates,
+            schedule,
+            active_group_index,
+            single_coder=effective_single_coder,
+        )
 
         if active_group_index is not None:
-            if self._is_single_coder(ctx):
+            if effective_single_coder:
                 self._dispatch_whole_plan(ctx, schedule)
             else:
                 self._dispatch_active_group(ctx, schedule, active_group_index)
 
         return updates
 
-    def get_event_specs(self) -> tuple[EventSpec, ...]:
-        return (
-            EventSpec(
-                name="done_marker",
-                watch_paths=("05_implementation/done_*",),
-                is_ready=lambda path, ctx, state: (
-                    ctx.files.feature_dir / path
-                ).exists(),
-            ),
-        )
+    def get_event_specs(self) -> Sequence[EventSpec]:
+        return ()
 
-    def handle_event(
+    def _handle_done(
         self,
         event: WorkflowEvent,
         state: dict,
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
-        """Handle events for implementing phase."""
-        if event.kind == "done_marker":
-            subplan_index = extract_subplan_index(event.path or "")
-            if subplan_index is not None:
-                return self._handle_subplan_completed(subplan_index, state, ctx)
+        payload = event.payload.get("payload", {})
+        subplan_index = payload.get("subplan_index")
+        if subplan_index is not None:
+            # Write done_N marker for group-completion tracking (idempotent)
+            done_n_path = ctx.files.implementation_dir / f"done_{subplan_index}"
+            if not done_n_path.exists():
+                done_n_path.touch()
+            return self._handle_subplan_completed(subplan_index, state, ctx)
         return {}, None
 
     def _handle_subplan_completed(
@@ -223,7 +264,7 @@ class ImplementingHandler:
         updates: dict[str, object] = {"completed_subplans": sorted(completed)}
 
         # Single-coder mode: one pane handles everything — just watch for all markers
-        if self._is_single_coder(ctx):
+        if self._is_single_coder(ctx, state):
             all_marker_indexes = [
                 int(idx) for group in schedule for idx in group["marker_indexes"]
             ]
@@ -255,8 +296,13 @@ class ImplementingHandler:
         if not _all_markers_complete(ctx.files.implementation_dir, active_group):
             # Group not complete - check if there are more pending plans to dispatch
             # This handles serial groups with multiple plans
-            if str(active_group["mode"]) == "serial":
-                self._dispatch_active_group(ctx, schedule, group_index - 1)
+            group_mode = (
+                str(state["implementation_group_mode"])
+                if "implementation_group_mode" in state
+                else str(active_group["mode"])
+            )
+            if group_mode == "serial":
+                self._dispatch_active_group(ctx, schedule, group_index - 1, state=state)
             return updates, None
 
         # Group complete - move to next group or finish
@@ -276,7 +322,12 @@ class ImplementingHandler:
 
         if next_group_index is None:
             # All groups complete
-            _set_implementation_progress(state, schedule, active_group_index=None)
+            _set_implementation_progress(
+                state,
+                schedule,
+                active_group_index=None,
+                single_coder=self._is_single_coder(ctx, state),
+            )
             updates = {
                 "completed_subplans": [],
                 "implementation_group_index": state.get("implementation_group_index"),
@@ -294,7 +345,10 @@ class ImplementingHandler:
 
         # Move to next group
         _set_implementation_progress(
-            state, schedule, active_group_index=next_group_index
+            state,
+            schedule,
+            active_group_index=next_group_index,
+            single_coder=self._is_single_coder(ctx, state),
         )
         updates = {
             "completed_subplans": [],
@@ -307,7 +361,7 @@ class ImplementingHandler:
                 "implementation_completed_group_ids"
             ),
         }
-        self._dispatch_active_group(ctx, schedule, next_group_index)
+        self._dispatch_active_group(ctx, schedule, next_group_index, state=state)
         return updates, None
 
     def _dispatch_active_group(
@@ -315,6 +369,7 @@ class ImplementingHandler:
         ctx: PipelineContext,
         schedule: list[dict[str, object]],
         active_group_index: int,
+        state: dict | None = None,
     ) -> None:
         """Dispatch prompts for the active group."""
         group = schedule[active_group_index]
@@ -345,7 +400,7 @@ class ImplementingHandler:
                         ctx.files.feature_dir,
                         ctx.files.relative_path(
                             ctx.files.implementation_dir
-                            / f"coder_prompt_{marker_index}.txt"
+                            / f"coder_prompt_{marker_index}.md"
                         ),
                         build_coder_subplan_prompt(
                             ctx.files,
@@ -363,7 +418,12 @@ class ImplementingHandler:
                 )
             )
 
-        if str(group["mode"]) == "parallel" and len(prompt_specs) > 1:
+        group_mode = (
+            str(state["implementation_group_mode"])
+            if state is not None and "implementation_group_mode" in state
+            else str(group["mode"])
+        )
+        if group_mode == "parallel" and len(prompt_specs) > 1:
             ctx.runtime.send_many("coder", prompt_specs)
         else:
             send_to_role(
@@ -393,8 +453,10 @@ class ImplementingHandler:
         return completed
 
     @staticmethod
-    def _is_single_coder(ctx: PipelineContext) -> bool:
+    def _is_single_coder(ctx: PipelineContext, state: dict | None = None) -> bool:
         """Return True if the coder agent uses single-coder mode (e.g. copilot)."""
+        if state is not None and "implementation_single_coder" in state:
+            return bool(state["implementation_single_coder"])
         coder = ctx.agents.get("coder")
         return coder is not None and coder.single_coder
 
@@ -431,7 +493,7 @@ class ImplementingHandler:
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
             ctx.files.relative_path(
-                ctx.files.implementation_dir / "coder_prompt_whole.txt"
+                ctx.files.implementation_dir / "coder_prompt_whole.md"
             ),
             prompt_content,
         )

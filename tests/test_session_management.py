@@ -60,7 +60,7 @@ class RemoveAllSessionsTests(unittest.TestCase):
                     return_value=True,
                 ) as mock_kill,
                 patch(
-                    "agentmux.runtime.tmux_control.tmux_session_exists",
+                    "agentmux.runtime.tmux_core.tmux_session_exists",
                     return_value=True,
                 ),
             ):
