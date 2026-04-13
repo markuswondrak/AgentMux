@@ -1,0 +1,202 @@
+/* ────────────────────────────────────────────────────────────
+   Brand colours
+   ──────────────────────────────────────────────────────────── */
+:root {
+  --vp-c-brand-1: #646cff;
+  --vp-c-brand-2: #747bff;
+  --vp-c-brand-3: #535bf2;
+  --vp-c-brand-soft: rgba(100, 108, 255, 0.14);
+}
+
+.dark {
+  --vp-c-brand-1: #a5adff;
+  --vp-c-brand-2: #b4bbff;
+  --vp-c-brand-3: #9399ff;
+  --vp-c-brand-soft: rgba(165, 173, 255, 0.14);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Home hero — constrain name size on small screens
+   ──────────────────────────────────────────────────────────── */
+.VPHero .name {
+  background: linear-gradient(135deg, var(--vp-c-brand-1) 0%, var(--vp-c-brand-3) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Quickstart component
+   ──────────────────────────────────────────────────────────── */
+.qs-root {
+  margin: 2rem 0;
+}
+
+.qs-root h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+}
+
+.qs-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.qs-step {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: 0 1rem;
+  align-items: start;
+}
+
+.qs-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+  font-weight: 700;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+  margin-top: 0.6rem;
+}
+
+.qs-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.qs-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--vp-c-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.qs-code-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--vp-code-block-bg);
+  border-radius: 8px;
+  padding: 0.75rem 3rem 0.75rem 1rem;
+  overflow: hidden;
+}
+
+.qs-code-wrap code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.875rem;
+  color: var(--vp-code-color);
+  white-space: pre;
+  overflow-x: auto;
+  padding-right: 0.5rem;
+}
+
+.qs-copy {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 4px;
+  color: var(--vp-c-text-3);
+  transition: color 0.2s, background 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.qs-copy:hover {
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+}
+
+.qs-copy svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Roadmap component
+   ──────────────────────────────────────────────────────────── */
+.roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin: 2rem 0;
+}
+
+@media (max-width: 768px) {
+  .roadmap-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.roadmap-col {
+  background: var(--vp-c-bg-soft);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.roadmap-col-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--vp-c-brand-1);
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--vp-c-brand-soft);
+}
+
+.roadmap-card {
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: border-color 0.2s;
+}
+
+.roadmap-card:hover {
+  border-color: var(--vp-c-brand-2);
+}
+
+.roadmap-card-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+
+.roadmap-card-desc {
+  font-size: 0.8rem;
+  color: var(--vp-c-text-2);
+  line-height: 1.4;
+}
+
+.roadmap-issue {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--vp-c-brand-1);
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.roadmap-issue:hover {
+  opacity: 1;
+  text-decoration: underline;
+}

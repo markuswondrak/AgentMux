@@ -1,0 +1,27 @@
+columns:
+  - id: now
+    title: "Now"
+    items:
+      - title: "Website launch"
+        description: "VitePress site with landing page, docs migration, and GitHub Pages deploy."
+        issue: 104
+
+  - id: next
+    title: "Next"
+    items:
+      - title: "Configuration wizard improvements"
+        description: "Guided init experience with provider detection and sane defaults."
+      - title: "Provider health checks"
+        description: "Detect stale login sessions and prompt re-auth before pipeline start."
+      - title: "Richer monitor display"
+        description: "Show per-agent token estimates, elapsed time, and phase history."
+
+  - id: later
+    title: "Later"
+    items:
+      - title: "Roadmap from GitHub Projects"
+        description: "Drive this page automatically from the GitHub Projects API."
+      - title: "Web UI dashboard"
+        description: "Browser-based session monitor as an alternative to the tmux pane."
+      - title: "Plugin / extension system"
+        description: "Allow custom agent roles and workflow phases via a plugin interface."

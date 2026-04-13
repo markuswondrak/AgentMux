@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#646cff"/>
+  <!-- A simplified "mux" network icon: central node + 3 outer nodes -->
+  <circle cx="32" cy="32" r="7" fill="white"/>
+  <circle cx="12" cy="16" r="5" fill="white" opacity="0.85"/>
+  <circle cx="52" cy="16" r="5" fill="white" opacity="0.85"/>
+  <circle cx="12" cy="48" r="5" fill="white" opacity="0.85"/>
+  <circle cx="52" cy="48" r="5" fill="white" opacity="0.85"/>
+  <line x1="17" y1="19" x2="27" y2="27" stroke="white" stroke-width="2.5" opacity="0.7"/>
+  <line x1="47" y1="19" x2="37" y2="27" stroke="white" stroke-width="2.5" opacity="0.7"/>
+  <line x1="17" y1="45" x2="27" y2="37" stroke="white" stroke-width="2.5" opacity="0.7"/>
+  <line x1="47" y1="45" x2="37" y2="37" stroke="white" stroke-width="2.5" opacity="0.7"/>
+</svg>
