@@ -24,6 +24,7 @@ from agentmux.workflow.phase_helpers import (
 )
 from agentmux.workflow.prompts import (
     build_reviewer_expert_prompt,
+    build_reviewer_followup_prompt,
     build_reviewer_logic_prompt,
     build_reviewer_prompt,
     build_reviewer_quality_prompt,
@@ -143,6 +144,44 @@ class ReviewingHandler(BaseToolHandler):
             "review_results": review_results,
         }
 
+    def _build_single_reviewer_prompt(
+        self,
+        role_suffix: str,
+        pane_role: str,
+        review_iteration: int,
+        ctx: PipelineContext,
+    ) -> str:
+        """Return the prompt text for one reviewer role.
+
+        Picks the compact follow-up prompt when we are past the first review
+        iteration AND the previous iteration's archived review for this role
+        exists. Falls back to the initial role-specific prompt otherwise.
+        """
+        if review_iteration > 0:
+            prev_iter = review_iteration - 1
+            prev_archive = ctx.files.review_dir / f"review_{prev_iter}_{pane_role}.md"
+            fix_request = ctx.files.fix_request
+            if prev_archive.is_file() and fix_request.is_file():
+                previous_review_rel = str(ctx.files.relative_path(prev_archive))
+                fix_request_rel = str(ctx.files.relative_path(fix_request))
+                return build_reviewer_followup_prompt(
+                    ctx.files,
+                    pane_role=pane_role,
+                    previous_review_rel=previous_review_rel,
+                    fix_request_rel=fix_request_rel,
+                    review_iteration=review_iteration,
+                    agent=ctx.agents.get(pane_role),
+                )
+
+        prompt_builder = _REVIEWER_PROMPT_BUILDERS.get(role_suffix)
+        if prompt_builder is None:
+            agent_prompt = build_reviewer_prompt(
+                ctx.files, agent=ctx.agents.get(pane_role)
+            )
+            command_prompt = build_reviewer_prompt(ctx.files, is_review=True)
+            return f"{agent_prompt}\n\n{command_prompt}"
+        return prompt_builder(ctx.files, ctx.agents.get(pane_role))
+
     def _build_reviewer_specs(
         self,
         reviewer_roles: list[str],
@@ -150,23 +189,24 @@ class ReviewingHandler(BaseToolHandler):
         ctx: PipelineContext,
         state: dict,
     ) -> list[ReviewerSpec]:
-        """Build ReviewerSpec list for roles that still need reviewing."""
+        """Build ReviewerSpec list for roles that still need reviewing.
+
+        When ``state['review_iteration'] > 0`` and the previous iteration's
+        archived review for this role exists, dispatch a compact follow-up
+        prompt (Issue #119) instead of the full initial prompt. Otherwise —
+        and as a defensive fallback when the archive is missing — use the
+        initial reviewer prompt.
+        """
+        review_iteration = int(state.get("review_iteration", 0))
         specs: list[ReviewerSpec] = []
         for role_suffix in reviewer_roles:
             pane_role = _REVIEWER_ROLE_MAP[role_suffix]
             if active_reviews.get(pane_role) != "pending":
                 continue
 
-            prompt_builder = _REVIEWER_PROMPT_BUILDERS.get(role_suffix)
-            if prompt_builder is None:
-                # Fallback: generic reviewer
-                agent_prompt = build_reviewer_prompt(
-                    ctx.files, agent=ctx.agents.get(pane_role)
-                )
-                command_prompt = build_reviewer_prompt(ctx.files, is_review=True)
-                full_prompt = f"{agent_prompt}\n\n{command_prompt}"
-            else:
-                full_prompt = prompt_builder(ctx.files, ctx.agents.get(pane_role))
+            full_prompt = self._build_single_reviewer_prompt(
+                role_suffix, pane_role, review_iteration, ctx
+            )
 
             # Write the prompt to a role-specific file
             prompt_filename = f"review_{role_suffix}_prompt.md"

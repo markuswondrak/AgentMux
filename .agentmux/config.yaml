@@ -2,12 +2,11 @@ version: 2
 
 defaults:
   session_name: agentmux
-  provider: qwen
+  provider: copilot
+  model: gpt-5.4
   max_review_iterations: 3
 
 roles:
-  architect:
-    provider: copilot
   web-researcher:
     provider: opencode
   code-researcher:
