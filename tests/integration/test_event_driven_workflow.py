@@ -37,6 +37,12 @@ class FakeRuntime:
             ("send", role, prompt_file.name, display_label, prefix_command)
         )
 
+    def send_reviewers_many(self, reviewer_specs: list) -> dict[str, str]:
+        """Fake send_reviewers_many — records call and returns mock pane mapping."""
+        roles = [spec.role for spec in reviewer_specs]
+        self.calls.append(("send_reviewers_many", roles))
+        return {role: f"%pane_{role}" for role in roles}
+
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(("send_many", role, len(prompt_specs)))
 
@@ -222,9 +228,9 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
             self.assertEqual("reviewing", state["phase"])
             self.assertEqual("implementation_completed", state["last_event"])
 
-            # 5. Reviewer writes review.yaml then submits via MCP tool
+            # 5. Reviewer writes review_reviewer_logic.yaml then submits via MCP tool
             ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
-            (ctx.files.review_dir / "review.yaml").write_text(
+            (ctx.files.review_dir / "review_reviewer_logic.yaml").write_text(
                 _yaml.safe_dump(
                     {
                         "verdict": "pass",
@@ -235,12 +241,28 @@ class TestEventDrivenWorkflowIntegration(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            # Create review.md for summary prompt include expansion
+            (ctx.files.review_dir / "review.md").write_text(
+                "verdict: pass\n\n## Summary\n\nAll checks pass.",
+                encoding="utf-8",
+            )
 
             event = WorkflowEvent(
                 kind="tool.submit_review",
                 payload={"payload": {}},
             )
-            updates, _ = router.handle(event, load_state(state_path), ctx)
+            with (
+                patch(
+                    "agentmux.workflow.handlers.reviewing.build_reviewer_summary_prompt",
+                    return_value="summary prompt",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.reviewing.write_prompt_file",
+                    return_value=Path("/tmp/prompt.md"),
+                ),
+                patch("agentmux.workflow.handlers.reviewing.send_to_role"),
+            ):
+                updates, _ = router.handle(event, load_state(state_path), ctx)
 
             # Still in reviewing, awaiting summary from reviewer
             state = load_state(state_path)

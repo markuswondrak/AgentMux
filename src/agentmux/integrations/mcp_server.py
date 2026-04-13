@@ -197,7 +197,6 @@ def _read_yaml_for_signal(yaml_path: Path, contract_name: str) -> dict[str, Any]
 
 @_tool("submit_architecture")
 def submit_architecture(
-    feature_dir: str | None = None,
     preferences: list[dict[str, str]] | None = None,
 ) -> str:
     """Signal architecture completion.
@@ -209,7 +208,7 @@ def submit_architecture(
     Optional: pass preferences=[{target_role, bullet}, ...] to persist approved
     style/quality preferences directly to .agentmux/prompts/agents/<role>.md.
     """
-    feature = _feature_dir(feature_dir)
+    feature = _feature_dir()
     md_path = feature / SESSION_DIR_NAMES["architecting"] / "architecture.md"
     if not md_path.exists():
         raise ValueError(
@@ -219,13 +218,12 @@ def submit_architecture(
         raise ValueError("architecture.md is empty.")
     if preferences:
         apply_preference_entries(_project_dir(), preferences)
-    append_tool_event(_log_path(feature_dir), "submit_architecture", {})
+    append_tool_event(_log_path(), "submit_architecture", {})
     return "Architecture submitted."
 
 
 @_tool("submit_plan")
 def submit_plan(
-    feature_dir: str | None = None,
     preferences: list[dict[str, str]] | None = None,
 ) -> str:
     """Signal execution plan completion.
@@ -237,36 +235,42 @@ def submit_plan(
     Optional: pass preferences=[{target_role, bullet}, ...] to persist approved
     style/quality preferences directly to .agentmux/prompts/agents/<role>.md.
     """
-    feature = _feature_dir(feature_dir)
+    feature = _feature_dir()
     yaml_path = feature / SESSION_DIR_NAMES["planning"] / "plan.yaml"
     _read_yaml_for_signal(yaml_path, "plan")
     if preferences:
         apply_preference_entries(_project_dir(), preferences)
-    append_tool_event(_log_path(feature_dir), "submit_plan", {})
+    append_tool_event(_log_path(), "submit_plan", {})
     return "Plan submitted."
 
 
 @_tool("submit_review")
 def submit_review(
-    feature_dir: str | None = None,
     preferences: list[dict[str, str]] | None = None,
+    role: str | None = None,
 ) -> str:
     """Signal review completion.
 
-    Reads and validates the agent-written 07_review/review.yaml,
-    then appends a completion signal to tool_events.jsonl.
-    Write the YAML file before calling this tool.
+    Reads and validates the agent-written review YAML, then appends a
+    completion signal to tool_events.jsonl.  Write the YAML file before
+    calling this tool.
+
+    When called by a parallel reviewer, pass role=<your_role> (e.g.
+    role="reviewer_logic") so the tool reads the role-specific file
+    review_{role}.yaml.  Without a role the legacy review.yaml is used.
 
     Optional: pass preferences=[{target_role, bullet}, ...] to persist approved
     style/quality preferences directly to .agentmux/prompts/agents/<role>.md.
     """
-    feature = _feature_dir(feature_dir)
-    yaml_path = feature / SESSION_DIR_NAMES["review"] / "review.yaml"
+    feature = _feature_dir()
+    review_dir = feature / SESSION_DIR_NAMES["review"]
+    filename = f"review_{role}.yaml" if role else "review.yaml"
+    yaml_path = review_dir / filename
     data = _read_yaml_for_signal(yaml_path, "review")
     verdict = data.get("verdict", "unknown")
     if preferences:
         apply_preference_entries(_project_dir(), preferences)
-    append_tool_event(_log_path(feature_dir), "submit_review", {})
+    append_tool_event(_log_path(), "submit_review", {})
     return f"Review submitted (verdict: {verdict})."
 
 
@@ -278,14 +282,11 @@ def submit_review(
 @_tool("submit_done")
 def submit_done(
     subplan_index: int,
-    feature_dir: str | None = None,
 ) -> str:
     """Mark a sub-plan as done."""
     if not isinstance(subplan_index, int) or subplan_index < 1:
         raise ValueError("subplan_index must be an integer >= 1.")
-    append_tool_event(
-        _log_path(feature_dir), "submit_done", {"subplan_index": subplan_index}
-    )
+    append_tool_event(_log_path(), "submit_done", {"subplan_index": subplan_index})
     return f"Sub-plan {subplan_index} marked done."
 
 
@@ -293,14 +294,13 @@ def submit_done(
 def submit_research_done(
     topic: str,
     type: str,
-    feature_dir: str | None = None,
 ) -> str:
     """Mark a research task as done."""
     normalized = _validate_topic(topic)
     if type not in ("code", "web"):
         raise ValueError("type must be 'code' or 'web'.")
     append_tool_event(
-        _log_path(feature_dir),
+        _log_path(),
         "submit_research_done",
         {"topic": normalized, "type": type, "role_type": type},
     )
@@ -309,7 +309,6 @@ def submit_research_done(
 
 @_tool("submit_pm_done")
 def submit_pm_done(
-    feature_dir: str | None = None,
     preferences: list[dict[str, str]] | None = None,
 ) -> str:
     """Mark the product management phase as done.
@@ -319,7 +318,7 @@ def submit_pm_done(
     """
     if preferences:
         apply_preference_entries(_project_dir(), preferences)
-    append_tool_event(_log_path(feature_dir), "submit_pm_done", {})
+    append_tool_event(_log_path(), "submit_pm_done", {})
     return "Product management phase done."
 
 

@@ -276,26 +276,29 @@ def research_role_from_payload(payload: dict) -> str | None:
     return None
 
 
-def select_reviewer_type(plan_meta: dict) -> str:
-    """Select the appropriate reviewer type based on plan_meta review_strategy.
+def select_reviewer_roles(plan_meta: dict) -> list[str]:
+    """Select reviewer roles based on plan_meta review_strategy.
+
+    Replaces select_reviewer_type() — returns a list of role suffixes
+    instead of a single reviewer type string.
 
     Args:
         plan_meta: The plan_meta dictionary from 02_planning/execution_plan.yaml
 
     Returns:
-        One of "logic" | "quality" | "expert"
+        List of role suffixes: ["quality"], ["logic"], or ["expert"]
 
     Rules:
-        - Missing review_strategy -> "logic" (default)
-        - low severity -> "quality"
-        - medium severity + no security/performance in focus -> "logic"
-        - medium severity + security OR performance in focus -> "expert"
-        - high severity + no security/performance in focus -> "logic"
-        - high severity + security OR performance in focus -> "expert"
+        - Missing review_strategy -> ["logic"] (default)
+        - low severity -> ["quality"]
+        - medium severity + no security/performance in focus -> ["logic"]
+        - medium severity + security OR performance in focus -> ["expert"]
+        - high severity + no security/performance in focus -> ["logic"]
+        - high severity + security OR performance in focus -> ["expert"]
     """
     review_strategy = plan_meta.get("review_strategy")
     if not review_strategy:
-        return "logic"
+        return ["logic"]
 
     severity = review_strategy.get("severity", "").lower()
     focus = review_strategy.get("focus", [])
@@ -311,13 +314,13 @@ def select_reviewer_type(plan_meta: dict) -> str:
     needs_expert = has_security_focus or has_performance_focus
 
     if severity == "low":
-        return "quality"
+        return ["quality"]
 
     if severity == "medium":
-        return "expert" if needs_expert else "logic"
+        return ["expert"] if needs_expert else ["logic"]
 
     if severity == "high":
-        return "expert" if needs_expert else "logic"
+        return ["expert"] if needs_expert else ["logic"]
 
     # Default fallback for unknown severity
-    return "logic"
+    return ["logic"]

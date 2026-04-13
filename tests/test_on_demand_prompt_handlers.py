@@ -40,6 +40,12 @@ class FakeRuntime:
             ("send", role, prompt_file.name, display_label, prefix_command)
         )
 
+    def send_reviewers_many(self, reviewer_specs: list) -> dict[str, str]:
+        """Fake send_reviewers_many — records call and returns mock pane mapping."""
+        roles = [spec.role for spec in reviewer_specs]
+        self.calls.append(("send_reviewers_many", roles))
+        return {role: f"%pane_{role}" for role in roles}
+
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(("send_many", role, _prompt_names(prompt_specs)))
         self.parallel_specs.append(
@@ -297,11 +303,8 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             self.assertEqual(
                 [
                     (
-                        "send",
-                        "reviewer_logic",
-                        "review_logic_prompt.md",
-                        "[reviewer_logic] logic",
-                        None,
+                        "send_reviewers_many",
+                        ["reviewer_logic"],
                     )
                 ],
                 ctx.runtime.calls,

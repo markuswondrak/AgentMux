@@ -37,7 +37,7 @@ from .handlers.planning import PlanningHandler
 from .handlers.product_management import ProductManagementHandler
 from .handlers.reviewing import ReviewingHandler
 from .handoff_artifacts import review_yaml_has_verdict
-from .phase_helpers import select_reviewer_type
+from .phase_helpers import select_reviewer_roles
 
 # ---------------------------------------------------------------------------
 # Resume-check helpers (extracted from sessions/state_store.infer_resume_phase)
@@ -158,7 +158,8 @@ def _reviewing_startup_role(
         if isinstance(loaded, dict):
             plan_meta = loaded
 
-    reviewer_type = select_reviewer_type(plan_meta)
+    reviewer_roles = select_reviewer_roles(plan_meta)
+    reviewer_type = reviewer_roles[0] if reviewer_roles else "logic"
     reviewer_role = {
         "logic": "reviewer_logic",
         "quality": "reviewer_quality",

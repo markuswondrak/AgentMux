@@ -122,7 +122,7 @@ class TestSubmitArchitecture(_FeatureDirMixin, unittest.TestCase):
 
     def test_reads_file_appends_minimal_signal(self):
         self._write_md()
-        result = mrs.submit_architecture(feature_dir=str(self.feature_dir))
+        result = mrs.submit_architecture()
         self.assertIn("Architecture submitted", result)
         entries = self._read_log_entries()
         self.assertEqual(entries[0]["tool"], "submit_architecture")
@@ -130,20 +130,20 @@ class TestSubmitArchitecture(_FeatureDirMixin, unittest.TestCase):
 
     def test_does_not_write_any_extra_files(self):
         self._write_md()
-        mrs.submit_architecture(feature_dir=str(self.feature_dir))
+        mrs.submit_architecture()
         self.assertFalse(
             (self.feature_dir / "02_architecting" / "architecture.yaml").exists()
         )
 
     def test_raises_when_md_missing(self):
         with self.assertRaises(ValueError) as ctx:
-            mrs.submit_architecture(feature_dir=str(self.feature_dir))
+            mrs.submit_architecture()
         self.assertIn("architecture.md", str(ctx.exception))
 
     def test_raises_when_md_empty(self):
         self._write_md("   \n")
         with self.assertRaises(ValueError) as ctx:
-            mrs.submit_architecture(feature_dir=str(self.feature_dir))
+            mrs.submit_architecture()
         self.assertIn("empty", str(ctx.exception))
 
 
@@ -188,7 +188,7 @@ class TestSubmitPlan(_FeatureDirMixin, unittest.TestCase):
 
     def test_reads_file_appends_minimal_signal(self):
         self._write_yaml()
-        result = mrs.submit_plan(feature_dir=str(self.feature_dir))
+        result = mrs.submit_plan()
         self.assertIn("Plan submitted", result)
         entries = self._read_log_entries()
         self.assertEqual(entries[0]["tool"], "submit_plan")
@@ -196,7 +196,7 @@ class TestSubmitPlan(_FeatureDirMixin, unittest.TestCase):
 
     def test_does_not_write_any_extra_files(self):
         self._write_yaml()
-        mrs.submit_plan(feature_dir=str(self.feature_dir))
+        mrs.submit_plan()
         self.assertFalse((self.feature_dir / "04_planning" / "plan.md").exists())
         self.assertFalse(
             (self.feature_dir / "04_planning" / "execution_plan.yaml").exists()
@@ -204,7 +204,7 @@ class TestSubmitPlan(_FeatureDirMixin, unittest.TestCase):
 
     def test_raises_when_yaml_missing(self):
         with self.assertRaises(ValueError) as ctx:
-            mrs.submit_plan(feature_dir=str(self.feature_dir))
+            mrs.submit_plan()
         self.assertIn("plan.yaml", str(ctx.exception))
 
     def test_validation_error_on_bad_mode(self):
@@ -214,7 +214,7 @@ class TestSubmitPlan(_FeatureDirMixin, unittest.TestCase):
         ]
         self._write_yaml(bad)
         with self.assertRaises(ValueError) as ctx:
-            mrs.submit_plan(feature_dir=str(self.feature_dir))
+            mrs.submit_plan()
         self.assertIn("mode", str(ctx.exception))
 
     def test_validation_error_on_empty_subplans(self):
@@ -222,7 +222,7 @@ class TestSubmitPlan(_FeatureDirMixin, unittest.TestCase):
         bad["subplans"] = []
         self._write_yaml(bad)
         with self.assertRaises(ValueError):
-            mrs.submit_plan(feature_dir=str(self.feature_dir))
+            mrs.submit_plan()
 
 
 class TestSubmitReview(_FeatureDirMixin, unittest.TestCase):
@@ -239,7 +239,7 @@ class TestSubmitReview(_FeatureDirMixin, unittest.TestCase):
 
     def test_pass_reads_file_appends_minimal_signal(self):
         self._write_yaml(self._VALID_PASS)
-        result = mrs.submit_review(feature_dir=str(self.feature_dir))
+        result = mrs.submit_review()
         self.assertIn("verdict: pass", result)
         entries = self._read_log_entries()
         self.assertEqual(entries[0]["tool"], "submit_review")
@@ -247,12 +247,12 @@ class TestSubmitReview(_FeatureDirMixin, unittest.TestCase):
 
     def test_does_not_write_any_extra_files(self):
         self._write_yaml(self._VALID_PASS)
-        mrs.submit_review(feature_dir=str(self.feature_dir))
+        mrs.submit_review()
         self.assertFalse((self.feature_dir / "07_review" / "review.md").exists())
 
     def test_raises_when_yaml_missing(self):
         with self.assertRaises(ValueError) as ctx:
-            mrs.submit_review(feature_dir=str(self.feature_dir))
+            mrs.submit_review()
         self.assertIn("review.yaml", str(ctx.exception))
 
     def test_fail_with_findings_appends_empty_payload(self):
@@ -270,7 +270,7 @@ class TestSubmitReview(_FeatureDirMixin, unittest.TestCase):
                 ],
             }
         )
-        result = mrs.submit_review(feature_dir=str(self.feature_dir))
+        result = mrs.submit_review()
         self.assertIn("verdict: fail", result)
         entries = self._read_log_entries()
         self.assertEqual(entries[0]["payload"], {})
@@ -278,13 +278,13 @@ class TestSubmitReview(_FeatureDirMixin, unittest.TestCase):
     def test_fail_without_findings_raises(self):
         self._write_yaml({"verdict": "fail", "summary": "Bad"})
         with self.assertRaises(ValueError) as ctx:
-            mrs.submit_review(feature_dir=str(self.feature_dir))
+            mrs.submit_review()
         self.assertIn("findings", str(ctx.exception))
 
     def test_invalid_verdict_raises(self):
         self._write_yaml({"verdict": "maybe", "summary": "Unsure"})
         with self.assertRaises(ValueError):
-            mrs.submit_review(feature_dir=str(self.feature_dir))
+            mrs.submit_review()
 
     def test_optional_approved_preferences_accepted(self):
         data = {
@@ -295,7 +295,7 @@ class TestSubmitReview(_FeatureDirMixin, unittest.TestCase):
             },
         }
         self._write_yaml(data)
-        result = mrs.submit_review(feature_dir=str(self.feature_dir))
+        result = mrs.submit_review()
         self.assertIn("verdict: pass", result)
 
 
@@ -303,7 +303,7 @@ class TestSubmitDone(_FeatureDirMixin, unittest.TestCase):
     """Tests for new submit_done tool."""
 
     def test_valid_index_appends_and_returns_confirmation(self):
-        result = mrs.submit_done(subplan_index=1, feature_dir=str(self.feature_dir))
+        result = mrs.submit_done(subplan_index=1)
         self.assertEqual("Sub-plan 1 marked done.", result)
         entries = self._read_log_entries()
         self.assertEqual(len(entries), 1)
@@ -312,18 +312,18 @@ class TestSubmitDone(_FeatureDirMixin, unittest.TestCase):
 
     def test_rejects_index_zero(self):
         with self.assertRaises(ValueError):
-            mrs.submit_done(subplan_index=0, feature_dir=str(self.feature_dir))
+            mrs.submit_done(subplan_index=0)
 
     def test_rejects_negative_index(self):
         with self.assertRaises(ValueError):
-            mrs.submit_done(subplan_index=-1, feature_dir=str(self.feature_dir))
+            mrs.submit_done(subplan_index=-1)
 
     def test_rejects_non_integer(self):
         with self.assertRaises(ValueError):
-            mrs.submit_done(subplan_index="1", feature_dir=str(self.feature_dir))
+            mrs.submit_done(subplan_index="1")
 
     def test_accepts_higher_index(self):
-        result = mrs.submit_done(subplan_index=5, feature_dir=str(self.feature_dir))
+        result = mrs.submit_done(subplan_index=5)
         self.assertEqual("Sub-plan 5 marked done.", result)
         entries = self._read_log_entries()
         self.assertEqual(entries[0]["payload"]["subplan_index"], 5)
@@ -333,9 +333,7 @@ class TestSubmitResearchDone(_FeatureDirMixin, unittest.TestCase):
     """Tests for new submit_research_done tool."""
 
     def test_valid_code_type_appends(self):
-        result = mrs.submit_research_done(
-            topic="auth-module", type="code", feature_dir=str(self.feature_dir)
-        )
+        result = mrs.submit_research_done(topic="auth-module", type="code")
         self.assertEqual("Research on 'auth-module' (code) marked done.", result)
         entries = self._read_log_entries()
         self.assertEqual(len(entries), 1)
@@ -344,37 +342,29 @@ class TestSubmitResearchDone(_FeatureDirMixin, unittest.TestCase):
         self.assertEqual(entries[0]["payload"]["type"], "code")
 
     def test_valid_web_type_appends(self):
-        result = mrs.submit_research_done(
-            topic="sdk-compat", type="web", feature_dir=str(self.feature_dir)
-        )
+        result = mrs.submit_research_done(topic="sdk-compat", type="web")
         self.assertEqual("Research on 'sdk-compat' (web) marked done.", result)
         entries = self._read_log_entries()
         self.assertEqual(entries[0]["payload"]["type"], "web")
 
     def test_rejects_invalid_topic_slug(self):
         with self.assertRaises(ValueError):
-            mrs.submit_research_done(
-                topic="Bad_Topic", type="code", feature_dir=str(self.feature_dir)
-            )
+            mrs.submit_research_done(topic="Bad_Topic", type="code")
 
     def test_rejects_invalid_type(self):
         with self.assertRaises(ValueError):
-            mrs.submit_research_done(
-                topic="valid-topic", type="invalid", feature_dir=str(self.feature_dir)
-            )
+            mrs.submit_research_done(topic="valid-topic", type="invalid")
 
     def test_rejects_empty_topic(self):
         with self.assertRaises(ValueError):
-            mrs.submit_research_done(
-                topic="", type="code", feature_dir=str(self.feature_dir)
-            )
+            mrs.submit_research_done(topic="", type="code")
 
 
 class TestSubmitPmDone(_FeatureDirMixin, unittest.TestCase):
     """Tests for new submit_pm_done tool."""
 
     def test_appends_and_returns_confirmation(self):
-        result = mrs.submit_pm_done(feature_dir=str(self.feature_dir))
+        result = mrs.submit_pm_done()
         self.assertEqual("Product management phase done.", result)
         entries = self._read_log_entries()
         self.assertEqual(len(entries), 1)

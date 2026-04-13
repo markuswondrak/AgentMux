@@ -33,6 +33,12 @@ class FakeRuntime:
     ) -> None:
         self.calls.append(("send", role, prompt_file.name, prefix_command))
 
+    def send_reviewers_many(self, reviewer_specs: list) -> dict[str, str]:
+        """Fake send_reviewers_many — records call and returns mock pane mapping."""
+        roles = [spec.role for spec in reviewer_specs]
+        self.calls.append(("send_reviewers_many", roles))
+        return {role: f"%pane_{role}" for role in roles}
+
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(
             (

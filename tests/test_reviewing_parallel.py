@@ -1,4 +1,4 @@
-"""Tests for ReviewingHandler resume guard and per-iteration archive."""
+"""Tests for ReviewingHandler parallel reviewer dispatch and verdict aggregation."""
 
 from __future__ import annotations
 
@@ -111,103 +111,84 @@ def _make_ctx(
     return ctx, files.state
 
 
-class TestResumeGuard(unittest.TestCase):
-    def test_resume_with_existing_review_results_does_not_redispatch(self) -> None:
-        """On resume, if review_results has entry, reviewer is not re-dispatched."""
+class TestParallelReviewerDispatch(unittest.TestCase):
+    """Test that enter() dispatches multiple reviewers in parallel."""
+
+    def test_enter_dispatches_single_reviewer_for_low_severity(self) -> None:
+        """low severity → only quality reviewer dispatched."""
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
                 review_strategy={"severity": "low", "focus": []},
             )
-            # Create review.md so _request_summary doesn't fail on include
-            ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-            (ctx.files.review_dir / "review.md").write_text(
-                "verdict: pass\n\n## Summary\n\nOK\n", encoding="utf-8"
-            )
-            state = load_state(state_path)
-            state["phase"] = "reviewing"
-            state["last_event"] = "resumed"
-            state["review_results"] = {
-                "reviewer_quality": {"verdict": "pass", "review_text": "OK"}
-            }
-            state["active_reviews"] = {"reviewer_quality": "completed"}
-            write_state(state_path, state)
-
-            handler = ReviewingHandler()
-            result = handler.enter(load_state(state_path), ctx)
-
-            # No new dispatch should happen, should transition to summary
-            dispatch_calls = [
-                c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
-            ]
-            self.assertEqual([], dispatch_calls)
-            # Should have requested summary (EVENT_REVIEW_PASSED)
-            # enter() returns either dict (state updates) or tuple (state, next_phase)
-            if isinstance(result, tuple):
-                self.assertEqual("review_passed", result[0].get("last_event"))
-            else:
-                self.assertEqual("review_passed", result.get("last_event"))
-
-    def test_resume_without_review_results_sends_prompt(self) -> None:
-        """On resume, if review_results is empty, enter() proceeds normally."""
-        with tempfile.TemporaryDirectory() as td:
-            ctx, state_path = _make_ctx(
-                Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
-            )
-            state = load_state(state_path)
-            state["phase"] = "reviewing"
-            state["last_event"] = "resumed"
-            # No review_results set
-            write_state(state_path, state)
-
-            handler = ReviewingHandler()
-            handler.enter(load_state(state_path), ctx)
-
-            # Should dispatch the quality reviewer
-            dispatch_calls = [
-                c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
-            ]
-            self.assertEqual(len(dispatch_calls), 1)
-            self.assertEqual(["reviewer_quality"], dispatch_calls[0][1])
-
-    def test_fresh_entry_clears_stale_review_yaml_for_pending_roles(self) -> None:
-        """Fresh entry deletes stale review_<role>.yaml for pending roles."""
-        with tempfile.TemporaryDirectory() as td:
-            ctx, state_path = _make_ctx(
-                Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
-            )
-            ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-            (ctx.files.review_dir / "review_reviewer_quality.yaml").write_text(
-                yaml.dump(
-                    {
-                        "verdict": "pass",
-                        "summary": "Looks good",
-                    },
-                    sort_keys=False,
-                ),
-                encoding="utf-8",
-            )
-
             state = load_state(state_path)
             state["phase"] = "reviewing"
             state["last_event"] = "implementation_completed"
             write_state(state_path, state)
 
             handler = ReviewingHandler()
-            handler.enter(load_state(state_path), ctx)
+            result = handler.enter(load_state(state_path), ctx)
 
-            self.assertFalse(
-                (ctx.files.review_dir / "review_reviewer_quality.yaml").exists(),
-                "stale review_reviewer_quality.yaml must be deleted",
+            # enter() returns state updates (active_reviews, review_results)
+            self.assertIn("active_reviews", result)
+            self.assertIn("review_results", result)
+            self.assertEqual({"reviewer_quality": "pending"}, result["active_reviews"])
+
+            # Should have called send_reviewers_many with quality role
+            dispatch_calls = [
+                c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
+            ]
+            self.assertEqual(len(dispatch_calls), 1)
+            self.assertEqual(["reviewer_quality"], dispatch_calls[0][1])
+
+    def test_enter_dispatches_multiple_reviewers_for_expert(self) -> None:
+        """medium severity + security focus → expert reviewer dispatched."""
+        with tempfile.TemporaryDirectory() as td:
+            ctx, state_path = _make_ctx(
+                Path(td) / "feature",
+                review_strategy={"severity": "medium", "focus": ["security"]},
             )
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            state["last_event"] = "implementation_completed"
+            write_state(state_path, state)
+
+            handler = ReviewingHandler()
+            result = handler.enter(load_state(state_path), ctx)
+
+            self.assertIn("active_reviews", result)
+            self.assertEqual({"reviewer_expert": "pending"}, result["active_reviews"])
+
+            dispatch_calls = [
+                c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
+            ]
+            self.assertEqual(len(dispatch_calls), 1)
+            self.assertEqual(["reviewer_expert"], dispatch_calls[0][1])
+
+    def test_enter_initializes_empty_review_results(self) -> None:
+        """enter() should initialize empty review_results dict."""
+        with tempfile.TemporaryDirectory() as td:
+            ctx, state_path = _make_ctx(
+                Path(td) / "feature",
+                review_strategy={"severity": "low", "focus": []},
+            )
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            state["last_event"] = "implementation_completed"
+            write_state(state_path, state)
+
+            handler = ReviewingHandler()
+            result = handler.enter(load_state(state_path), ctx)
+
+            self.assertEqual({}, result.get("review_results", {}))
 
 
-class TestReviewArchive(unittest.TestCase):
+class TestVerdictAggregation(unittest.TestCase):
+    """Test _handle_review() with multi-reviewer verdict aggregation."""
+
     _FAIL_PAYLOAD: dict = {
         "verdict": "fail",
-        "summary": "Issues found in implementation.",
+        "summary": "Issues found.",
         "findings": [
             {
                 "location": "src/x.py:1",
@@ -224,15 +205,15 @@ class TestReviewArchive(unittest.TestCase):
         "commit_message": "feat: implementation complete",
     }
 
-    def _dispatch_review(
+    def _setup_review(
         self,
         ctx: PipelineContext,
         state_path: Path,
         reviewer_role: str,
         payload: dict,
+        active_reviews: dict,
+        review_results: dict,
         iteration: int = 0,
-        active_reviews: dict | None = None,
-        review_results: dict | None = None,
     ) -> tuple[dict, str | None]:
         """Helper to set up state and dispatch a review for a specific role."""
         ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
@@ -241,94 +222,119 @@ class TestReviewArchive(unittest.TestCase):
             yaml.dump(payload, default_flow_style=False),
             encoding="utf-8",
         )
+        # Also create review.md for the summary prompt include
+        (ctx.files.review_dir / "review.md").write_text(
+            f"verdict: {payload['verdict']}\n\n## Summary\n\n{payload['summary']}\n",
+            encoding="utf-8",
+        )
 
         state = load_state(state_path)
         state["phase"] = "reviewing"
         state["review_iteration"] = iteration
-        state["active_reviews"] = active_reviews or {reviewer_role: "pending"}
-        state["review_results"] = review_results or {}
+        state["active_reviews"] = active_reviews
+        state["review_results"] = review_results
         write_state(state_path, state)
 
         handler = ReviewingHandler()
         event = WorkflowEvent(kind="review", payload={"payload": {}})
         return handler.handle_event(event, load_state(state_path), ctx)
 
-    def test_verdict_fail_creates_archive_and_keeps_review_yaml(self) -> None:
-        role = "reviewer_quality"
+    def test_pass_records_result_and_triggers_summary_for_single_reviewer(self) -> None:
+        """Pass verdict with single reviewer → summary triggered."""
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
+                review_strategy={"severity": "medium", "focus": ["security"]},
             )
-            self._dispatch_review(
-                ctx, state_path, role, self._FAIL_PAYLOAD, iteration=0
-            )
-
-            archive = ctx.files.review_dir / f"review_0_{role}.md"
-            self.assertTrue(archive.exists(), f"{archive.name} archive must be created")
-            self.assertIn("verdict: fail", archive.read_text(encoding="utf-8"))
-            self.assertTrue(
-                (ctx.files.review_dir / f"review_{role}.yaml").exists(),
-                f"review_{role}.yaml must still exist",
+            result_updates, next_phase = self._setup_review(
+                ctx,
+                state_path,
+                reviewer_role="reviewer_expert",
+                payload=self._PASS_PAYLOAD,
+                active_reviews={"reviewer_expert": "pending"},
+                review_results={},
             )
 
-    def test_verdict_fail_second_iteration_archives_correctly(self) -> None:
-        role = "reviewer_quality"
+            # Single reviewer, all pass → summary triggered
+            self.assertEqual("review_passed", result_updates.get("last_event"))
+            self.assertTrue(result_updates.get("awaiting_summary"))
+
+    def test_all_pass_triggers_summary(self) -> None:
+        """All reviewers pass → _request_summary() triggered."""
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
+                review_strategy={"severity": "medium", "focus": ["security"]},
             )
-            self._dispatch_review(
-                ctx, state_path, role, self._FAIL_PAYLOAD, iteration=1
+            # Simulate reviewer_expert already passed
+            result_updates, next_phase = self._setup_review(
+                ctx,
+                state_path,
+                reviewer_role="reviewer_expert",
+                payload=self._PASS_PAYLOAD,
+                active_reviews={"reviewer_expert": "pending"},
+                review_results={},
             )
 
-            archive = ctx.files.review_dir / f"review_1_{role}.md"
-            self.assertTrue(archive.exists(), f"{archive.name} archive must be created")
+            self.assertEqual("review_passed", result_updates.get("last_event"))
+            self.assertTrue(result_updates.get("awaiting_summary"))
 
-    def test_verdict_pass_creates_archive_and_keeps_review_yaml(self) -> None:
-        role = "reviewer_quality"
+    def test_fail_triggers_fixing_with_aggregated_feedback(self) -> None:
+        """Fail verdict → EVENT_REVIEW_FAILED with aggregated feedback."""
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
+                review_strategy={"severity": "medium", "focus": ["security"]},
+            )
+            result_updates, next_phase = self._setup_review(
+                ctx,
+                state_path,
+                reviewer_role="reviewer_expert",
+                payload=self._FAIL_PAYLOAD,
+                active_reviews={"reviewer_expert": "pending"},
+                review_results={},
+            )
+
+            self.assertEqual("review_failed", result_updates.get("last_event"))
+            self.assertEqual("fixing", next_phase)
+            # fix_request.md should be written
+            self.assertTrue(ctx.files.fix_request.exists())
+            fix_content = ctx.files.fix_request.read_text(encoding="utf-8")
+            self.assertIn("missing validation", fix_content)
+
+
+class TestResumeSupport(unittest.TestCase):
+    """Test resume behavior for parallel reviewers."""
+
+    def test_resume_skips_completed_reviewers(self) -> None:
+        """Resume skips reviewers already present in review_results."""
+        with tempfile.TemporaryDirectory() as td:
+            ctx, state_path = _make_ctx(
+                Path(td) / "feature",
+                review_strategy={"severity": "medium", "focus": ["security"]},
             )
             # Create review.md so _request_summary doesn't fail on include
             ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
             (ctx.files.review_dir / "review.md").write_text(
-                "verdict: pass\n\n## Summary\n\nOK\n",
-                encoding="utf-8",
+                "verdict: pass\n\n## Summary\n\nOK\n", encoding="utf-8"
             )
-            self._dispatch_review(
-                ctx, state_path, role, self._PASS_PAYLOAD, iteration=0
-            )
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            state["last_event"] = "resumed"
+            state["active_reviews"] = {"reviewer_expert": "completed"}
+            state["review_results"] = {
+                "reviewer_expert": {"verdict": "pass", "summary": "OK"}
+            }
+            write_state(state_path, state)
 
-            archive = ctx.files.review_dir / f"review_0_{role}.md"
-            self.assertTrue(
-                archive.exists(), f"{archive.name} archive must be created on pass"
-            )
-            self.assertTrue(
-                (ctx.files.review_dir / f"review_{role}.yaml").exists(),
-                f"review_{role}.yaml must still exist on pass",
-            )
+            handler = ReviewingHandler()
+            handler.enter(load_state(state_path), ctx)
 
-    def test_archive_contains_same_content_as_review_md(self) -> None:
-        role = "reviewer_quality"
-        with tempfile.TemporaryDirectory() as td:
-            ctx, state_path = _make_ctx(
-                Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
-            )
-            self._dispatch_review(
-                ctx, state_path, role, self._FAIL_PAYLOAD, iteration=2
-            )
-
-            archive = ctx.files.review_dir / f"review_2_{role}.md"
-            _ = ctx.files.review_dir / f"review_{role}.yaml"
-            self.assertTrue(archive.exists(), "archive must be created")
-            # Verify archive contains the review content from the YAML
-            archive_text = archive.read_text(encoding="utf-8")
-            self.assertIn("missing validation", archive_text)
+            # No new dispatch should happen
+            dispatch_calls = [
+                c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
+            ]
+            self.assertEqual([], dispatch_calls)
 
 
 if __name__ == "__main__":

@@ -364,11 +364,16 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             with self.subTest(template=str(template_path)):
                 template = template_path.read_text(encoding="utf-8")
                 self.assertIn("[[placeholder:project_instructions]]", template)
-                # Agent templates use "## Constraints", commands use "Constraints:"
+                # Agent templates use "## Constraints", commands use "Constraints:",
+                # researcher templates use [[shared:research-constraints]]
                 if "## Constraints" in template:
                     constraints_str = "## Constraints"
-                else:
+                elif "Constraints:" in template:
                     constraints_str = "Constraints:"
+                elif "[[shared:research-constraints]]" in template:
+                    constraints_str = "[[shared:research-constraints]]"
+                else:
+                    self.fail(f"No Constraints sentinel found in {template_path}")
                 self.assertIn(constraints_str, template)
                 self.assertLess(
                     template.index("[[placeholder:project_instructions]]"),

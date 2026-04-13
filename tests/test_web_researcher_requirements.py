@@ -34,6 +34,12 @@ class FakeRuntime:
     ) -> None:
         self.calls.append(("send", role, prompt_file.name, prefix_command))
 
+    def send_reviewers_many(self, reviewer_specs: list) -> dict[str, str]:
+        """Fake send_reviewers_many — records call and returns mock pane mapping."""
+        roles = [spec.role for spec in reviewer_specs]
+        self.calls.append(("send_reviewers_many", roles))
+        return {role: f"%pane_{role}" for role in roles}
+
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(
             (
@@ -153,7 +159,7 @@ class WebResearcherRequirementsTests(unittest.TestCase):
             self.assertIn(str(feature_dir), prompt)
             self.assertIn(str(project_dir), prompt)
             self.assertIn("03_research/web-openai-models/request.md", prompt)
-            self.assertIn("03_research/web-openai-models/done", prompt)
+            self.assertIn("submit_research_done", prompt)
             self.assertIn("version", prompt.lower())
             self.assertTrue(
                 "fabricat" in prompt.lower() or "invent" in prompt.lower(),

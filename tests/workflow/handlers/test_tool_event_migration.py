@@ -857,8 +857,9 @@ class TestReviewingHandlerToolEvents:
         from agentmux.workflow.event_catalog import EVENT_REVIEW_PASSED
 
         handler = ReviewingHandler()
+        role = "reviewer_logic"
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.review_dir / "review.yaml").write_text(
+        (mock_ctx.files.review_dir / f"review_{role}.yaml").write_text(
             yaml.dump(
                 {
                     "verdict": "pass",
@@ -869,17 +870,33 @@ class TestReviewingHandlerToolEvents:
                 default_flow_style=False,
             )
         )
+        # Create review.md for summary prompt include expansion
+        (mock_ctx.files.review_dir / "review.md").write_text(
+            "verdict: pass\n\n## Summary\n\nLooks good!", encoding="utf-8"
+        )
         event = WorkflowEvent(kind="review", payload={"payload": {}})
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {role: "pending"},
+            "review_results": {},
+        }
 
-        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        with (
+            patch(
+                "agentmux.workflow.handlers.reviewing.build_reviewer_summary_prompt",
+                return_value="summary prompt",
+            ),
+            patch(
+                "agentmux.workflow.handlers.reviewing.write_prompt_file",
+                return_value=Path("/tmp/prompt.md"),
+            ),
+            patch("agentmux.workflow.handlers.reviewing.send_to_role"),
+        ):
+            updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
-        yaml_path = mock_ctx.files.review_dir / "review.yaml"
-        md_path = mock_ctx.files.review_dir / "review.md"
+        yaml_path = mock_ctx.files.review_dir / f"review_{role}.yaml"
         assert yaml_path.exists()
-        assert md_path.exists()
 
-        mock_ctx.runtime.finish_many.assert_called_once_with("coder")
-        mock_ctx.runtime.kill_primary.assert_called_once_with("coder")
         assert updates.get("awaiting_summary") is True
         assert updates.get("last_event") == EVENT_REVIEW_PASSED
         assert next_phase is None
@@ -891,8 +908,9 @@ class TestReviewingHandlerToolEvents:
         from agentmux.workflow.event_catalog import EVENT_REVIEW_FAILED
 
         handler = ReviewingHandler()
+        role = "reviewer_logic"
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.review_dir / "review.yaml").write_text(
+        (mock_ctx.files.review_dir / f"review_{role}.yaml").write_text(
             yaml.dump(
                 {
                     "verdict": "fail",
@@ -911,13 +929,16 @@ class TestReviewingHandlerToolEvents:
             )
         )
         event = WorkflowEvent(kind="review", payload={"payload": {}})
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {role: "pending"},
+            "review_results": {},
+        }
 
-        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
-        yaml_path = mock_ctx.files.review_dir / "review.yaml"
-        md_path = mock_ctx.files.review_dir / "review.md"
+        yaml_path = mock_ctx.files.review_dir / f"review_{role}.yaml"
         assert yaml_path.exists()
-        assert md_path.exists()
         assert mock_ctx.files.fix_request.exists()
 
         assert updates["review_iteration"] == 1
@@ -929,8 +950,9 @@ class TestReviewingHandlerToolEvents:
         from agentmux.workflow.event_catalog import EVENT_REVIEW_FAILED
 
         handler = ReviewingHandler()
+        role = "reviewer_logic"
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.review_dir / "review.yaml").write_text(
+        (mock_ctx.files.review_dir / f"review_{role}.yaml").write_text(
             yaml.dump(
                 {
                     "verdict": "fail",
@@ -950,7 +972,11 @@ class TestReviewingHandlerToolEvents:
         )
         event = WorkflowEvent(kind="review", payload={"payload": {}})
 
-        state = {"review_iteration": 3}
+        state = {
+            "review_iteration": 3,
+            "active_reviews": {role: "pending"},
+            "review_results": {},
+        }
         updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
         assert next_phase == "completing"

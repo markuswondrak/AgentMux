@@ -85,12 +85,10 @@ class TestSubmitArchitecture(SubmitToolTestBase):
         path.write_text(content, encoding="utf-8")
         return path
 
-    def _submit(self, feature_dir=None):
+    def _submit(self):
         from agentmux.integrations.mcp_server import submit_architecture
 
-        return submit_architecture(
-            feature_dir=feature_dir or str(self.feature_dir),
-        )
+        return submit_architecture()
 
     def test_appends_minimal_signal_to_log(self):
         self._write_md()
@@ -114,7 +112,7 @@ class TestSubmitArchitecture(SubmitToolTestBase):
         from agentmux.integrations.mcp_server import submit_architecture
 
         with self.assertRaises(ValueError) as ctx:
-            submit_architecture(feature_dir=str(self.feature_dir))
+            submit_architecture()
         self.assertIn("architecture.md", str(ctx.exception))
 
     def test_raises_when_md_empty(self):
@@ -122,17 +120,15 @@ class TestSubmitArchitecture(SubmitToolTestBase):
 
         self._write_md("   \n")
         with self.assertRaises(ValueError) as ctx:
-            submit_architecture(feature_dir=str(self.feature_dir))
+            submit_architecture()
         self.assertIn("empty", str(ctx.exception))
 
 
 class TestSubmitPlan(SubmitToolTestBase):
-    def _submit(self, feature_dir=None):
+    def _submit(self):
         from agentmux.integrations.mcp_server import submit_plan
 
-        return submit_plan(
-            feature_dir=feature_dir or str(self.feature_dir),
-        )
+        return submit_plan()
 
     def test_appends_minimal_signal_to_log(self):
         self._write_yaml("04_planning/plan.yaml", _VALID_PLAN)
@@ -155,7 +151,7 @@ class TestSubmitPlan(SubmitToolTestBase):
         from agentmux.integrations.mcp_server import submit_plan
 
         with self.assertRaises(ValueError) as ctx:
-            submit_plan(feature_dir=str(self.feature_dir))
+            submit_plan()
         self.assertIn("plan.yaml", str(ctx.exception))
 
     def test_raises_when_yaml_is_not_a_dict(self):
@@ -165,7 +161,7 @@ class TestSubmitPlan(SubmitToolTestBase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("- item1\n- item2\n", encoding="utf-8")
         with self.assertRaises(ValueError) as ctx:
-            submit_plan(feature_dir=str(self.feature_dir))
+            submit_plan()
         self.assertIn("must be a YAML mapping", str(ctx.exception))
 
     def test_raises_on_invalid_mode(self):
@@ -177,7 +173,7 @@ class TestSubmitPlan(SubmitToolTestBase):
         ]
         self._write_yaml("04_planning/plan.yaml", bad)
         with self.assertRaises(ValueError) as ctx:
-            submit_plan(feature_dir=str(self.feature_dir))
+            submit_plan()
         self.assertIn("mode", str(ctx.exception))
 
     def test_raises_on_empty_subplans(self):
@@ -187,7 +183,7 @@ class TestSubmitPlan(SubmitToolTestBase):
         bad["subplans"] = []
         self._write_yaml("04_planning/plan.yaml", bad)
         with self.assertRaises(ValueError):
-            submit_plan(feature_dir=str(self.feature_dir))
+            submit_plan()
 
     def test_preferences_param_writes_bullets_to_agent_prompt(self):
         import os
@@ -202,7 +198,6 @@ class TestSubmitPlan(SubmitToolTestBase):
                 from agentmux.integrations.mcp_server import submit_plan
 
                 result = submit_plan(
-                    feature_dir=str(self.feature_dir),
                     preferences=[
                         {
                             "target_role": "coder",
@@ -224,12 +219,10 @@ class TestSubmitPlan(SubmitToolTestBase):
 
 
 class TestSubmitReview(SubmitToolTestBase):
-    def _submit(self, feature_dir=None):
+    def _submit(self, role=None):
         from agentmux.integrations.mcp_server import submit_review
 
-        return submit_review(
-            feature_dir=feature_dir or str(self.feature_dir),
-        )
+        return submit_review(role=role)
 
     def test_pass_appends_minimal_signal_to_log(self):
         self._write_yaml("07_review/review.yaml", _VALID_REVIEW_PASS)
@@ -249,7 +242,7 @@ class TestSubmitReview(SubmitToolTestBase):
         from agentmux.integrations.mcp_server import submit_review
 
         with self.assertRaises(ValueError) as ctx:
-            submit_review(feature_dir=str(self.feature_dir))
+            submit_review()
         self.assertIn("review.yaml", str(ctx.exception))
 
     def test_raises_when_yaml_is_not_a_dict(self):
@@ -259,7 +252,7 @@ class TestSubmitReview(SubmitToolTestBase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("- item1\n- item2\n", encoding="utf-8")
         with self.assertRaises(ValueError) as ctx:
-            submit_review(feature_dir=str(self.feature_dir))
+            submit_review()
         self.assertIn("must be a YAML mapping", str(ctx.exception))
 
     def test_fail_with_findings(self):
@@ -286,7 +279,7 @@ class TestSubmitReview(SubmitToolTestBase):
 
         self._write_yaml("07_review/review.yaml", {"verdict": "fail", "summary": "Bad"})
         with self.assertRaises(ValueError) as ctx:
-            submit_review(feature_dir=str(self.feature_dir))
+            submit_review()
         self.assertIn("findings", str(ctx.exception))
 
     def test_invalid_verdict_raises(self):
@@ -296,7 +289,7 @@ class TestSubmitReview(SubmitToolTestBase):
             "07_review/review.yaml", {"verdict": "maybe", "summary": "Unsure"}
         )
         with self.assertRaises(ValueError):
-            submit_review(feature_dir=str(self.feature_dir))
+            submit_review()
 
     def test_accepts_optional_commit_message(self):
         data = {**_VALID_REVIEW_PASS, "commit_message": "feat: add auth"}
@@ -317,7 +310,6 @@ class TestSubmitReview(SubmitToolTestBase):
                 from agentmux.integrations.mcp_server import submit_review
 
                 result = submit_review(
-                    feature_dir=str(self.feature_dir),
                     preferences=[
                         {"target_role": "coder", "bullet": "- Keep regression tests"}
                     ],
@@ -333,6 +325,32 @@ class TestSubmitReview(SubmitToolTestBase):
                 )
             finally:
                 os.environ.pop("PROJECT_DIR", None)
+
+    def test_role_param_reads_role_specific_yaml(self):
+        """submit_review(role=...) reads review_{role}.yaml instead of review.yaml."""
+        from agentmux.integrations.mcp_server import submit_review
+
+        self._write_yaml("07_review/review_reviewer_logic.yaml", _VALID_REVIEW_PASS)
+        result = submit_review(role="reviewer_logic")
+        self.assertIn("verdict: pass", result)
+
+    def test_role_param_raises_when_role_specific_yaml_missing(self):
+        """submit_review(role=...) raises when review_{role}.yaml is absent."""
+        from agentmux.integrations.mcp_server import submit_review
+
+        with self.assertRaises(ValueError) as ctx:
+            submit_review(role="reviewer_logic")
+        self.assertIn("review_reviewer_logic.yaml", str(ctx.exception))
+
+    def test_role_param_logs_correct_event(self):
+        """submit_review(role=...) appends exactly one submit_review event."""
+        from agentmux.integrations.mcp_server import submit_review
+
+        self._write_yaml("07_review/review_reviewer_quality.yaml", _VALID_REVIEW_PASS)
+        submit_review(role="reviewer_quality")
+        entries = self._read_log_entries()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["tool"], "submit_review")
 
 
 if __name__ == "__main__":
