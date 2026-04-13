@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,8 +46,16 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             (topic_dir / "detail.md").write_text(
                 f"# Detail for {topic_dir_name}\n", encoding="utf-8"
             )
-        if done:
-            (topic_dir / "done").write_text("", encoding="utf-8")
+        if not done:
+            return
+
+        state_file = feature_dir / "state.json"
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        if topic_dir_name.startswith("code-"):
+            state.setdefault("research_tasks", {})[topic_dir_name[5:]] = "done"
+        elif topic_dir_name.startswith("web-"):
+            state.setdefault("web_research_tasks", {})[topic_dir_name[4:]] = "done"
+        state_file.write_text(json.dumps(state), encoding="utf-8")
 
     def _write_builtin_template(
         self, prompts_dir: Path, subdir: str, name: str, content: str

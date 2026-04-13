@@ -48,6 +48,12 @@ _REVIEWER_PROMPT_BUILDERS = {
 }
 
 
+def _all_done(active_reviews: dict) -> bool:
+    return bool(active_reviews) and all(
+        s == "completed" for s in active_reviews.values()
+    )
+
+
 def _summary_ready(path: str, ctx: PipelineContext, state: dict) -> bool:
     return bool(state.get("awaiting_summary")) and ctx.files.summary.exists()
 
@@ -207,21 +213,21 @@ class ReviewingHandler(BaseToolHandler):
     ) -> tuple[dict, str | None]:
         """Handle review submission via tool event.
 
-        Scans all role-specific review_*.yaml files, aggregates verdicts,
-        and either triggers fixing (first fail) or summary (all pass).
+        Scans every role-specific review_*.yaml file available at event time,
+        aggregates verdicts, and only after the full scan decides the verdict.
+        This avoids dropping feedback when two reviewers fail concurrently or
+        when a fail would short-circuit a sibling's still-unread file.
         """
         review_results = dict(state.get("review_results", {}))
         active_reviews = dict(state.get("active_reviews", {}))
         review_iteration = int(state.get("review_iteration", 0))
 
-        # Scan all review_<role>.yaml files
         review_dir = ctx.files.review_dir
         for review_file in sorted(review_dir.glob("review_reviewer_*.yaml")):
-            # Extract role from filename: review_<role>.yaml
             role_name = review_file.stem[len("review_") :]
 
             if role_name in review_results:
-                continue  # Already processed
+                continue
 
             try:
                 data = yaml.safe_load(review_file.read_text(encoding="utf-8"))
@@ -233,13 +239,11 @@ class ReviewingHandler(BaseToolHandler):
             if verdict not in ("pass", "fail"):
                 continue
 
-            # Load review text and archive it
             review_text = self._generate_review_text(data)
             archive_path = review_dir / f"review_{review_iteration}_{role_name}.md"
             if review_text is not None:
                 archive_path.write_text(review_text, encoding="utf-8")
 
-            # Store result
             review_results[role_name] = {
                 "verdict": verdict,
                 "review_text": review_text or "",
@@ -247,24 +251,34 @@ class ReviewingHandler(BaseToolHandler):
             if role_name in active_reviews:
                 active_reviews[role_name] = "completed"
 
-            # Handle verdict
-            if verdict == "fail":
-                return self._handle_fail(
-                    state, ctx, review_results, active_reviews, review_iteration
-                )
+        any_failed = any(r.get("verdict") == "fail" for r in review_results.values())
+        if any_failed:
+            self._kill_pending_reviewers(ctx, active_reviews)
+            return self._handle_fail(
+                state, ctx, review_results, active_reviews, review_iteration
+            )
 
-        # Check if all reviewers are done
-        all_completed = all(s == "completed" for s in active_reviews.values())
-        if all_completed and active_reviews:
-            all_pass = all(r.get("verdict") == "pass" for r in review_results.values())
-            if all_pass:
-                return self._request_summary(state, ctx)
+        if _all_done(active_reviews):
+            return self._request_summary(state, ctx)
 
-        # Update state, no transition yet
         return {
             "review_results": review_results,
             "active_reviews": active_reviews,
         }, None
+
+    def _kill_pending_reviewers(
+        self, ctx: PipelineContext, active_reviews: dict
+    ) -> None:
+        """Tear down reviewer panes that are still marked 'pending'.
+
+        Called whenever we abandon the reviewing phase before every reviewer
+        has submitted — prevents leaked reviewer panes running against stale
+        code once fixing has started.
+        """
+        for role, status in list(active_reviews.items()):
+            if status == "pending":
+                ctx.runtime.kill_primary(role)
+                active_reviews[role] = "killed"
 
     def _generate_review_text(self, data: dict) -> str | None:
         """Generate review markdown from an already-parsed review data dict."""
@@ -355,6 +369,12 @@ class ReviewingHandler(BaseToolHandler):
         # Use the first role as coordinator (typically "logic")
         first = reviewer_roles[0] if reviewer_roles else "logic"
         coordinator_role = _REVIEWER_ROLE_MAP.get(first, "reviewer_logic")
+
+        # All reviewers have passed — the coder panes are no longer needed.
+        # Tear them down before dispatching the summary so we don't leak
+        # implementation panes across the summary/completing transition.
+        ctx.runtime.finish_many("coder")
+        ctx.runtime.kill_primary("coder")
 
         # Clear any stale summary from a previous run
         if ctx.files.summary.exists():

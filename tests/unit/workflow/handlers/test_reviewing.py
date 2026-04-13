@@ -393,6 +393,101 @@ class TestParallelVerdictFlow:
         assert "reviewer_quality" in content
         assert "quality issue found" in content
 
+    def test_two_simultaneous_fails_aggregate_both_feedback(self, tmp_path):
+        """Two reviewers fail in the same scan — fix_request contains both findings.
+
+        Regression test for partial-aggregation bug: the previous code returned on
+        the first 'fail' encountered in alphabetical order, dropping later fails'
+        feedback. Here `expert` is processed first alphabetically; without the fix,
+        `logic`'s findings would be silently lost.
+        """
+        ctx = FakeContext(tmp_path)
+        ctx.write_review_yaml(
+            "reviewer_expert", "fail", findings=["security regression"]
+        )
+        ctx.write_review_yaml("reviewer_logic", "fail", findings=["plan deviation"])
+
+        handler = ReviewingHandler()
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {
+                "reviewer_expert": "pending",
+                "reviewer_logic": "pending",
+            },
+            "review_results": {},
+        }
+        event = MagicMock()
+
+        _state_update, next_phase = handler._handle_review(event, state, ctx)
+
+        assert next_phase == "fixing"
+        content = ctx.files.fix_request.read_text()
+        assert "security regression" in content
+        assert "plan deviation" in content
+        assert "reviewer_expert" in content
+        assert "reviewer_logic" in content
+
+    def test_pending_reviewer_pane_killed_on_early_fail(self, tmp_path):
+        """When one reviewer fails while another is still pending, the pending
+        reviewer's pane is torn down before transitioning to fixing — otherwise
+        we leak a still-running reviewer process."""
+        ctx = FakeContext(tmp_path)
+        ctx.write_review_yaml("reviewer_expert", "fail", findings=["something bad"])
+        # reviewer_logic is in active_reviews but never wrote a file
+
+        handler = ReviewingHandler()
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {
+                "reviewer_expert": "pending",
+                "reviewer_logic": "pending",
+            },
+            "review_results": {},
+        }
+        event = MagicMock()
+
+        _state_update, next_phase = handler._handle_review(event, state, ctx)
+
+        assert next_phase == "fixing"
+        ctx.runtime.kill_primary.assert_any_call("reviewer_logic")
+
+    def test_coder_panes_killed_on_review_pass(self, tmp_path):
+        """When all reviewers pass and we request the summary, the coder pane(s)
+        must be torn down (`finish_many` + `kill_primary`). Regression test for
+        cleanup that existed on main but was dropped by the parallel-reviewer
+        refactor.
+        """
+        ctx = FakeContext(tmp_path)
+        ctx.write_review_yaml("reviewer_logic", "pass")
+        ctx.write_review_yaml("reviewer_quality", "pass")
+
+        handler = ReviewingHandler()
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {
+                "reviewer_logic": "pending",
+                "reviewer_quality": "pending",
+            },
+            "review_results": {},
+        }
+        event = MagicMock()
+
+        with (
+            patch(
+                "agentmux.workflow.handlers.reviewing.write_prompt_file"
+            ) as mock_write,
+            patch(
+                "agentmux.workflow.handlers.reviewing.build_reviewer_summary_prompt",
+                return_value="summary prompt",
+            ),
+            patch("agentmux.workflow.handlers.reviewing.send_to_role"),
+        ):
+            mock_write.return_value = Path("/tmp/prompt.md")
+            _state_update, _next_phase = handler._handle_review(event, state, ctx)
+
+        ctx.runtime.finish_many.assert_any_call("coder")
+        ctx.runtime.kill_primary.assert_any_call("coder")
+
 
 class TestReviewYamlHasVerdictParallel:
     """Tests for review_yaml_has_verdict() with parallel role-specific files."""
