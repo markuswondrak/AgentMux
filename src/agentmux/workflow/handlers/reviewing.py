@@ -162,12 +162,10 @@ class ReviewingHandler(BaseToolHandler):
             prev_archive = ctx.files.review_dir / f"review_{prev_iter}_{pane_role}.md"
             fix_request = ctx.files.fix_request
             if prev_archive.is_file() and fix_request.is_file():
-                previous_review_rel = str(ctx.files.relative_path(prev_archive))
                 fix_request_rel = str(ctx.files.relative_path(fix_request))
                 return build_reviewer_followup_prompt(
                     ctx.files,
                     pane_role=pane_role,
-                    previous_review_rel=previous_review_rel,
                     fix_request_rel=fix_request_rel,
                     review_iteration=review_iteration,
                     agent=ctx.agents.get(pane_role),

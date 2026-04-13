@@ -4,11 +4,7 @@ You are still [[placeholder:review_role]] for this pipeline run.
 The coder has addressed the findings from your previous review. Re-check
 only whether those findings are resolved. Do not re-read the architecture,
 plan, or context files — they have not changed. Do not expand scope.
-
-Your previous findings (role-specific):
-<file path="[[placeholder:previous_review_file]]">
-[[include:[[placeholder:previous_review_file]]]]
-</file>
+Your previous findings are still in your session context.
 
 Aggregated fix request the coder worked from:
 <file path="[[placeholder:fix_request_file]]">

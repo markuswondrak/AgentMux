@@ -307,7 +307,6 @@ def build_reviewer_expert_prompt(
 def build_reviewer_followup_prompt(
     files: RuntimeFiles,
     pane_role: str,
-    previous_review_rel: str,
     fix_request_rel: str,
     review_iteration: int,
     agent: AgentConfig | None = None,
@@ -316,8 +315,8 @@ def build_reviewer_followup_prompt(
 
     Unlike `build_reviewer_<role>_prompt`, this deliberately omits the big
     initial includes (context.md, architecture.md, plan.md). It only references
-    the reviewer's own previous archived review and the aggregated fix_request,
-    so the reviewer can focus on whether their prior findings were resolved.
+    the aggregated fix_request so the reviewer can focus on whether their prior
+    findings (still in session context) were resolved.
     """
     del agent  # reserved for future per-agent tweaks; unused today
     rendered = _render_template(
@@ -329,7 +328,6 @@ def build_reviewer_followup_prompt(
         {
             "review_role": pane_role,
             "review_iteration": str(review_iteration),
-            "previous_review_file": previous_review_rel,
             "fix_request_file": fix_request_rel,
         },
     )
