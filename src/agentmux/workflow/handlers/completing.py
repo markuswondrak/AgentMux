@@ -12,6 +12,7 @@ from agentmux.sessions.state_store import feature_slug_from_dir, read_json_resil
 from agentmux.shared.models import ProjectPaths
 from agentmux.workflow.event_catalog import EVENT_CHANGES_REQUESTED
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
+from agentmux.workflow.handlers.base import PhaseResult
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
@@ -80,7 +81,7 @@ def _parse_changed_paths(status_output: str) -> list[str]:
 class CompletingHandler:
     """Event-driven handler for completing phase."""
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering completing phase.
 
         Launches native TUI or auto-approves if configured.
@@ -95,10 +96,10 @@ class CompletingHandler:
                 json.dumps({"action": "approve", "exclude_files": []}, indent=2) + "\n",
                 encoding="utf-8",
             )
-            return {}
+            return PhaseResult({})
 
         ctx.runtime.show_completion_ui(ctx.files.feature_dir)
-        return {}
+        return PhaseResult({})
 
     def get_event_specs(self) -> tuple[EventSpec, ...]:
         return _SPECS

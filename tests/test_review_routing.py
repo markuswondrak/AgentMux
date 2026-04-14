@@ -1,204 +1,60 @@
-"""Tests for reviewer routing logic based on plan_meta review_strategy."""
+"""Tests for reviewer routing — state-based select_reviewer_roles()."""
 
 from agentmux.workflow.phase_helpers import select_reviewer_roles
 
 
-class TestSelectReviewerType:
-    """Test select_reviewer_roles() function covering all routing rules."""
+class TestSelectReviewerRoles:
+    """Test select_reviewer_roles() reads state["reviewer_nominations"]."""
 
-    def test_missing_review_strategy_returns_logic(self):
-        """Missing review_strategy key -> returns ["logic"] (backward compat)."""
-        plan_meta = {
-            "needs_design": False,
-            "needs_docs": True,
-            "doc_files": ["docs/file-protocol.md"],
+    def test_missing_nominations_returns_logic(self):
+        """Missing reviewer_nominations -> ["reviewer_logic"]."""
+        state = {"phase": "reviewing"}
+        assert select_reviewer_roles(state) == ["reviewer_logic"]
+
+    def test_empty_nominations_returns_logic(self):
+        """Empty list -> ["reviewer_logic"]."""
+        state = {"reviewer_nominations": []}
+        assert select_reviewer_roles(state) == ["reviewer_logic"]
+
+    def test_none_nominations_returns_logic(self):
+        """None value -> ["reviewer_logic"]."""
+        state = {"reviewer_nominations": None}
+        assert select_reviewer_roles(state) == ["reviewer_logic"]
+
+    def test_valid_single_preserved(self):
+        """Valid single nomination preserved."""
+        state = {"reviewer_nominations": ["reviewer_expert"]}
+        assert select_reviewer_roles(state) == ["reviewer_expert"]
+
+    def test_valid_list_preserved(self):
+        """Valid list preserved as-is."""
+        state = {"reviewer_nominations": ["reviewer_logic", "reviewer_quality"]}
+        assert select_reviewer_roles(state) == ["reviewer_logic", "reviewer_quality"]
+
+    def test_unknown_role_filtered_out(self):
+        """Unknown roles are filtered out."""
+        state = {"reviewer_nominations": ["reviewer_logic", "bogus", "reviewer_expert"]}
+        assert select_reviewer_roles(state) == ["reviewer_logic", "reviewer_expert"]
+
+    def test_all_unknown_returns_logic(self):
+        """All unknown -> ["reviewer_logic"]."""
+        state = {"reviewer_nominations": ["bogus", "fake"]}
+        assert select_reviewer_roles(state) == ["reviewer_logic"]
+
+    def test_non_list_returns_logic(self):
+        """Non-list value -> ["reviewer_logic"]."""
+        state = {"reviewer_nominations": "reviewer_logic"}
+        assert select_reviewer_roles(state) == ["reviewer_logic"]
+
+
+class TestSelectReviewerRolesIntegration:
+    """Integration tests with state context."""
+
+    def test_nomination_from_architect(self, tmp_path):
+        """Nominations flow from state through selector."""
+        state = {
+            "phase": "architecting",
+            "reviewer_nominations": ["reviewer_logic", "reviewer_expert"],
         }
-        assert select_reviewer_roles(plan_meta) == ["logic"]
-
-    def test_empty_plan_meta_returns_logic(self):
-        """Empty plan_meta dict -> returns ["logic"]."""
-        plan_meta = {}
-        assert select_reviewer_roles(plan_meta) == ["logic"]
-
-    def test_low_severity_with_any_focus_returns_quality(self):
-        """low severity with any focus -> returns ["quality"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "low",
-                "focus": ["accessibility", "performance"],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["quality"]
-
-    def test_low_severity_empty_focus_returns_quality(self):
-        """low severity with empty focus -> returns ["quality"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "low",
-                "focus": [],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["quality"]
-
-    def test_medium_severity_empty_focus_returns_logic(self):
-        """medium severity with empty focus -> returns ["logic"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "medium",
-                "focus": [],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["logic"]
-
-    def test_medium_severity_accessibility_focus_returns_logic(self):
-        """medium severity with ["accessibility"] -> returns ["logic"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "medium",
-                "focus": ["accessibility"],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["logic"]
-
-    def test_medium_severity_security_focus_returns_expert(self):
-        """medium severity with ["security"] -> returns ["expert"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "medium",
-                "focus": ["security"],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["expert"]
-
-    def test_medium_severity_performance_focus_returns_expert(self):
-        """medium severity with ["performance"] -> returns ["expert"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "medium",
-                "focus": ["performance"],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["expert"]
-
-    def test_high_severity_empty_focus_returns_logic(self):
-        """high severity with empty focus -> returns ["logic"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "high",
-                "focus": [],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["logic"]
-
-    def test_high_severity_security_focus_returns_expert(self):
-        """high severity with ["security"] -> returns ["expert"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "high",
-                "focus": ["security"],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["expert"]
-
-    def test_high_severity_performance_focus_returns_expert(self):
-        """high severity with ["performance"] -> returns ["expert"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "high",
-                "focus": ["performance"],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["expert"]
-
-
-class TestSelectReviewerTypeEdgeCases:
-    """Test edge cases for select_reviewer_roles() function."""
-
-    def test_invalid_severity_value_defaults_to_logic(self):
-        """Invalid severity value -> defaults to ["logic"]."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "invalid",
-                "focus": [],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["logic"]
-
-    def test_focus_as_non_list_handles_gracefully(self):
-        """Focus as non-list value -> handles gracefully."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "medium",
-                "focus": "security",
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["logic"]
-
-    def test_unknown_focus_values_route_based_on_severity(self):
-        """Unknown focus values -> routes based on severity alone."""
-        plan_meta = {
-            "review_strategy": {
-                "severity": "medium",
-                "focus": ["unknown", "another_unknown"],
-            }
-        }
-        assert select_reviewer_roles(plan_meta) == ["logic"]
-
-
-class TestReviewRoutingIntegration:
-    """Integration tests for review routing in workflow context."""
-
-    def test_backward_compatibility_no_review_strategy(self, tmp_path):
-        """Session without review_strategy uses logic reviewer (backward compat)."""
-
-        # Create a mock planning directory without review_strategy
-        planning_dir = tmp_path / "02_planning"
-        planning_dir.mkdir(parents=True)
-        plan_meta = {
-            "needs_design": False,
-            "needs_docs": False,
-            "doc_files": [],
-        }
-        import yaml
-
-        (planning_dir / "execution_plan.yaml").write_text(
-            yaml.dump(plan_meta, default_flow_style=False)
-        )
-
-        # Verify routing defaults to logic
-        from agentmux.workflow.phase_helpers import (
-            load_plan_meta,
-            select_reviewer_roles,
-        )
-
-        loaded_meta = load_plan_meta(planning_dir)
-        reviewer_roles = select_reviewer_roles(loaded_meta)
-        assert reviewer_roles == ["logic"]
-
-    def test_planning_to_reviewing_transition_with_various_plan_meta(self, tmp_path):
-        """Test transition with various plan_meta configurations."""
-        import yaml
-
-        from agentmux.workflow.phase_helpers import (
-            load_plan_meta,
-            select_reviewer_roles,
-        )
-
-        test_cases = [
-            ({"severity": "low", "focus": []}, ["quality"]),
-            ({"severity": "medium", "focus": []}, ["logic"]),
-            ({"severity": "medium", "focus": ["security"]}, ["expert"]),
-            ({"severity": "high", "focus": ["performance"]}, ["expert"]),
-        ]
-
-        for idx, (review_strategy, expected_roles) in enumerate(test_cases):
-            planning_dir = tmp_path / f"02_planning_{idx}_{expected_roles[0]}"
-            planning_dir.mkdir(parents=True)
-            plan_meta = {"review_strategy": review_strategy}
-            (planning_dir / "execution_plan.yaml").write_text(
-                yaml.dump(plan_meta, default_flow_style=False)
-            )
-
-            loaded_meta = load_plan_meta(planning_dir)
-            reviewer_roles = select_reviewer_roles(loaded_meta)
-            assert reviewer_roles == expected_roles, f"Failed for {review_strategy}"
+        roles = select_reviewer_roles(state)
+        assert roles == ["reviewer_logic", "reviewer_expert"]

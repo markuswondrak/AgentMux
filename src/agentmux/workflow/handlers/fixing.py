@@ -14,7 +14,11 @@ from agentmux.workflow.event_router import (
     WorkflowEvent,
     extract_subplan_index,
 )
-from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
+from agentmux.workflow.handlers.base import (
+    BaseToolHandler,
+    PhaseResult,
+    ToolHandlerEntry,
+)
 from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
@@ -37,7 +41,7 @@ class FixingHandler(BaseToolHandler):
             ),
         )
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering fixing phase.
 
         Sends fix prompt to coder.
@@ -59,9 +63,11 @@ class FixingHandler(BaseToolHandler):
                 ctx.files.feature_dir, "coder", state=state
             ),
         )
-        return {
-            "completed_subplans": [],
-        }
+        return PhaseResult(
+            {
+                "completed_subplans": [],
+            }
+        )
 
     def get_event_specs(self) -> tuple[EventSpec, ...]:
         return ()

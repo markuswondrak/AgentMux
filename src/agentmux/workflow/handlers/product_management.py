@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING
 
 from agentmux.workflow.event_catalog import EVENT_PM_COMPLETED
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
-from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
+from agentmux.workflow.handlers.base import (
+    BaseToolHandler,
+    PhaseResult,
+    ToolHandlerEntry,
+)
 from agentmux.workflow.phase_helpers import (
     handle_research_done,
     handle_research_request,
@@ -58,7 +62,7 @@ class ProductManagementHandler(BaseToolHandler):
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering product_management phase.
 
         Sends product-manager prompt.
@@ -71,7 +75,7 @@ class ProductManagementHandler(BaseToolHandler):
             build_product_manager_prompt(ctx.files, ctx.agents.get("product-manager")),
         )
         send_to_role(ctx, "product-manager", prompt_file)
-        return {}  # No state updates
+        return PhaseResult({})  # No state updates
 
     def _handle_pm_done(
         self,

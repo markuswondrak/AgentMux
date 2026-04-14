@@ -64,6 +64,7 @@ def _make_ctx(
     feature_dir: Path,
     *,
     review_strategy: dict | None = None,
+    reviewer_nominations: list[str] | None = None,
     max_review_iterations: int = 3,
 ) -> tuple[PipelineContext, Path]:
     project_dir = feature_dir.parent / "project"
@@ -85,6 +86,8 @@ def _make_ctx(
     plan_data: dict = {}
     if review_strategy is not None:
         plan_data["review_strategy"] = review_strategy
+    if reviewer_nominations is not None:
+        plan_data["reviewer_nominations"] = reviewer_nominations
     (planning_dir / "execution_plan.yaml").write_text(
         yaml.dump(plan_data, default_flow_style=False), encoding="utf-8"
     )
@@ -119,20 +122,25 @@ class TestParallelReviewerDispatch(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
+                reviewer_nominations=["reviewer_quality"],
             )
             state = load_state(state_path)
             state["phase"] = "reviewing"
             state["last_event"] = "implementation_completed"
+            # Must add reviewer_nominations directly to state for handler to read it
+            state["reviewer_nominations"] = ["reviewer_quality"]
             write_state(state_path, state)
 
+            # Reload to get the full state
+            state = load_state(state_path)
             handler = ReviewingHandler()
-            result = handler.enter(load_state(state_path), ctx)
+            result = handler.enter(state, ctx)
 
-            # enter() returns state updates (active_reviews, review_results)
-            self.assertIn("active_reviews", result)
-            self.assertIn("review_results", result)
-            self.assertEqual({"reviewer_quality": "pending"}, result["active_reviews"])
+            # enter() returns PhaseResult with updates (active_reviews, review_results)
+            updates = result.updates
+            self.assertIn("active_reviews", updates)
+            self.assertIn("review_results", updates)
+            self.assertEqual({"reviewer_quality": "pending"}, updates["active_reviews"])
 
             # Should have called send_reviewers_many with quality role
             dispatch_calls = [
@@ -142,22 +150,24 @@ class TestParallelReviewerDispatch(unittest.TestCase):
             self.assertEqual(["reviewer_quality"], dispatch_calls[0][1])
 
     def test_enter_dispatches_multiple_reviewers_for_expert(self) -> None:
-        """medium severity + security focus → expert reviewer dispatched."""
+        """nominated expert reviewer → expert reviewer dispatched."""
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "medium", "focus": ["security"]},
+                reviewer_nominations=["reviewer_expert"],
             )
             state = load_state(state_path)
             state["phase"] = "reviewing"
             state["last_event"] = "implementation_completed"
+            state["reviewer_nominations"] = ["reviewer_expert"]
             write_state(state_path, state)
 
             handler = ReviewingHandler()
             result = handler.enter(load_state(state_path), ctx)
 
-            self.assertIn("active_reviews", result)
-            self.assertEqual({"reviewer_expert": "pending"}, result["active_reviews"])
+            updates = result.updates
+            self.assertIn("active_reviews", updates)
+            self.assertEqual({"reviewer_expert": "pending"}, updates["active_reviews"])
 
             dispatch_calls = [
                 c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
@@ -170,17 +180,20 @@ class TestParallelReviewerDispatch(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
+                reviewer_nominations=["reviewer_quality"],
             )
             state = load_state(state_path)
             state["phase"] = "reviewing"
             state["last_event"] = "implementation_completed"
+            state["reviewer_nominations"] = ["reviewer_quality"]
             write_state(state_path, state)
 
             handler = ReviewingHandler()
             result = handler.enter(load_state(state_path), ctx)
 
-            self.assertEqual({}, result.get("review_results", {}))
+            updates = result.updates
+            self.assertIn("active_reviews", updates)
+            self.assertEqual({"reviewer_quality": "pending"}, updates["active_reviews"])
 
 
 class TestVerdictAggregation(unittest.TestCase):
@@ -311,7 +324,7 @@ class TestResumeSupport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "medium", "focus": ["security"]},
+                reviewer_nominations=["reviewer_expert"],
             )
             # Create review.md so _request_summary doesn't fail on include
             ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
@@ -321,6 +334,7 @@ class TestResumeSupport(unittest.TestCase):
             state = load_state(state_path)
             state["phase"] = "reviewing"
             state["last_event"] = "resumed"
+            state["reviewer_nominations"] = ["reviewer_expert"]
             state["active_reviews"] = {"reviewer_expert": "completed"}
             state["review_results"] = {
                 "reviewer_expert": {"verdict": "pass", "summary": "OK"}
@@ -330,7 +344,7 @@ class TestResumeSupport(unittest.TestCase):
             handler = ReviewingHandler()
             handler.enter(load_state(state_path), ctx)
 
-            # No new dispatch should happen
+            # No new dispatch should happen (all already completed)
             dispatch_calls = [
                 c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
             ]

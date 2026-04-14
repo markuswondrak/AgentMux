@@ -195,9 +195,19 @@ def _read_yaml_for_signal(yaml_path: Path, contract_name: str) -> dict[str, Any]
     return data
 
 
+_ALLOWED_REVIEWER_ROLES = frozenset(
+    {
+        "reviewer_logic",
+        "reviewer_quality",
+        "reviewer_expert",
+    }
+)
+
+
 @_tool("submit_architecture")
 def submit_architecture(
     preferences: list[dict[str, str]] | None = None,
+    reviewers: list[str] | None = None,
 ) -> str:
     """Signal architecture completion.
 
@@ -207,6 +217,10 @@ def submit_architecture(
 
     Optional: pass preferences=[{target_role, bullet}, ...] to persist approved
     style/quality preferences directly to .agentmux/prompts/agents/<role>.md.
+
+    Optional: pass reviewers=[...] to nominate which reviewer roles should run.
+    Valid values: reviewer_logic, reviewer_quality, reviewer_expert.
+    Default (None or empty): reviewer_logic.
     """
     feature = _feature_dir()
     md_path = feature / SESSION_DIR_NAMES["architecting"] / "architecture.md"
@@ -218,7 +232,20 @@ def submit_architecture(
         raise ValueError("architecture.md is empty.")
     if preferences:
         apply_preference_entries(_project_dir(), preferences)
-    append_tool_event(_log_path(), "submit_architecture", {})
+
+    # Validate and normalise reviewers
+    if reviewers is not None:
+        for r in reviewers:
+            if r not in _ALLOWED_REVIEWER_ROLES:
+                raise ValueError(
+                    f"Unknown reviewer role {r!r}. "
+                    f"Allowed: {sorted(_ALLOWED_REVIEWER_ROLES)}"
+                )
+        reviewer_payload = {"reviewers": list(reviewers)}
+    else:
+        reviewer_payload = {}
+
+    append_tool_event(_log_path(), "submit_architecture", reviewer_payload)
     return "Architecture submitted."
 
 

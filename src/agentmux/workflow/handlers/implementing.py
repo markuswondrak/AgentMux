@@ -17,7 +17,11 @@ from agentmux.workflow.event_catalog import (
 )
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.execution_plan import load_execution_plan
-from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
+from agentmux.workflow.handlers.base import (
+    BaseToolHandler,
+    PhaseResult,
+    ToolHandlerEntry,
+)
 from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
@@ -161,7 +165,7 @@ class ImplementingHandler(BaseToolHandler):
             ),
         )
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering implementing phase.
 
         Resets markers and dispatches first group (or whole plan in single-coder mode).
@@ -226,7 +230,7 @@ class ImplementingHandler(BaseToolHandler):
             else:
                 self._dispatch_active_group(ctx, schedule, active_group_index)
 
-        return updates
+        return PhaseResult(updates)
 
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()

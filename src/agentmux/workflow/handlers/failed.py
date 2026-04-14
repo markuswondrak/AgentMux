@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
+from agentmux.workflow.handlers.base import PhaseResult
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
@@ -26,12 +27,12 @@ class FailedHandler:
             ),
         )
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering failed phase.
 
         Does nothing - failure is handled by handle_event.
         """
-        return {}
+        return PhaseResult({})
 
     def handle_event(
         self,

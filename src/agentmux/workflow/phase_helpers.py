@@ -74,7 +74,7 @@ def load_plan_meta(planning_dir: Path) -> dict[str, object]:
         return {}
     if not isinstance(data, dict):
         return {}
-    meta_keys = {"needs_design", "needs_docs", "doc_files", "review_strategy"}
+    meta_keys = {"needs_design", "needs_docs", "doc_files"}
     return {k: v for k, v in data.items() if k in meta_keys}
 
 
@@ -276,51 +276,29 @@ def research_role_from_payload(payload: dict) -> str | None:
     return None
 
 
-def select_reviewer_roles(plan_meta: dict) -> list[str]:
-    """Select reviewer roles based on plan_meta review_strategy.
+_ALLOWED_REVIEWER_ROLES = frozenset(
+    {
+        "reviewer_logic",
+        "reviewer_quality",
+        "reviewer_expert",
+    }
+)
 
-    Replaces select_reviewer_type() — returns a list of role suffixes
-    instead of a single reviewer type string.
+
+def select_reviewer_roles(state: dict) -> list[str]:
+    """Select reviewer roles from the architect's nominations in state.
+
+    Replaces the old severity/focus matrix — the architect now explicitly
+    nominates which reviewers should run via submit_architecture(reviewers= [...]).
 
     Args:
-        plan_meta: The plan_meta dictionary from 02_planning/execution_plan.yaml
+        state: The current state dict (may be empty for fallback calls).
 
     Returns:
-        List of role suffixes: ["quality"], ["logic"], or ["expert"]
-
-    Rules:
-        - Missing review_strategy -> ["logic"] (default)
-        - low severity -> ["quality"]
-        - medium severity + no security/performance in focus -> ["logic"]
-        - medium severity + security OR performance in focus -> ["expert"]
-        - high severity + no security/performance in focus -> ["logic"]
-        - high severity + security OR performance in focus -> ["expert"]
+        List of full pane role names, e.g. ["reviewer_logic", "reviewer_quality"].
+        Defaults to ["reviewer_logic"] when no valid nominations exist.
     """
-    review_strategy = plan_meta.get("review_strategy")
-    if not review_strategy:
-        return ["logic"]
-
-    severity = review_strategy.get("severity", "").lower()
-    focus = review_strategy.get("focus", [])
-
-    # Normalize focus to lowercase strings for comparison
-    focus_lower = set()
-    for item in focus:
-        if isinstance(item, str):
-            focus_lower.add(item.lower())
-
-    has_security_focus = "security" in focus_lower
-    has_performance_focus = "performance" in focus_lower
-    needs_expert = has_security_focus or has_performance_focus
-
-    if severity == "low":
-        return ["quality"]
-
-    if severity == "medium":
-        return ["expert"] if needs_expert else ["logic"]
-
-    if severity == "high":
-        return ["expert"] if needs_expert else ["logic"]
-
-    # Default fallback for unknown severity
-    return ["logic"]
+    nominated = state.get("reviewer_nominations") or []
+    if not isinstance(nominated, list) or not nominated:
+        return ["reviewer_logic"]
+    return [r for r in nominated if r in _ALLOWED_REVIEWER_ROLES] or ["reviewer_logic"]

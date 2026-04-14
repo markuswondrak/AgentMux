@@ -12,9 +12,8 @@ from agentmux.sessions.state_store import create_feature_files, load_state, writ
 from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig
 from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import ReviewingHandler
+from agentmux.workflow.handlers.base import PhaseResult
 from agentmux.workflow.transitions import PipelineContext
-
-PLANNING_DIR = SESSION_DIR_NAMES["planning"]
 
 
 class FakeRuntime:
@@ -63,7 +62,7 @@ class FakeRuntime:
 def _make_ctx(
     feature_dir: Path,
     *,
-    review_strategy: dict | None = None,
+    reviewer_nominations: list[str] | None = None,
     max_review_iterations: int = 3,
 ) -> tuple[PipelineContext, Path]:
     project_dir = feature_dir.parent / "project"
@@ -79,17 +78,14 @@ def _make_ctx(
     files.plan.parent.mkdir(parents=True, exist_ok=True)
     files.plan.write_text("# Plan", encoding="utf-8")
 
-    # Create execution_plan.yaml with review_strategy
-    planning_dir = feature_dir / PLANNING_DIR
+    # Create execution_plan.yaml (no review_strategy needed anymore)
+    planning_dir = feature_dir / SESSION_DIR_NAMES["planning"]
     planning_dir.mkdir(parents=True, exist_ok=True)
-    plan_data: dict = {}
-    if review_strategy is not None:
-        plan_data["review_strategy"] = review_strategy
     (planning_dir / "execution_plan.yaml").write_text(
-        yaml.dump(plan_data, default_flow_style=False), encoding="utf-8"
+        yaml.dump({}, default_flow_style=False), encoding="utf-8"
     )
 
-    agents = {
+    agents: dict[str, AgentConfig] = {
         "reviewer_logic": AgentConfig(
             role="reviewer_logic", cli="claude", model="sonnet", args=[]
         ),
@@ -108,6 +104,10 @@ def _make_ctx(
         max_review_iterations=max_review_iterations,
         prompts={},
     )
+    # Store nominations in state
+    if reviewer_nominations:
+        # We'll set this in the state after loading
+        pass
     return ctx, files.state
 
 
@@ -117,7 +117,7 @@ class TestResumeGuard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
+                reviewer_nominations=["reviewer_logic"],
             )
             # Create review.md so _request_summary doesn't fail on include
             ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
@@ -127,56 +127,55 @@ class TestResumeGuard(unittest.TestCase):
             state = load_state(state_path)
             state["phase"] = "reviewing"
             state["last_event"] = "resumed"
+            state["reviewer_nominations"] = ["reviewer_logic"]
             state["review_results"] = {
-                "reviewer_quality": {"verdict": "pass", "review_text": "OK"}
+                "reviewer_logic": {"verdict": "pass", "review_text": "OK"}
             }
-            state["active_reviews"] = {"reviewer_quality": "completed"}
+            state["active_reviews"] = {"reviewer_logic": "completed"}
             write_state(state_path, state)
 
             handler = ReviewingHandler()
             result = handler.enter(load_state(state_path), ctx)
 
-            # No new dispatch should happen, should transition to summary
+            # No new dispatch should happen
             dispatch_calls = [
                 c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
             ]
             self.assertEqual([], dispatch_calls)
-            # Should have requested summary (EVENT_REVIEW_PASSED)
-            # enter() returns either dict (state updates) or tuple (state, next_phase)
-            if isinstance(result, tuple):
-                self.assertEqual("review_passed", result[0].get("last_event"))
-            else:
-                self.assertEqual("review_passed", result.get("last_event"))
+            # Should be PhaseResult with summary request
+            self.assertIsInstance(result, PhaseResult)
+            self.assertEqual("review_passed", result.updates.get("last_event"))
 
     def test_resume_without_review_results_sends_prompt(self) -> None:
         """On resume, if review_results is empty, enter() proceeds normally."""
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
+                reviewer_nominations=["reviewer_logic"],
             )
             state = load_state(state_path)
             state["phase"] = "reviewing"
             state["last_event"] = "resumed"
+            state["reviewer_nominations"] = ["reviewer_logic"]
             # No review_results set
             write_state(state_path, state)
 
             handler = ReviewingHandler()
             handler.enter(load_state(state_path), ctx)
 
-            # Should dispatch the quality reviewer
+            # Should dispatch the logic reviewer
             dispatch_calls = [
                 c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
             ]
             self.assertEqual(len(dispatch_calls), 1)
-            self.assertEqual(["reviewer_quality"], dispatch_calls[0][1])
+            self.assertEqual(["reviewer_logic"], dispatch_calls[0][1])
 
     def test_fresh_entry_clears_stale_review_yaml_for_pending_roles(self) -> None:
         """Fresh entry deletes stale review_<role>.yaml for pending roles."""
         with tempfile.TemporaryDirectory() as td:
             ctx, state_path = _make_ctx(
                 Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
+                reviewer_nominations=["reviewer_quality"],
             )
             ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
             (ctx.files.review_dir / "review_reviewer_quality.yaml").write_text(
@@ -193,6 +192,7 @@ class TestResumeGuard(unittest.TestCase):
             state = load_state(state_path)
             state["phase"] = "reviewing"
             state["last_event"] = "implementation_completed"
+            state["reviewer_nominations"] = ["reviewer_quality"]
             write_state(state_path, state)
 
             handler = ReviewingHandler()
@@ -202,6 +202,73 @@ class TestResumeGuard(unittest.TestCase):
                 (ctx.files.review_dir / "review_reviewer_quality.yaml").exists(),
                 "stale review_reviewer_quality.yaml must be deleted",
             )
+
+    def test_resume_ingests_pre_existing_yaml(self) -> None:
+        """On resume, valid review_<role>.yaml without state entry is ingested."""
+        with tempfile.TemporaryDirectory() as td:
+            ctx, state_path = _make_ctx(
+                Path(td) / "feature",
+                reviewer_nominations=["reviewer_logic"],
+            )
+            ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
+            (ctx.files.review_dir / "review_reviewer_logic.yaml").write_text(
+                yaml.dump(
+                    {
+                        "verdict": "pass",
+                        "summary": "All good",
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            (ctx.files.review_dir / "review.md").write_text(
+                "verdict: pass\n\n## Summary\n\nOK\n", encoding="utf-8"
+            )
+
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            state["last_event"] = "resumed"
+            state["reviewer_nominations"] = ["reviewer_logic"]
+            # No review_results — should ingest from YAML
+            write_state(state_path, state)
+
+            handler = ReviewingHandler()
+            result = handler.enter(load_state(state_path), ctx)
+
+            # Should have ingested the verdict
+            self.assertIn("reviewer_logic", result.updates.get("review_results", {}))
+            # Should not re-dispatch
+            dispatch_calls = [
+                c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
+            ]
+            self.assertEqual([], dispatch_calls)
+
+    def test_enter_returns_phase_result_no_tuple_crash(self) -> None:
+        """enter() always returns PhaseResult, never tuple[dict, str|None]."""
+        with tempfile.TemporaryDirectory() as td:
+            ctx, state_path = _make_ctx(
+                Path(td) / "feature",
+                reviewer_nominations=["reviewer_logic"],
+            )
+            ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
+            (ctx.files.review_dir / "review.md").write_text(
+                "verdict: pass\n\n## Summary\n\nOK\n", encoding="utf-8"
+            )
+            state = load_state(state_path)
+            state["phase"] = "reviewing"
+            state["last_event"] = "resumed"
+            state["reviewer_nominations"] = ["reviewer_logic"]
+            state["review_results"] = {
+                "reviewer_logic": {"verdict": "pass", "review_text": "OK"}
+            }
+            write_state(state_path, state)
+
+            handler = ReviewingHandler()
+            result = handler.enter(load_state(state_path), ctx)
+
+            self.assertIsInstance(result, PhaseResult)
+            # result.updates must be a dict, result.next_phase may be None
+            self.assertIsInstance(result.updates, dict)
 
 
 class TestReviewArchive(unittest.TestCase):
@@ -256,10 +323,7 @@ class TestReviewArchive(unittest.TestCase):
     def test_verdict_fail_creates_archive_and_keeps_review_yaml(self) -> None:
         role = "reviewer_quality"
         with tempfile.TemporaryDirectory() as td:
-            ctx, state_path = _make_ctx(
-                Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
-            )
+            ctx, state_path = _make_ctx(Path(td) / "feature")
             self._dispatch_review(
                 ctx, state_path, role, self._FAIL_PAYLOAD, iteration=0
             )
@@ -275,10 +339,7 @@ class TestReviewArchive(unittest.TestCase):
     def test_verdict_fail_second_iteration_archives_correctly(self) -> None:
         role = "reviewer_quality"
         with tempfile.TemporaryDirectory() as td:
-            ctx, state_path = _make_ctx(
-                Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
-            )
+            ctx, state_path = _make_ctx(Path(td) / "feature")
             self._dispatch_review(
                 ctx, state_path, role, self._FAIL_PAYLOAD, iteration=1
             )
@@ -289,10 +350,7 @@ class TestReviewArchive(unittest.TestCase):
     def test_verdict_pass_creates_archive_and_keeps_review_yaml(self) -> None:
         role = "reviewer_quality"
         with tempfile.TemporaryDirectory() as td:
-            ctx, state_path = _make_ctx(
-                Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
-            )
+            ctx, state_path = _make_ctx(Path(td) / "feature")
             # Create review.md so _request_summary doesn't fail on include
             ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
             (ctx.files.review_dir / "review.md").write_text(
@@ -315,10 +373,7 @@ class TestReviewArchive(unittest.TestCase):
     def test_archive_contains_same_content_as_review_md(self) -> None:
         role = "reviewer_quality"
         with tempfile.TemporaryDirectory() as td:
-            ctx, state_path = _make_ctx(
-                Path(td) / "feature",
-                review_strategy={"severity": "low", "focus": []},
-            )
+            ctx, state_path = _make_ctx(Path(td) / "feature")
             self._dispatch_review(
                 ctx, state_path, role, self._FAIL_PAYLOAD, iteration=2
             )

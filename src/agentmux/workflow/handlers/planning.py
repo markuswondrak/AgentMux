@@ -14,7 +14,11 @@ import yaml
 from agentmux.workflow.event_catalog import EVENT_CHANGES_REQUESTED, EVENT_PLAN_WRITTEN
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.execution_plan import load_execution_plan
-from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
+from agentmux.workflow.handlers.base import (
+    BaseToolHandler,
+    PhaseResult,
+    ToolHandlerEntry,
+)
 from agentmux.workflow.handoff_artifacts import (
     _write_yaml,
     generate_execution_plan_yaml,
@@ -75,7 +79,7 @@ class PlanningHandler(BaseToolHandler):
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering planning phase.
 
         Sends planner prompt (initial or changes).
@@ -95,7 +99,7 @@ class PlanningHandler(BaseToolHandler):
             else build_planner_prompt(ctx.files, ctx.agents.get("planner")),
         )
         send_to_role(ctx, "planner", prompt_file)
-        return {}
+        return PhaseResult({})
 
     def _handle_plan(
         self,
