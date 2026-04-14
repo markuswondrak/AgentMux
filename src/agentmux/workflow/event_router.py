@@ -12,21 +12,10 @@ import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, NamedTuple, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
+from .phase_result import PhaseResult
 from .transitions import PipelineContext
-
-
-class PhaseResult(NamedTuple):
-    """Uniform return type for handler enter() methods.
-
-    Attributes:
-        updates: Dict of state updates to apply.
-        next_phase: Optional phase name to transition to immediately.
-    """
-
-    updates: dict
-    next_phase: str | None = None
 
 
 @dataclass(frozen=True)
