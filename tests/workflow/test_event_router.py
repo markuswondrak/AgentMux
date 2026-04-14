@@ -15,7 +15,6 @@ from agentmux.shared.models import (
 from agentmux.workflow.event_router import (
     EventSpec,
     PhaseHandler,
-    PhaseResult,
     WorkflowEvent,
     WorkflowEventRouter,
     extract_research_topic,
@@ -23,6 +22,7 @@ from agentmux.workflow.event_router import (
     path_matches,
     path_matches_any,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.transitions import PipelineContext
 
 

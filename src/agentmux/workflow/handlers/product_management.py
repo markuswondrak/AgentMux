@@ -7,16 +7,13 @@ from typing import TYPE_CHECKING
 
 from agentmux.workflow.event_catalog import EVENT_PM_COMPLETED
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
-from agentmux.workflow.handlers.base import (
-    BaseToolHandler,
-    PhaseResult,
-    ToolHandlerEntry,
-)
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.phase_helpers import (
     handle_research_done,
     handle_research_request,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import (
     build_product_manager_prompt,
     write_prompt_file,

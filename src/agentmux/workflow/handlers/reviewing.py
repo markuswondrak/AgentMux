@@ -15,16 +15,13 @@ from agentmux.workflow.event_catalog import (
     EVENT_REVIEW_PASSED,
 )
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
-from agentmux.workflow.handlers.base import (
-    BaseToolHandler,
-    PhaseResult,
-    ToolHandlerEntry,
-)
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.handoff_artifacts import generate_review_md
 from agentmux.workflow.phase_helpers import (
     select_reviewer_roles,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import (
     build_reviewer_expert_prompt,
     build_reviewer_logic_prompt,

@@ -14,15 +14,12 @@ from agentmux.workflow.event_router import (
     WorkflowEvent,
     extract_subplan_index,
 )
-from agentmux.workflow.handlers.base import (
-    BaseToolHandler,
-    PhaseResult,
-    ToolHandlerEntry,
-)
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import build_fix_prompt, write_prompt_file
 
 if TYPE_CHECKING:

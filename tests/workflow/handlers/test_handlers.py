@@ -22,7 +22,7 @@ from agentmux.workflow.event_catalog import (
     EVENT_PM_COMPLETED,
     EVENT_REVIEW_PASSED,
 )
-from agentmux.workflow.event_router import PhaseResult, WorkflowEvent
+from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import (
     PHASE_HANDLERS,
     CompletingHandler,
@@ -34,6 +34,7 @@ from agentmux.workflow.handlers import (
     ProductManagementHandler,
     ReviewingHandler,
 )
+from agentmux.workflow.phase_result import PhaseResult
 
 if TYPE_CHECKING:
     pass

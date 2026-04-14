@@ -14,11 +14,7 @@ import yaml
 from agentmux.workflow.event_catalog import EVENT_CHANGES_REQUESTED, EVENT_PLAN_WRITTEN
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.execution_plan import load_execution_plan
-from agentmux.workflow.handlers.base import (
-    BaseToolHandler,
-    PhaseResult,
-    ToolHandlerEntry,
-)
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.handoff_artifacts import (
     _write_yaml,
     generate_execution_plan_yaml,
@@ -32,6 +28,7 @@ from agentmux.workflow.phase_helpers import (
     load_plan_meta,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import (
     build_change_prompt,
     build_planner_prompt,

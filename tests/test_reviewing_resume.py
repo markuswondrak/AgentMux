@@ -12,7 +12,7 @@ from agentmux.sessions.state_store import create_feature_files, load_state, writ
 from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig
 from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import ReviewingHandler
-from agentmux.workflow.handlers.base import PhaseResult
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.transitions import PipelineContext
 
 

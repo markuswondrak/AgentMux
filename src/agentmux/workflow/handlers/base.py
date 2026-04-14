@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from agentmux.workflow.event_router import ToolSpec, WorkflowEvent
-from agentmux.workflow.phase_result import PhaseResult
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext

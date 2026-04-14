@@ -12,7 +12,7 @@ from agentmux.sessions.state_store import feature_slug_from_dir, read_json_resil
 from agentmux.shared.models import ProjectPaths
 from agentmux.workflow.event_catalog import EVENT_CHANGES_REQUESTED
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
-from agentmux.workflow.handlers.base import PhaseResult
+from agentmux.workflow.phase_result import PhaseResult
 
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext

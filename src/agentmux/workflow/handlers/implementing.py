@@ -17,15 +17,12 @@ from agentmux.workflow.event_catalog import (
 )
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.execution_plan import load_execution_plan
-from agentmux.workflow.handlers.base import (
-    BaseToolHandler,
-    PhaseResult,
-    ToolHandlerEntry,
-)
+from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.plan_parser import coder_label_for_subplan
 from agentmux.workflow.prompts import (
     build_coder_subplan_prompt,
