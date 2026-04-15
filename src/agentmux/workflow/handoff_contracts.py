@@ -83,8 +83,10 @@ PLAN_CONTRACT = HandoffContract(
         FieldSpec(
             name="review_strategy",
             type="dict",
+            required=False,
             description=(
-                "Review configuration: {severity: low|medium|high, focus: [...]}."
+                "Deprecated — reviewer selection is now via "
+                "submit_architecture(reviewers=[...])."
             ),
             example={"severity": "medium", "focus": ["security", "testing"]},
         ),
@@ -401,6 +403,7 @@ def _validate_plan(data: dict[str, Any], errors: list[str]) -> None:
                 f" missing: {missing_csv}."
             )
 
+    # Deprecated: kept for backward compat but not required.
     strategy = data.get("review_strategy")
     if isinstance(strategy, dict):
         sev = strategy.get("severity")

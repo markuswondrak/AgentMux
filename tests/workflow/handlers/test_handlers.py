@@ -34,6 +34,7 @@ from agentmux.workflow.handlers import (
     ProductManagementHandler,
     ReviewingHandler,
 )
+from agentmux.workflow.phase_result import PhaseResult
 
 if TYPE_CHECKING:
     pass
@@ -107,14 +108,14 @@ class TestProductManagementHandler:
             mock_write.return_value = Path("/mock/prompt.md")
             mock_build.return_value = "mock prompt content"
 
-            updates = handler.enter(empty_state, mock_ctx)
+            result = handler.enter(empty_state, mock_ctx)
 
             mock_build.assert_called_once_with(mock_ctx.files, None)
             mock_write.assert_called_once()
             mock_send.assert_called_once_with(
                 mock_ctx, "product-manager", Path("/mock/prompt.md")
             )
-            assert updates == {}
+            assert result.updates == {}
 
     def test_handle_pm_completed(self, mock_ctx: MagicMock, empty_state: dict) -> None:
         """Test handling of pm_done marker."""
@@ -574,12 +575,12 @@ class TestImplementingHandler:
             mock_write.return_value = Path("/mock/prompt.md")
             mock_build.return_value = "coder prompt"
 
-            updates = handler.enter(state, mock_ctx)
+            result = handler.enter(state, mock_ctx)
 
             mock_reset.assert_called_once()
             mock_ctx.runtime.kill_primary.assert_called_once_with("coder")
-            assert "subplan_count" in updates
-            assert updates["subplan_count"] == 1
+            assert "subplan_count" in result.updates
+            assert result.updates["subplan_count"] == 1
 
     def test_handle_subplan_completed_parallel_mode(self, mock_ctx: MagicMock) -> None:
         """Test handling subplan completion in parallel mode."""
@@ -1065,9 +1066,9 @@ class TestImplementingHandler:
         )
 
         with patch.object(handler, "_dispatch_active_group"):
-            updates = handler.enter(state, mock_ctx)
+            result = handler.enter(state, mock_ctx)
 
-        assert updates["implementation_single_coder"] is False
+        assert result.updates["implementation_single_coder"] is False
 
 
 class TestReviewingHandler:
@@ -1076,36 +1077,31 @@ class TestReviewingHandler:
     def test_enter_sends_reviewer_prompt(
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:
-        """Test that enter() sends reviewer prompt."""
+        """Test that enter() dispatches reviewers via ctx.runtime."""
         handler = ReviewingHandler()
 
-        with (
-            patch(
-                "agentmux.workflow.handlers.reviewing.write_prompt_file"
-            ) as mock_write,
-            patch("agentmux.workflow.handlers.reviewing.send_to_role") as mock_send,
-            patch(
-                "agentmux.workflow.handlers.reviewing.build_reviewer_logic_prompt"
-            ) as mock_build_logic,
-            patch(
-                "agentmux.workflow.handlers.reviewing.role_display_label"
-            ) as mock_label,
-        ):
-            mock_write.return_value = Path("/mock/prompt.md")
-            mock_build_logic.return_value = "reviewer logic prompt"
-            mock_label.return_value = "[reviewer] iteration 1"
+        with patch(
+            "agentmux.workflow.handlers.reviewing.select_reviewer_roles"
+        ) as mock_select:
+            # Mock to return a single reviewer for simplicity
+            mock_select.return_value = ["reviewer_logic"]
 
-            handler.enter(empty_state, mock_ctx)
+            result = handler.enter(empty_state, mock_ctx)
 
-            mock_build_logic.assert_called_once()
-            mock_send.assert_called_once()
+            # Should return PhaseResult with updates
+            assert isinstance(result, PhaseResult)
+            # select_reviewer_roles should be called
+            mock_select.assert_called_once()
+            # ctx.runtime.send_reviewers_many should be called via the mock
+            mock_ctx.runtime.send_reviewers_many.assert_called_once()
 
     def test_handle_review_passed(self, mock_ctx: MagicMock, empty_state: dict) -> None:
         """Test that VERDICT:PASS stays in reviewing and requests summary."""
         handler = ReviewingHandler()
 
+        role = "reviewer_logic"
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.review_dir / "review.yaml").write_text(
+        (mock_ctx.files.review_dir / f"review_{role}.yaml").write_text(
             yaml.dump(
                 {
                     "verdict": "pass",
@@ -1116,12 +1112,19 @@ class TestReviewingHandler:
                 default_flow_style=False,
             )
         )
+        # Create review.md for summary prompt include
+        (mock_ctx.files.review_dir / "review.md").write_text(
+            "verdict: pass\n\n## Summary\n\nLooks good!", encoding="utf-8"
+        )
         event = WorkflowEvent(kind="review", payload={"payload": {}})
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {role: "pending"},
+            "review_results": {},
+        }
 
-        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
-        mock_ctx.runtime.finish_many.assert_called_once_with("coder")
-        mock_ctx.runtime.kill_primary.assert_called_once_with("coder")
         # Stays in reviewing, awaiting summary
         assert next_phase is None
         assert updates.get("awaiting_summary") is True
@@ -1133,8 +1136,9 @@ class TestReviewingHandler:
         """Review tool event writes both review.yaml and review.md."""
         handler = ReviewingHandler()
 
+        role = "reviewer_logic"
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.review_dir / "review.yaml").write_text(
+        (mock_ctx.files.review_dir / f"review_{role}.yaml").write_text(
             yaml.dump(
                 {
                     "verdict": "pass",
@@ -1145,13 +1149,22 @@ class TestReviewingHandler:
                 default_flow_style=False,
             )
         )
+        # Create review.md for summary prompt include
+        (mock_ctx.files.review_dir / "review.md").write_text(
+            "verdict: pass\n\n## Summary\n\nLooks good!", encoding="utf-8"
+        )
         event = WorkflowEvent(kind="review", payload={"payload": {}})
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {role: "pending"},
+            "review_results": {},
+        }
 
-        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
         assert next_phase is None
         assert updates.get("awaiting_summary") is True
-        yaml_path = mock_ctx.files.review_dir / "review.yaml"
+        yaml_path = mock_ctx.files.review_dir / f"review_{role}.yaml"
         assert yaml_path.exists()
         assert mock_ctx.files.review.exists()
         assert mock_ctx.files.review.read_text(encoding="utf-8").startswith(
@@ -1164,8 +1177,9 @@ class TestReviewingHandler:
         """Test transition to fixing when under max iterations."""
         handler = ReviewingHandler()
 
+        role = "reviewer_logic"
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.review_dir / "review.yaml").write_text(
+        (mock_ctx.files.review_dir / f"review_{role}.yaml").write_text(
             yaml.dump(
                 {
                     "verdict": "fail",
@@ -1183,9 +1197,18 @@ class TestReviewingHandler:
                 default_flow_style=False,
             )
         )
+        # Create review.md for summary prompt include
+        (mock_ctx.files.review_dir / "review.md").write_text(
+            "verdict: fail\n\n## Summary\n\nNeeds fixes", encoding="utf-8"
+        )
         event = WorkflowEvent(kind="review", payload={"payload": {}})
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {role: "pending"},
+            "review_results": {},
+        }
 
-        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
         assert next_phase == "fixing"
         assert updates["review_iteration"] == 1
@@ -1197,8 +1220,9 @@ class TestReviewingHandler:
         """Review tool event with fail verdict creates fix_request.txt."""
         handler = ReviewingHandler()
 
+        role = "reviewer_logic"
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.review_dir / "review.yaml").write_text(
+        (mock_ctx.files.review_dir / f"review_{role}.yaml").write_text(
             yaml.dump(
                 {
                     "verdict": "fail",
@@ -1216,15 +1240,25 @@ class TestReviewingHandler:
                 default_flow_style=False,
             )
         )
+        # Create review.md for summary prompt include
+        (mock_ctx.files.review_dir / "review.md").write_text(
+            "verdict: fail\n\n## Summary\n\nNeeds fixes", encoding="utf-8"
+        )
         event = WorkflowEvent(kind="review", payload={"payload": {}})
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {role: "pending"},
+            "review_results": {},
+        }
 
-        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
         assert next_phase == "fixing"
         assert updates["review_iteration"] == 1
         assert mock_ctx.files.fix_request.exists()
-        assert mock_ctx.files.fix_request.read_text(encoding="utf-8").startswith(
-            "verdict: fail"
+        # fix_request contains aggregated feedback
+        assert "Missing validation" in mock_ctx.files.fix_request.read_text(
+            encoding="utf-8"
         )
 
     def test_handle_review_failed_at_max_iterations(
@@ -1233,8 +1267,9 @@ class TestReviewingHandler:
         """Test transition to completing when max iterations reached."""
         handler = ReviewingHandler()
 
+        role = "reviewer_logic"
         mock_ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-        (mock_ctx.files.review_dir / "review.yaml").write_text(
+        (mock_ctx.files.review_dir / f"review_{role}.yaml").write_text(
             yaml.dump(
                 {
                     "verdict": "fail",
@@ -1252,10 +1287,18 @@ class TestReviewingHandler:
                 default_flow_style=False,
             )
         )
+        # Create review.md for summary prompt include
+        (mock_ctx.files.review_dir / "review.md").write_text(
+            "verdict: fail\n\n## Summary\n\nStill failing", encoding="utf-8"
+        )
         event = WorkflowEvent(kind="review", payload={"payload": {}})
 
         # Set state at max iterations
-        state = {"review_iteration": 3}
+        state = {
+            "review_iteration": 3,
+            "active_reviews": {role: "pending"},
+            "review_results": {},
+        }
         updates, next_phase = handler.handle_event(event, state, mock_ctx)
 
         assert next_phase == "completing"
@@ -1425,9 +1468,9 @@ class TestFailedHandler:
         """Test that enter() returns empty updates."""
         handler = FailedHandler()
 
-        updates = handler.enter(empty_state, mock_ctx)
+        result = handler.enter(empty_state, mock_ctx)
 
-        assert updates == {}
+        assert result.updates == {}
 
     def test_handle_event_returns_exit_failure(
         self, mock_ctx: MagicMock, empty_state: dict

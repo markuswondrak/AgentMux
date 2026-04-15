@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agentmux.runtime import ParallelPromptSpec, TmuxAgentRuntime
+from agentmux.runtime import ParallelPromptSpec, ReviewerSpec, TmuxAgentRuntime
 from agentmux.runtime.event_bus import EventBus
 from agentmux.runtime.interruption_sources import InterruptionEventSource
 from agentmux.shared.models import AgentConfig
@@ -753,6 +753,108 @@ class UnexpectedMissingRegisteredPanesTests(unittest.TestCase):
             result = runtime.unexpected_missing_registered_panes()
         self.assertEqual([], result)
         self.assertIn("%1", runtime._grace_panes)
+
+    def test_reviewer_spec_namedtuple_has_required_fields(self) -> None:
+        """ReviewerSpec NamedTuple has role, prompt_file, display_label."""
+        spec = ReviewerSpec(
+            role="reviewer_logic",
+            prompt_file=Path("/some/prompt.md"),
+            display_label="Logic Review",
+        )
+        self.assertEqual(spec.role, "reviewer_logic")
+        self.assertEqual(spec.prompt_file, Path("/some/prompt.md"))
+        self.assertEqual(spec.display_label, "Logic Review")
+
+    def test_reviewer_spec_display_label_defaults_to_none(self) -> None:
+        """ReviewerSpec display_label defaults to None."""
+        spec = ReviewerSpec(
+            role="reviewer_quality",
+            prompt_file=Path("/prompt.md"),
+        )
+        self.assertIsNone(spec.display_label)
+
+    def test_send_reviewers_many_creates_panes_per_role(self) -> None:
+        """send_reviewers_many creates panes per ReviewerSpec."""
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            prompt_a = feature_dir / "reviewer_a.md"
+            prompt_b = feature_dir / "reviewer_b.md"
+            prompt_a.write_text("review a", encoding="utf-8")
+            prompt_b.write_text("review b", encoding="utf-8")
+            zone = FakeZone("session-x")
+            created_panes: list[tuple[str, str]] = []  # (role, pane_id)
+            sent_prompts: list[tuple[str, str]] = []  # (pane_id, prompt_name)
+
+            def fake_create(
+                session_name, role, agents, project_dir, trust_snippet, **kwargs
+            ):
+                pane_id = f"%reviewer_{role}"
+                created_panes.append((role, pane_id))
+                return (pane_id, 12345)
+
+            def fake_send_prompt(pane_id, prompt_file):
+                sent_prompts.append((pane_id, prompt_file.name))
+
+            # Create agents config that includes the reviewer roles
+            reviewer_agents = {
+                **_agents(),
+                "reviewer_logic": AgentConfig(
+                    role="reviewer_logic", cli="claude", model="sonnet", args=[]
+                ),
+                "reviewer_quality": AgentConfig(
+                    role="reviewer_quality", cli="claude", model="sonnet", args=[]
+                ),
+            }
+
+            with (
+                patch("agentmux.runtime.tmux_pane_exists", return_value=False),
+                patch("agentmux.runtime.create_agent_pane", side_effect=fake_create),
+                patch("agentmux.runtime.send_prompt", side_effect=fake_send_prompt),
+                patch("agentmux.runtime.set_pane_identity", return_value=None),
+            ):
+                runtime = TmuxAgentRuntime(
+                    feature_dir=feature_dir,
+                    project_dir=Path("/project"),
+                    session_name="session-x",
+                    agents=reviewer_agents,
+                    primary_panes={"architect": "%1"},
+                    zone=zone,
+                )
+                result = runtime.send_reviewers_many(
+                    [
+                        ReviewerSpec(
+                            role="reviewer_logic",
+                            prompt_file=prompt_a,
+                            display_label="Logic Review",
+                        ),
+                        ReviewerSpec(
+                            role="reviewer_quality",
+                            prompt_file=prompt_b,
+                        ),
+                    ]
+                )
+
+            # Returns dict mapping role -> pane_id
+            self.assertEqual(
+                result,
+                {
+                    "reviewer_logic": "%reviewer_reviewer_logic",
+                    "reviewer_quality": "%reviewer_reviewer_quality",
+                },
+            )
+            # Parallel show called for all panes
+            self.assertEqual(
+                [["%reviewer_reviewer_logic", "%reviewer_reviewer_quality"]],
+                zone.parallel_shows,
+            )
+            # Prompts sent to correct panes
+            self.assertEqual(
+                {
+                    ("%reviewer_reviewer_logic", "reviewer_a.md"),
+                    ("%reviewer_reviewer_quality", "reviewer_b.md"),
+                },
+                set(sent_prompts),
+            )
 
 
 if __name__ == "__main__":

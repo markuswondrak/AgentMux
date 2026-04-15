@@ -32,7 +32,7 @@ You focus **exclusively** on whether the technical implementation aligns with th
 
 ## Output & Artifacts
 
-- `07_review/review.md` — verdict (pass/fail) with findings, logic gaps, and guidance for the coder if fail.
+- `07_review/review_reviewer_logic.yaml` — verdict (pass/fail) with findings, logic gaps, and guidance for the coder if fail.
 - `08_completion/confirmation_prompt.md` — confirmation prompt for the user (confirmation step only).
 
 ## Preference Memory
@@ -46,3 +46,5 @@ You focus **exclusively** on whether the technical implementation aligns with th
 - Do not mix implementation verdicting with preference-capture decisions.
 - Do not implement fixes or modify any project files.
 - When verdict is fail, the orchestrator routes to the coder agent for fixes — your job ends at writing the review.
+
+[[shared:handoff-contract-review]]

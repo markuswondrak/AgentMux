@@ -411,7 +411,8 @@ class ResumeStartupRoleTests(unittest.TestCase):
                 agents,
             )
 
-            self.assertEqual("reviewer_expert", role)
+            # Without explicit reviewer_nominations, falls back to reviewer_logic
+            self.assertEqual("reviewer_logic", role)
 
 
 class ResumeApplicationFlowTests(unittest.TestCase):

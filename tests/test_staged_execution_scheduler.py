@@ -226,7 +226,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             handler = ImplementingHandler()
             state = load_state(state_path)
-            updates = handler.enter(state, ctx)
+            result = handler.enter(state, ctx)
+            updates = result.updates
             # Merge updates into state
             state.update(updates)
             write_state(state_path, state)
@@ -267,7 +268,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             handler = ImplementingHandler()
             state = load_state(state_path)
-            updates = handler.enter(state, ctx)
+            result = handler.enter(state, ctx)
+            updates = result.updates
             state.update(updates)
             write_state(state_path, state)
 
@@ -329,7 +331,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             handler = ImplementingHandler()
             state = load_state(state_path)
-            updates = handler.enter(state, ctx)
+            result = handler.enter(state, ctx)
+            updates = result.updates
             state.update(updates)
             write_state(state_path, state)
 
@@ -427,7 +430,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             handler = ImplementingHandler()
             state = load_state(state_path)
-            updates = handler.enter(state, ctx)
+            result = handler.enter(state, ctx)
+            updates = result.updates
             state.update(updates)
             write_state(state_path, state)
 
@@ -472,8 +476,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             )
             resumed_handler = ImplementingHandler()
             resumed_state = load_state(state_path)
-            updates = resumed_handler.enter(resumed_state, resumed_ctx)
-            resumed_state.update(updates)
+            result = resumed_handler.enter(resumed_state, resumed_ctx)
+            resumed_state.update(result.updates)
             write_state(state_path, resumed_state)
 
             self.assertIn(
@@ -535,7 +539,8 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
 
             handler = ImplementingHandler()
             state = load_state(state_path)
-            updates = handler.enter(state, ctx)
+            result = handler.enter(state, ctx)
+            updates = result.updates
             state.update(updates)
             write_state(state_path, state)
 

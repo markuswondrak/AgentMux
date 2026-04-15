@@ -144,6 +144,12 @@ class SyncFakeRuntime:
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self._record("send_many", role, prompt_specs)
 
+    def send_reviewers_many(self, reviewer_specs: list) -> dict[str, str]:
+        """Fake send_reviewers_many — records call and returns mock pane mapping."""
+        roles = [spec.role for spec in reviewer_specs]
+        self._record("send_reviewers_many", roles)
+        return {role: f"%pane_{role}" for role in roles}
+
     def spawn_task(self, role: str, task_id: str, research_dir: Path) -> None:
         self._record("spawn_task", role, task_id, research_dir)
 
@@ -399,7 +405,14 @@ def _write_review_pass(feature_dir: Path) -> None:
         "findings": [],
         "commit_message": "feat: implement feature",
     }
-    (d / "review.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    (d / "review_reviewer_logic.yaml").write_text(
+        yaml.safe_dump(data), encoding="utf-8"
+    )
+    # Create review.md for summary prompt include expansion
+    (d / "review.md").write_text(
+        "verdict: pass\n\n## Summary\n\nAll checks pass, implementation is solid.",
+        encoding="utf-8",
+    )
 
 
 def _write_summary(
@@ -547,37 +560,15 @@ def test_happy_path_parallel_coders():
                 orchestrator=orchestrator,
             )
 
-            # Phase 4: reviewing — wait for reviewer prompt
-            runtime.wait_for_call("send", match={"role": "reviewer_logic"})
+            # Phase 4: reviewing — wait for reviewer dispatch via send_reviewers_many
+            runtime.wait_for_call("send_reviewers_many")
 
             # Simulate review pass
             _write_review_pass(feature_dir)
             _emit_tool(feature_dir, "submit_review", orchestrator=orchestrator)
 
-            # Wait for summary prompt to reviewer
-            # After review pass, the handler sends a summary prompt to the
-            # same reviewer — this is the second "send" to reviewer_logic
-            calls_before = len(
-                [
-                    c
-                    for c in runtime.calls
-                    if c.method == "send" and c.args[0] == "reviewer_logic"
-                ]
-            )
-            if calls_before < 2:
-                # Wait for the summary prompt
-                deadline = time.monotonic() + SYNC_TIMEOUT
-                while True:
-                    reviewer_sends = [
-                        c
-                        for c in runtime.calls
-                        if c.method == "send" and c.args[0] == "reviewer_logic"
-                    ]
-                    if len(reviewer_sends) >= 2:
-                        break
-                    if time.monotonic() > deadline:
-                        raise TimeoutError("Timed out waiting for summary prompt")
-                    time.sleep(0.1)
+            # Wait for summary prompt (send to reviewer_logic)
+            runtime.wait_for_call("send", match={"role": "reviewer_logic"})
 
             # Simulate summary written
             _write_summary(feature_dir, orchestrator=orchestrator)
@@ -701,24 +692,13 @@ def test_happy_path_pm_with_research():
                 orchestrator=orchestrator,
             )
 
-            # Phase 4: reviewing
-            runtime.wait_for_call("send", match={"role": "reviewer_logic"})
+            # Phase 4: reviewing — wait for reviewer dispatch via send_reviewers_many
+            runtime.wait_for_call("send_reviewers_many")
             _write_review_pass(feature_dir)
             _emit_tool(feature_dir, "submit_review", orchestrator=orchestrator)
 
-            # Wait for second reviewer_logic send (summary prompt)
-            deadline = time.monotonic() + SYNC_TIMEOUT
-            while True:
-                reviewer_sends = [
-                    c
-                    for c in runtime.calls
-                    if c.method == "send" and c.args[0] == "reviewer_logic"
-                ]
-                if len(reviewer_sends) >= 2:
-                    break
-                if time.monotonic() > deadline:
-                    raise TimeoutError("Timed out waiting for summary prompt")
-                time.sleep(0.1)
+            # Wait for summary prompt (send to reviewer_logic)
+            runtime.wait_for_call("send", match={"role": "reviewer_logic"})
 
             _write_summary(feature_dir, orchestrator=orchestrator)
             _wait_and_flush_approval(feature_dir, orchestrator)

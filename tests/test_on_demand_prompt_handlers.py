@@ -40,6 +40,12 @@ class FakeRuntime:
             ("send", role, prompt_file.name, display_label, prefix_command)
         )
 
+    def send_reviewers_many(self, reviewer_specs: list) -> dict[str, str]:
+        """Fake send_reviewers_many — records call and returns mock pane mapping."""
+        roles = [spec.role for spec in reviewer_specs]
+        self.calls.append(("send_reviewers_many", roles))
+        return {role: f"%pane_{role}" for role in roles}
+
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(("send_many", role, _prompt_names(prompt_specs)))
         self.parallel_specs.append(
@@ -165,9 +171,9 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             write_state(state_path, state)
 
             handler = ImplementingHandler()
-            updates = handler.enter(load_state(state_path), ctx)
+            result = handler.enter(load_state(state_path), ctx)
             updated = load_state(state_path)
-            updated.update(updates)
+            updated.update(result.updates)
 
             self.assertTrue(
                 (ctx.files.implementation_dir / "coder_prompt_1.md").exists()
@@ -205,9 +211,9 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             write_state(state_path, state)
 
             handler = ImplementingHandler()
-            updates = handler.enter(load_state(state_path), ctx)
+            result = handler.enter(load_state(state_path), ctx)
             updated = load_state(state_path)
-            updated.update(updates)
+            updated.update(result.updates)
 
             self.assertEqual(
                 [
@@ -251,9 +257,9 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             write_state(state_path, state)
 
             handler = ImplementingHandler()
-            updates = handler.enter(load_state(state_path), ctx)
+            result = handler.enter(load_state(state_path), ctx)
             state = load_state(state_path)
-            state.update(updates)
+            state.update(result.updates)
             write_state(state_path, state)
 
             self.assertEqual("parallel", state.get("implementation_group_mode"))
@@ -293,19 +299,12 @@ class OnDemandPromptHandlerTests(unittest.TestCase):
             handler = ReviewingHandler()
             handler.enter(load_state(state_path), ctx)
 
-            self.assertTrue((ctx.files.review_dir / "review_logic_prompt.md").exists())
-            self.assertEqual(
-                [
-                    (
-                        "send",
-                        "reviewer_logic",
-                        "review_logic_prompt.md",
-                        "[reviewer_logic] logic",
-                        None,
-                    )
-                ],
-                ctx.runtime.calls,
-            )
+            # Verify parallel reviewer dispatch happens
+            dispatch_calls = [
+                c for c in ctx.runtime.calls if c[0] == "send_reviewers_many"
+            ]
+            self.assertEqual(1, len(dispatch_calls))
+            self.assertEqual(["reviewer_logic"], dispatch_calls[0][1])
 
     def test_enter_fixing_kills_stale_coder_and_builds_fix_prompt_inline(self) -> None:
         with tempfile.TemporaryDirectory() as td:

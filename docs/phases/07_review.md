@@ -3,7 +3,7 @@
 > Related source files: `src/agentmux/workflow/handlers/reviewing.py`, `src/agentmux/workflow/phase_registry.py`, `src/agentmux/workflow/prompts.py`, `src/agentmux/integrations/mcp_server.py`
 > Directory: `07_review/` | Optional: no
 
-The reviewer evaluates the implementation against the plan, producing a structured verdict. AgentMux routes to a specialized reviewer type based on the plan's `review_strategy`.
+The reviewer evaluates the implementation against the plan, producing a structured verdict. The architect nominates which reviewer roles should run via `submit_architecture(reviewers=[...])`.
 
 ## Conditions
 
@@ -11,14 +11,15 @@ Entered after `implementing` or `fixing` completes (`implementation_completed` e
 
 ## Role
 
-One of four reviewer agents is selected based on `review_strategy.severity` and `review_strategy.focus` from `plan.yaml`:
+The architect nominates the reviewer set via `submit_architecture(reviewers=[...])` during the architecting phase. Valid values:
 
-| Condition | Agent used |
-|-----------|------------|
-| No `review_strategy` in plan | **reviewer_logic** (backward-compatible default) |
-| `severity: low` | **reviewer_quality** |
-| `severity: medium/high`, no security/performance focus | **reviewer_logic** |
-| `severity: medium/high` with `security` or `performance` in focus | **reviewer_expert** |
+| Role | Purpose |
+|------|---------|
+| `reviewer_logic` | Checks alignment to plan and functional correctness |
+| `reviewer_quality` | Checks code quality, style, and maintainability |
+| `reviewer_expert` | Checks security, performance, and edge cases |
+
+When `reviewers` is omitted or empty, only `reviewer_logic` runs by default.
 
 ## Artifacts
 
@@ -35,7 +36,7 @@ One of four reviewer agents is selected based on `review_strategy.severity` and 
 
 ## Reviewer selection
 
-See the **Role** section above for the routing table.
+The architect nominates the reviewer set via `submit_architecture(reviewers=[...])` during the architecting phase. The nominations are stored in `state["reviewer_nominations"]` and read by `select_reviewer_roles(state)` to determine which reviewer panes to dispatch.
 
 ## `review.yaml` schema
 

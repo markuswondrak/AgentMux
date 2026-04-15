@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Literal, NamedTuple, Protocol
 
 from ..agent_labels import role_display_label
 from ..shared.models import BATCH_AGENT_ROLES, AgentConfig
@@ -28,6 +28,14 @@ from .tmux_core import tmux_pane_exists
 SNAPSHOT_VERSION = 2
 
 
+class ReviewerSpec(NamedTuple):
+    """Specification for a reviewer pane in send_reviewers_many()."""
+
+    role: str
+    prompt_file: Path
+    display_label: str | None = None
+
+
 class AgentRuntime(Protocol):
     def send(
         self,
@@ -40,6 +48,10 @@ class AgentRuntime(Protocol):
     def send_many(
         self, role: str, prompt_specs: list[ParallelPromptSpec | Path]
     ) -> None: ...
+
+    def send_reviewers_many(
+        self, reviewer_specs: list[ReviewerSpec]
+    ) -> dict[str, str]: ...
 
     def deactivate(self, role: str) -> None: ...
 
@@ -491,6 +503,60 @@ class TmuxAgentRuntime:
 
         self.parallel_panes[role] = workers
         self._persist_snapshot()
+
+    def send_reviewers_many(self, reviewer_specs: list[ReviewerSpec]) -> dict[str, str]:
+        """Create parallel panes for heterogeneous reviewer roles.
+
+        Unlike send_many() which creates multiple panes for the same role,
+        this creates one pane per distinct reviewer role. Each pane gets its
+        own prompt file. All panes are shown in parallel via content_zone.
+
+        Args:
+            reviewer_specs: List of ReviewerSpec, one per reviewer role.
+
+        Returns:
+            Dict mapping role -> pane_id for all created panes.
+        """
+        if not reviewer_specs:
+            return {}
+
+        role_to_pane: dict[str, str] = {}
+        pane_ids: list[str] = []
+
+        for spec in reviewer_specs:
+            if spec.role not in self.agents:
+                logging.getLogger(__name__).warning(
+                    "Unknown reviewer role %r — skipping", spec.role
+                )
+                continue
+            display_label = spec.display_label or self._display_label_for_task(
+                spec.role, None
+            )
+            pane_id, pid = create_agent_pane(
+                self.session_name,
+                spec.role,
+                self.agents,
+                self.project_dir,
+                self.agents[spec.role].trust_snippet,
+                display_label=display_label,
+            )
+            self._track_process_pid(pane_id, pid)
+            set_pane_identity(pane_id, role=spec.role, display_label=display_label)
+            role_to_pane[spec.role] = pane_id
+            pane_ids.append(pane_id)
+
+        self._zone.show_parallel(pane_ids)
+
+        for spec in reviewer_specs:
+            if spec.role in role_to_pane:
+                send_prompt(role_to_pane[spec.role], spec.prompt_file)
+
+        # Track in parallel_panes under each role
+        for role, pane_id in role_to_pane.items():
+            self.parallel_panes.setdefault(role, {})[0] = pane_id
+
+        self._persist_snapshot()
+        return role_to_pane
 
     def deactivate(self, role: str) -> None:
         workers = self.parallel_panes.get(role, {})

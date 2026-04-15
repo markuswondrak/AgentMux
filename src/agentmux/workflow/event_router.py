@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
+from .phase_result import PhaseResult
 from .transitions import PipelineContext
 
 
@@ -96,7 +97,7 @@ class PhaseHandler(Protocol):
     ``EventSpec(name=..., watch_paths=('*',), ...)``.
     """
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called once when entering the phase.
 
         Responsibilities:
@@ -109,7 +110,7 @@ class PhaseHandler(Protocol):
             ctx: Pipeline context with files, runtime, agents
 
         Returns:
-            Dict of state updates to apply (e.g., {"subplan_count": 3})
+            PhaseResult with updates dict and optional next_phase
         """
         ...
 
@@ -233,21 +234,44 @@ class WorkflowEventRouter:
 
         return False
 
-    def enter_current_phase(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter_current_phase(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         phase_name = state.get("phase", "")
         handler = self._phases.get(phase_name)
         if handler is None or phase_name in self._entered:
-            return {}
+            return PhaseResult({})
 
         self._entered.add(phase_name)
 
-        enter_updates = handler.enter(state, ctx)
-        state.update(enter_updates)
+        result = handler.enter(state, ctx)
+        state.update(result.updates)
 
         from ..sessions.state_store import write_state
 
         write_state(ctx.files.state, state)
-        return enter_updates
+
+        # If enter() requests an immediate transition, do it
+        if result.next_phase is not None:
+            return self._transition(state, ctx, phase_name, result.next_phase)
+
+        return result
+
+    def _transition(
+        self,
+        state: dict,
+        ctx: PipelineContext,
+        current_phase: str,
+        next_phase: str,
+    ) -> PhaseResult:
+        """Perform a phase transition: update state, write, enter new phase."""
+        self._entered.discard(current_phase)
+        state["phase"] = next_phase
+        state["updated_at"] = self._now_iso()
+        state["updated_by"] = "pipeline"
+        from ..sessions.state_store import write_state
+
+        write_state(ctx.files.state, state)
+        self.enter_current_phase(state, ctx)
+        return PhaseResult({})
 
     def handle(
         self, event: WorkflowEvent, state: dict, ctx: PipelineContext
@@ -292,16 +316,9 @@ class WorkflowEventRouter:
         # Apply updates
         state.update(updates)
 
-        # Phase transition: enter new phase explicitly (no recursive handle call)
+        # Phase transition: enter new phase explicitly
         if next_phase is not None:
-            self._entered.discard(phase_name)
-            state["phase"] = next_phase
-            state["updated_at"] = self._now_iso()
-            state["updated_by"] = "pipeline"
-            from ..sessions.state_store import write_state
-
-            write_state(ctx.files.state, state)
-            self.enter_current_phase(state, ctx)
+            self._transition(state, ctx, phase_name, next_phase)
             return {}, None
 
         # Write state if there were updates

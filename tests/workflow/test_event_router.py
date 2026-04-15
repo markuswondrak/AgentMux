@@ -22,6 +22,7 @@ from agentmux.workflow.event_router import (
     path_matches,
     path_matches_any,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.transitions import PipelineContext
 
 
@@ -80,10 +81,10 @@ class MockHandler:
     enter_calls: list = field(default_factory=list)
     handle_calls: list = field(default_factory=list)
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Record enter call and return configured updates."""
         self.enter_calls.append((state.copy(), ctx))
-        return self.enter_updates
+        return PhaseResult(self.enter_updates, None)
 
     def get_event_specs(self):
         """Catch-all für Tests: jedes File-Event dispatcht 'any_file'."""
@@ -450,7 +451,7 @@ class TestIntegration:
 
             def enter(self, state, ctx):
                 workflow_log.append(f"enter:{self.name}")
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -530,7 +531,7 @@ class TestEventSpecRouting:
 
         class SpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -563,7 +564,7 @@ class TestEventSpecRouting:
 
         class SpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -595,7 +596,7 @@ class TestEventSpecRouting:
 
         class SpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -626,7 +627,7 @@ class TestEventSpecRouting:
 
         class SpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -660,7 +661,7 @@ class TestEventSpecRouting:
 
         class EmptySpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return ()
@@ -687,7 +688,7 @@ class TestEventSpecRouting:
 
         class LegacyHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def handle_event(self, event, state, ctx):
                 received.append(event)
@@ -711,7 +712,7 @@ class TestEventSpecRouting:
 
         class MultiSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -749,7 +750,7 @@ class TestEventSpecRouting:
 
         class StatefulSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -793,7 +794,7 @@ class TestEventSpecRouting:
 
         class SpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -848,7 +849,7 @@ class TestToolSpecRouting:
 
         class ToolSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return ()
@@ -888,7 +889,7 @@ class TestToolSpecRouting:
 
         class ToolSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return ()
@@ -929,7 +930,7 @@ class TestToolSpecRouting:
 
         class DualSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -977,7 +978,7 @@ class TestToolSpecRouting:
 
         class ToolSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return ()
@@ -1016,7 +1017,7 @@ class TestToolSpecRouting:
 
         class NoToolSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return ()
@@ -1065,7 +1066,7 @@ class TestEnteredBeforeEnter:
             def enter(self, state, ctx):
                 # Router should have already added phase to _entered
                 entered_during_enter.append(state.get("phase", "") in router._entered)
-                return {}
+                return PhaseResult({}, None)
 
             def handle_event(self, event, state, ctx):
                 return {}, None
@@ -1108,7 +1109,7 @@ class TestPhaseEntryAtTransition:
         class PlanningHandler:
             def enter(self, state, ctx):
                 enter_calls.append("planning")
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -1128,7 +1129,7 @@ class TestPhaseEntryAtTransition:
         class ImplementingHandler:
             def enter(self, state, ctx):
                 enter_calls.append("implementing")
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -1185,7 +1186,7 @@ class TestPreDispatchFilter:
 
         class ToolSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return ()
@@ -1220,7 +1221,7 @@ class TestPreDispatchFilter:
 
         class FileSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -1253,7 +1254,7 @@ class TestPreDispatchFilter:
 
         class FileSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (
@@ -1286,7 +1287,7 @@ class TestPreDispatchFilter:
 
         class FileSpecHandler:
             def enter(self, state, ctx):
-                return {}
+                return PhaseResult({}, None)
 
             def get_event_specs(self):
                 return (

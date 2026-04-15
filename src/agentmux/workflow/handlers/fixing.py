@@ -19,6 +19,7 @@ from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import build_fix_prompt, write_prompt_file
 
 if TYPE_CHECKING:
@@ -37,7 +38,7 @@ class FixingHandler(BaseToolHandler):
             ),
         )
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering fixing phase.
 
         Sends fix prompt to coder.
@@ -59,9 +60,11 @@ class FixingHandler(BaseToolHandler):
                 ctx.files.feature_dir, "coder", state=state
             ),
         )
-        return {
-            "completed_subplans": [],
-        }
+        return PhaseResult(
+            {
+                "completed_subplans": [],
+            }
+        )
 
     def get_event_specs(self) -> tuple[EventSpec, ...]:
         return ()
