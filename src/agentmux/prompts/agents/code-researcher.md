@@ -35,8 +35,4 @@ Your job:
 
 [[placeholder:project_instructions]]
 
-Constraints:
-- Communicate only through files in the session directory.
-- Do not invent facts.
-- Do not ask questions. If the scope is unclear, use your best judgment and document your interpretation.
-- Only write files in the session directory. Do not create or modify any files in the project directory.
+[[shared:research-constraints]]

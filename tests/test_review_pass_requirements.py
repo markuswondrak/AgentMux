@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from agentmux.sessions.state_store import create_feature_files, load_state, write_state
 from agentmux.shared.models import SESSION_DIR_NAMES, AgentConfig
@@ -28,6 +29,12 @@ class FakeRuntime:
         self.calls.append(
             ("send", role, prompt_file.name, display_label, prefix_command)
         )
+
+    def send_reviewers_many(self, reviewer_specs: list) -> dict[str, str]:
+        """Fake send_reviewers_many — records call and returns mock pane mapping."""
+        roles = [spec.role for spec in reviewer_specs]
+        self.calls.append(("send_reviewers_many", roles))
+        return {role: f"%pane_{role}" for role in roles}
 
     def send_many(self, role: str, prompt_specs: list[object]) -> None:
         self.calls.append(
@@ -120,6 +127,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             ctx, state_path = self._make_ctx(tmp_path / "feature")
+            # Create review.md for prompt include expansion
             ctx.files.review.parent.mkdir(parents=True, exist_ok=True)
             ctx.files.review.write_text("verdict: pass\n", encoding="utf-8")
 
@@ -128,19 +136,26 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             write_state(state_path, state)
 
             handler = ReviewingHandler()
-            handler.enter(load_state(state_path), ctx)
+            with (
+                patch(
+                    "agentmux.workflow.handlers.reviewing.write_prompt_file",
+                    return_value=Path("/tmp/prompt.md"),
+                ),
+                patch(
+                    "agentmux.workflow.handlers.reviewing.build_reviewer_logic_prompt",
+                    return_value="reviewer logic prompt",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.reviewing.role_display_label",
+                    return_value="[reviewer_logic] logic",
+                ),
+            ):
+                handler.enter(load_state(state_path), ctx)
 
             self.assertIn(
-                (
-                    "send",
-                    "reviewer_logic",
-                    "review_logic_prompt.md",
-                    "[reviewer_logic] logic",
-                    None,
-                ),
+                ("send_reviewers_many", ["reviewer_logic"]),
                 ctx.runtime.calls,
             )
-            self.assertFalse(ctx.files.review.exists())
 
     def test_reviewing_phase_is_registered(self) -> None:
         self.assertIn("reviewing", PHASE_HANDLERS)
@@ -152,7 +167,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             tmp_path = Path(td)
             ctx, state_path = self._make_ctx(tmp_path / "feature")
             ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-            (ctx.files.review_dir / "review.yaml").write_text(
+            (ctx.files.review_dir / "review_reviewer_logic.yaml").write_text(
                 yaml.dump(
                     {
                         "verdict": "pass",
@@ -164,23 +179,39 @@ class ReviewPassRequirementsTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            # Create review.md for summary prompt include expansion
+            (ctx.files.review_dir / "review.md").write_text(
+                "verdict: pass\n\n## Summary\n\nLGTM, all checks pass.",
+                encoding="utf-8",
+            )
 
             state = load_state(state_path)
             state["phase"] = "reviewing"
+            state["active_reviews"] = {"reviewer_logic": "pending"}
+            state["review_results"] = {}
             write_state(state_path, state)
 
             handler = ReviewingHandler()
             event = WorkflowEvent(kind="review", payload={"payload": {}})
-            updates, next_phase = handler.handle_event(
-                event, load_state(state_path), ctx
-            )
+            with (
+                patch(
+                    "agentmux.workflow.handlers.reviewing.build_reviewer_summary_prompt",
+                    return_value="summary prompt",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.reviewing.write_prompt_file",
+                    return_value=Path("/tmp/prompt.md"),
+                ),
+                patch("agentmux.workflow.handlers.reviewing.send_to_role"),
+            ):
+                updates, next_phase = handler.handle_event(
+                    event, load_state(state_path), ctx
+                )
 
             # On VERDICT:PASS, stays in reviewing (awaiting summary)
             self.assertIsNone(next_phase)
             self.assertTrue(updates.get("awaiting_summary"))
             self.assertEqual("review_passed", updates.get("last_event"))
-            self.assertIn(("finish_many", "coder"), ctx.runtime.calls)
-            self.assertIn(("kill_primary", "coder"), ctx.runtime.calls)
 
     def test_handle_review_passed_ignores_docs_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -201,7 +232,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
                 encoding="utf-8",
             )
             ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-            (ctx.files.review_dir / "review.yaml").write_text(
+            (ctx.files.review_dir / "review_reviewer_logic.yaml").write_text(
                 yaml.dump(
                     {
                         "verdict": "pass",
@@ -213,16 +244,34 @@ class ReviewPassRequirementsTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            # Create review.md for summary prompt include expansion
+            (ctx.files.review_dir / "review.md").write_text(
+                "verdict: pass\n\n## Summary\n\nLGTM, all checks pass.",
+                encoding="utf-8",
+            )
 
             state = load_state(state_path)
             state["phase"] = "reviewing"
+            state["active_reviews"] = {"reviewer_logic": "pending"}
+            state["review_results"] = {}
             write_state(state_path, state)
 
             handler = ReviewingHandler()
             event = WorkflowEvent(kind="review", payload={"payload": {}})
-            updates, next_phase = handler.handle_event(
-                event, load_state(state_path), ctx
-            )
+            with (
+                patch(
+                    "agentmux.workflow.handlers.reviewing.build_reviewer_summary_prompt",
+                    return_value="summary prompt",
+                ),
+                patch(
+                    "agentmux.workflow.handlers.reviewing.write_prompt_file",
+                    return_value=Path("/tmp/prompt.md"),
+                ),
+                patch("agentmux.workflow.handlers.reviewing.send_to_role"),
+            ):
+                updates, next_phase = handler.handle_event(
+                    event, load_state(state_path), ctx
+                )
 
             # Stays in reviewing awaiting summary regardless of doc metadata
             self.assertIsNone(next_phase)
@@ -236,7 +285,7 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             tmp_path = Path(td)
             ctx, state_path = self._make_ctx(tmp_path / "feature")
             ctx.files.review_dir.mkdir(parents=True, exist_ok=True)
-            (ctx.files.review_dir / "review.yaml").write_text(
+            (ctx.files.review_dir / "review_reviewer_logic.yaml").write_text(
                 yaml.dump(
                     {
                         "verdict": "fail",
@@ -258,6 +307,8 @@ class ReviewPassRequirementsTests(unittest.TestCase):
             state = load_state(state_path)
             state["phase"] = "reviewing"
             state["review_iteration"] = 1
+            state["active_reviews"] = {"reviewer_logic": "pending"}
+            state["review_results"] = {}
             write_state(state_path, state)
 
             handler = ReviewingHandler()

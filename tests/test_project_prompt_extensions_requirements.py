@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,8 +46,16 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             (topic_dir / "detail.md").write_text(
                 f"# Detail for {topic_dir_name}\n", encoding="utf-8"
             )
-        if done:
-            (topic_dir / "done").write_text("", encoding="utf-8")
+        if not done:
+            return
+
+        state_file = feature_dir / "state.json"
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        if topic_dir_name.startswith("code-"):
+            state.setdefault("research_tasks", {})[topic_dir_name[5:]] = "done"
+        elif topic_dir_name.startswith("web-"):
+            state.setdefault("web_research_tasks", {})[topic_dir_name[4:]] = "done"
+        state_file.write_text(json.dumps(state), encoding="utf-8")
 
     def _write_builtin_template(
         self, prompts_dir: Path, subdir: str, name: str, content: str
@@ -364,11 +373,16 @@ class ProjectPromptExtensionsRequirementsTests(unittest.TestCase):
             with self.subTest(template=str(template_path)):
                 template = template_path.read_text(encoding="utf-8")
                 self.assertIn("[[placeholder:project_instructions]]", template)
-                # Agent templates use "## Constraints", commands use "Constraints:"
+                # Agent templates use "## Constraints", commands use "Constraints:",
+                # researcher templates use [[shared:research-constraints]]
                 if "## Constraints" in template:
                     constraints_str = "## Constraints"
-                else:
+                elif "Constraints:" in template:
                     constraints_str = "Constraints:"
+                elif "[[shared:research-constraints]]" in template:
+                    constraints_str = "[[shared:research-constraints]]"
+                else:
+                    self.fail(f"No Constraints sentinel found in {template_path}")
                 self.assertIn(constraints_str, template)
                 self.assertLess(
                     template.index("[[placeholder:project_instructions]]"),

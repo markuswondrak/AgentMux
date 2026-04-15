@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -119,17 +120,48 @@ def write_prompt_file(feature_dir: Path, name: str, content: str) -> Path:
 
 
 def _build_research_handoff(files: RuntimeFiles) -> str:
+    """Build a research handoff section from completed research tasks.
+
+    Uses state.json as the source of truth for completion status (the
+    submit_research_done MCP tool writes events there rather than creating
+    physical 'done' marker files).
+    """
     research_dir = files.research_dir
     if not research_dir.is_dir():
         return ""
 
+    # Read completed tasks from state.json
+    state_file = files.feature_dir / "state.json"
+    if not state_file.exists():
+        return ""
+
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    done_code_tasks = {
+        k for k, v in state.get("research_tasks", {}).items() if v == "done"
+    }
+    done_web_tasks = {
+        k for k, v in state.get("web_research_tasks", {}).items() if v == "done"
+    }
+
     references: list[str] = []
     for topic_dir in sorted(path for path in research_dir.iterdir() if path.is_dir()):
-        done_path = topic_dir / "done"
         summary_path = topic_dir / "summary.md"
         detail_path = topic_dir / "detail.md"
-        if not done_path.is_file() or not summary_path.is_file():
+
+        # Determine completion from state based on topic prefix
+        topic = topic_dir.name
+        is_done = False
+        if (
+            topic.startswith("code-")
+            and topic[5:] in done_code_tasks
+            or topic.startswith("web-")
+            and topic[4:] in done_web_tasks
+        ):
+            is_done = True
+
+        if not is_done or not summary_path.is_file():
             continue
+
         references.append(f"- `{files.relative_path(summary_path)}` (primary)")
         if detail_path.is_file():
             references.append(
@@ -226,6 +258,7 @@ def build_reviewer_logic_prompt(
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
             "user_ask_tool": _user_ask_tool_for(agent),
+            "review_role": "reviewer_logic",
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)
@@ -245,6 +278,7 @@ def build_reviewer_quality_prompt(
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
             "user_ask_tool": _user_ask_tool_for(agent),
+            "review_role": "reviewer_quality",
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)
@@ -264,6 +298,7 @@ def build_reviewer_expert_prompt(
             "feature_dir": files.feature_dir,
             "project_dir": files.project_dir,
             "user_ask_tool": _user_ask_tool_for(agent),
+            "review_role": "reviewer_expert",
         },
     )
     return _expand_session_includes(rendered, files.feature_dir)

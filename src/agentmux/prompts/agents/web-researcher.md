@@ -19,7 +19,7 @@ Your job:
 4. If you cannot verify something, say explicitly that you could not find reliable information.
 5. Write `03_research/web-[[placeholder:topic]]/summary.md` for the architect (see format below).
 6. Write `03_research/web-[[placeholder:topic]]/detail.md` for coder/designer agents (see format below).
-7. FINAL STEP ONLY — call `mcp__agentmux__submit_research_done(topic="[[placeholder:topic]]", type="web")` to signal completion to the orchestrator and materialize `03_research/web-[[placeholder:topic]]/done`.
+7. FINAL STEP ONLY — call `mcp__agentmux__submit_research_done(topic="[[placeholder:topic]]", type="web")` to signal completion to the orchestrator.
 
 ## Output format
 
@@ -36,8 +36,4 @@ Your job:
 
 [[placeholder:project_instructions]]
 
-Constraints:
-- Communicate only through files in the session directory.
-- Do not invent facts.
-- Do not ask questions. If the scope is unclear, use your best judgment and document your interpretation.
-- Only write files in the session directory. Do not create or modify any files in the project directory.
+[[shared:research-constraints]]

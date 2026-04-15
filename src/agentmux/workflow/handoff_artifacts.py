@@ -96,7 +96,6 @@ def generate_execution_plan_yaml(data: dict[str, Any]) -> dict[str, Any]:
         )
     return {
         "groups": converted_groups,
-        "review_strategy": data.get("review_strategy", {}),
         "needs_design": data.get("needs_design", False),
         "needs_docs": data.get("needs_docs", False),
         "doc_files": data.get("doc_files", []),
@@ -145,8 +144,21 @@ def _load_review_yaml_data(review_dir: Path) -> dict[str, Any] | None:
 
 
 def review_yaml_has_verdict(review_dir: Path) -> bool:
-    """Return True when review.yaml contains a valid review submission."""
-    return _load_review_yaml_data(review_dir) is not None
+    """Return True when any review YAML in review_dir contains a valid submission.
+
+    Checks the legacy review.yaml path first, then role-specific
+    review_reviewer_*.yaml files written by parallel reviewers.
+    """
+    if _load_review_yaml_data(review_dir) is not None:
+        return True
+    for review_file in review_dir.glob("review_reviewer_*.yaml"):
+        try:
+            data = yaml.safe_load(review_file.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            continue
+        if isinstance(data, dict) and data.get("verdict") in _VALID_REVIEW_VERDICTS:
+            return True
+    return False
 
 
 def load_review_text(

@@ -13,6 +13,7 @@ from agentmux.workflow.phase_helpers import (
     handle_research_request,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import (
     build_product_manager_prompt,
     write_prompt_file,
@@ -58,7 +59,7 @@ class ProductManagementHandler(BaseToolHandler):
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering product_management phase.
 
         Sends product-manager prompt.
@@ -71,7 +72,7 @@ class ProductManagementHandler(BaseToolHandler):
             build_product_manager_prompt(ctx.files, ctx.agents.get("product-manager")),
         )
         send_to_role(ctx, "product-manager", prompt_file)
-        return {}  # No state updates
+        return PhaseResult({})  # No state updates
 
     def _handle_pm_done(
         self,

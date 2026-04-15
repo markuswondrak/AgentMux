@@ -22,6 +22,7 @@ from agentmux.workflow.phase_helpers import (
     reset_markers,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.plan_parser import coder_label_for_subplan
 from agentmux.workflow.prompts import (
     build_coder_subplan_prompt,
@@ -161,7 +162,7 @@ class ImplementingHandler(BaseToolHandler):
             ),
         )
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering implementing phase.
 
         Resets markers and dispatches first group (or whole plan in single-coder mode).
@@ -226,7 +227,7 @@ class ImplementingHandler(BaseToolHandler):
             else:
                 self._dispatch_active_group(ctx, schedule, active_group_index)
 
-        return updates
+        return PhaseResult(updates)
 
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()

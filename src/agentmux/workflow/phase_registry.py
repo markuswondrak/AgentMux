@@ -37,7 +37,7 @@ from .handlers.planning import PlanningHandler
 from .handlers.product_management import ProductManagementHandler
 from .handlers.reviewing import ReviewingHandler
 from .handoff_artifacts import review_yaml_has_verdict
-from .phase_helpers import select_reviewer_type
+from .phase_helpers import select_reviewer_roles
 
 # ---------------------------------------------------------------------------
 # Resume-check helpers (extracted from sessions/state_store.infer_resume_phase)
@@ -145,25 +145,9 @@ def _designing_needed_and_done(feature_dir: Path, state: dict[str, Any]) -> bool
 def _reviewing_startup_role(
     feature_dir: Path, state: dict[str, Any], agents: dict[str, Any]
 ) -> str | None:
-    import yaml
-
-    _ = state
-    ep_path = feature_dir / "04_planning" / "execution_plan.yaml"
-    plan_meta: dict[str, Any] = {}
-    if ep_path.exists():
-        try:
-            loaded = yaml.safe_load(ep_path.read_text(encoding="utf-8"))
-        except (yaml.YAMLError, OSError):
-            loaded = {}
-        if isinstance(loaded, dict):
-            plan_meta = loaded
-
-    reviewer_type = select_reviewer_type(plan_meta)
-    reviewer_role = {
-        "logic": "reviewer_logic",
-        "quality": "reviewer_quality",
-        "expert": "reviewer_expert",
-    }[reviewer_type]
+    _ = feature_dir
+    reviewer_roles = select_reviewer_roles(state)
+    reviewer_role = reviewer_roles[0] if reviewer_roles else "reviewer_logic"
     if reviewer_role in agents:
         return reviewer_role
     return None
