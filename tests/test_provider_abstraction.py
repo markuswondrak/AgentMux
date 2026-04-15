@@ -887,5 +887,99 @@ roles:
         self.assertNotIn("--model", cmd)
 
 
+def test_cursor_provider_in_providers():
+    """cursor provider exists with correct cli, trust_key, and batch_command."""
+    from agentmux.configuration.providers import PROVIDERS, BatchCommandMode
+
+    p = PROVIDERS["cursor"]
+    assert p.cli == "agent"
+    assert p.trust_key == "a"
+    assert p.batch_command is not None
+    assert p.batch_command.verb == "-p"
+    assert p.batch_command.mode == BatchCommandMode.FLAG
+
+
+def test_resolve_agent_threads_trust_key():
+    """resolve_agent with cursor provider produces AgentConfig with trust_key='a'."""
+    from agentmux.configuration.providers import get_provider, resolve_agent
+
+    provider = get_provider("cursor")
+    cfg = resolve_agent(provider, role="coder", model=None, extra_args=[])
+    assert cfg.trust_key == "a"
+
+
+def test_resolve_agent_default_trust_key():
+    """resolve_agent with claude returns AgentConfig with trust_key='Enter'."""
+    from agentmux.configuration.providers import get_provider, resolve_agent
+
+    provider = get_provider("claude")
+    cfg = resolve_agent(provider, role="coder", model=None, extra_args=[])
+    assert cfg.trust_key == "Enter"
+
+
+def test_accept_trust_prompt_uses_trust_key():
+    """When snippet matches, send-keys uses the provided trust_key, not 'Enter'."""
+    from unittest.mock import call, patch
+
+    from agentmux.runtime.pane_io import accept_trust_prompt
+
+    cap_patch = patch(
+        "agentmux.runtime.pane_io.capture_pane", return_value="Allow something here"
+    )
+    with cap_patch, patch("agentmux.runtime.pane_io.run_command") as mock_run:
+        accept_trust_prompt("pane-id", snippet="Allow", trust_key="a")
+        send_keys_calls = [c for c in mock_run.call_args_list if "send-keys" in str(c)]
+        assert any("a" in str(c) for c in send_keys_calls), (
+            f"Expected 'a' in send-keys calls: {mock_run.call_args_list}"
+        )
+        assert (
+            call(["tmux", "send-keys", "-t", "pane-id", "Enter"])
+            not in mock_run.call_args_list
+        )
+
+
+def test_accept_trust_prompt_default_enter():
+    """When no trust_key given, send-keys defaults to 'Enter'."""
+    from unittest.mock import call, patch
+
+    from agentmux.runtime.pane_io import accept_trust_prompt
+
+    cap_patch = patch(
+        "agentmux.runtime.pane_io.capture_pane", return_value="Allow something here"
+    )
+    with cap_patch, patch("agentmux.runtime.pane_io.run_command") as mock_run:
+        accept_trust_prompt("pane-id", snippet="Allow")
+        enter_call = call(["tmux", "send-keys", "-t", "pane-id", "Enter"])
+        assert enter_call in mock_run.call_args_list
+
+
+def test_load_layered_config_cursor_trust_key():
+    """load_layered_config with cursor provider sets trust_key='a' on AgentConfig."""
+    import tempfile
+    from pathlib import Path
+    from unittest.mock import patch
+
+    import yaml
+
+    from agentmux.configuration import load_layered_config
+
+    config = {
+        "version": 2,
+        "defaults": {"provider": "cursor", "model": "claude-3-5-sonnet"},
+    }
+    with tempfile.TemporaryDirectory() as td:
+        project_dir = Path(td)
+        config_dir = project_dir / ".agentmux"
+        config_dir.mkdir()
+        (config_dir / "config.yaml").write_text(yaml.dump(config), encoding="utf-8")
+        with patch(
+            "agentmux.configuration.USER_CONFIG_PATH",
+            project_dir / "nonexistent.yaml",
+        ):
+            loaded = load_layered_config(project_dir)
+
+    assert loaded.agents["coder"].trust_key == "a"
+
+
 if __name__ == "__main__":
     unittest.main()

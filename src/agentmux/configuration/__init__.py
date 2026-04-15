@@ -247,6 +247,8 @@ def _normalize_provider(name: str, raw: Any) -> dict[str, Any]:
     # (preserves builtin values during merge)
     if raw.get("trust_snippet") is not None:
         result["trust_snippet"] = str(raw["trust_snippet"])
+    if raw.get("trust_key") is not None:
+        result["trust_key"] = str(raw["trust_key"])
     if raw.get("batch_subcommand") is not None:
         result["batch_subcommand"] = str(raw["batch_subcommand"])
     if raw.get("batch_command") is not None:
@@ -472,6 +474,7 @@ def _resolve_loaded_config(
             provider=provider_name,
             batch_command=_build_batch_command_from_provider(provider),
             single_coder=bool(provider.get("single_coder", False)),
+            trust_key=str(provider.get("trust_key", "Enter")),
         )
 
     return LoadedConfig(

@@ -238,6 +238,21 @@ providers:
       - --reasoning-effort
       - high
     role_args: {}
+  cursor:
+    command: agent
+    model_flag: --model
+    trust_snippet: "Allow"
+    trust_key: "a"
+    batch_command:
+      verb: "-p"
+      mode: flag
+    default_role_args:
+      - --trust
+    role_args:
+      code-researcher:
+        - --force
+      web-researcher:
+        - --force
   qwen:
     command: qwen
     model_flag: null

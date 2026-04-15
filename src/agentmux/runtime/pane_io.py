@@ -67,6 +67,7 @@ def accept_trust_prompt(
     target_pane: str,
     *,
     snippet: str | None,
+    trust_key: str = "Enter",
     timeout_seconds: float = 3.0,
 ) -> None:
     if snippet is None:
@@ -75,7 +76,7 @@ def accept_trust_prompt(
     while time.time() < deadline:
         if snippet in capture_pane(target_pane):
             run_command(["tmux", "select-pane", "-t", target_pane])
-            run_command(["tmux", "send-keys", "-t", target_pane, "Enter"])
+            run_command(["tmux", "send-keys", "-t", target_pane, trust_key])
             break
         time.sleep(0.2)
     time.sleep(0.5)  # let the CLI tool finish starting up before sending keys

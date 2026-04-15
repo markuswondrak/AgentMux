@@ -10,9 +10,6 @@ First, determine the issue type. If $ARGUMENTS is provided, use it directly. Oth
 
 Current version: !`agentmux --version 2>/dev/null || echo "unknown"`
 
-Recent commits for context:
-!`git log --oneline -10`
-
 ---
 
 If creating a **bug report**, gather these fields from me:
