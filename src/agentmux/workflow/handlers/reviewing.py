@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
@@ -18,10 +19,10 @@ from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
 from agentmux.workflow.handoff_artifacts import generate_review_md
 from agentmux.workflow.phase_helpers import (
-    load_plan_meta,
     select_reviewer_roles,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import (
     build_reviewer_expert_prompt,
     build_reviewer_followup_prompt,
@@ -35,17 +36,19 @@ from agentmux.workflow.prompts import (
 if TYPE_CHECKING:
     from agentmux.workflow.transitions import PipelineContext
 
-_REVIEWER_ROLE_MAP = {
-    "logic": "reviewer_logic",
-    "quality": "reviewer_quality",
-    "expert": "reviewer_expert",
-}
+_ALLOWED_REVIEWER_ROLES = frozenset(
+    {
+        "reviewer_logic",
+        "reviewer_quality",
+        "reviewer_expert",
+    }
+)
 
-# Review prompt builders keyed by role suffix
-_REVIEWER_PROMPT_BUILDERS = {
-    "logic": build_reviewer_logic_prompt,
-    "quality": build_reviewer_quality_prompt,
-    "expert": build_reviewer_expert_prompt,
+# Review prompt builders keyed by full pane role name
+_REVIEWER_PROMPT_BUILDERS_BY_ROLE = {
+    "reviewer_logic": build_reviewer_logic_prompt,
+    "reviewer_quality": build_reviewer_quality_prompt,
+    "reviewer_expert": build_reviewer_expert_prompt,
 }
 
 
@@ -87,24 +90,33 @@ class ReviewingHandler(BaseToolHandler):
     # enter() — parallel reviewer dispatch
     # -------------------------------------------------------------------------
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering reviewing phase.
 
         Dispatches reviewer roles in parallel via send_reviewers_many().
         On resume, skips reviewers that already have results in review_results.
         """
-        plan_meta = load_plan_meta(ctx.files.planning_dir)
-        reviewer_roles = select_reviewer_roles(plan_meta)
+        reviewer_roles = select_reviewer_roles(state)
 
         # Determine which roles still need reviewing (resume support)
         review_results = dict(state.get("review_results", {}))
-        active_reviews = {
-            _REVIEWER_ROLE_MAP[role]: "pending" for role in reviewer_roles
-        }
+        active_reviews = {role: "pending" for role in reviewer_roles}
 
-        # On resume: skip completed reviewers
+        # On resume: ingest pre-existing YAML verdicts before deleting anything
         is_resume = state.get("last_event") == EVENT_RESUMED
         if is_resume:
+            review_iteration = int(state.get("review_iteration", 0))
+            for role in list(active_reviews.keys()):
+                if role not in review_results:
+                    self._ingest_review_yaml(
+                        ctx.files.review_dir,
+                        role,
+                        review_results,
+                        active_reviews,
+                        review_iteration,
+                    )
+
+            # Mark completed from review_results
             for role in list(active_reviews.keys()):
                 if role in review_results:
                     active_reviews[role] = "completed"
@@ -112,21 +124,35 @@ class ReviewingHandler(BaseToolHandler):
             # If all are already completed, transition to summary or fixing
             all_completed = all(s == "completed" for s in active_reviews.values())
             if all_completed and active_reviews:
-                # Check if any review was a fail
                 any_failed = any(
-                    review_results.get(_REVIEWER_ROLE_MAP.get(r, r), {}).get("verdict")
-                    == "fail"
-                    for r in reviewer_roles
+                    review_results.get(r, {}).get("verdict") == "fail"
+                    for r in active_reviews
                 )
                 if any_failed:
-                    return self._trigger_fixing(state, ctx, review_results)
-                return self._request_summary(state, ctx)
+                    updates, next_phase = self._trigger_fixing(
+                        state, ctx, review_results
+                    )
+                else:
+                    result = self._request_summary(state, ctx)
+                    # _request_summary returns tuple (dict, str | None) or PhaseResult
+                    if isinstance(result, PhaseResult):
+                        updates = result.updates
+                        next_phase = result.next_phase
+                    elif isinstance(result, dict):
+                        # Handle dict-only return (e.g., from mocks)
+                        updates = result
+                        next_phase = None
+                    else:
+                        updates, next_phase = result
+                # Ensure ingested results are carried forward
+                updates["review_results"] = review_results
+                updates["active_reviews"] = active_reviews
+                return PhaseResult(updates, next_phase)
 
         # Clear stale review outputs for roles we're about to re-dispatch
-        for role_suffix in reviewer_roles:
-            pane_role = _REVIEWER_ROLE_MAP[role_suffix]
-            if active_reviews.get(pane_role) == "pending":
-                review_file = ctx.files.review_dir / f"review_{pane_role}.yaml"
+        for role in reviewer_roles:
+            if active_reviews.get(role) == "pending":
+                review_file = ctx.files.review_dir / f"review_{role}.yaml"
                 if review_file.exists():
                     review_file.unlink()
 
@@ -139,46 +165,12 @@ class ReviewingHandler(BaseToolHandler):
             ctx.runtime.send_reviewers_many(reviewer_specs)
 
         # Initialize state
-        return {
-            "active_reviews": active_reviews,
-            "review_results": review_results,
-        }
-
-    def _build_single_reviewer_prompt(
-        self,
-        role_suffix: str,
-        pane_role: str,
-        review_iteration: int,
-        ctx: PipelineContext,
-    ) -> str:
-        """Return the prompt text for one reviewer role.
-
-        Picks the compact follow-up prompt when we are past the first review
-        iteration AND the previous iteration's archived review for this role
-        exists. Falls back to the initial role-specific prompt otherwise.
-        """
-        if review_iteration > 0:
-            prev_iter = review_iteration - 1
-            prev_archive = ctx.files.review_dir / f"review_{prev_iter}_{pane_role}.md"
-            fix_request = ctx.files.fix_request
-            if prev_archive.is_file() and fix_request.is_file():
-                fix_request_rel = str(ctx.files.relative_path(fix_request))
-                return build_reviewer_followup_prompt(
-                    ctx.files,
-                    pane_role=pane_role,
-                    fix_request_rel=fix_request_rel,
-                    review_iteration=review_iteration,
-                    agent=ctx.agents.get(pane_role),
-                )
-
-        prompt_builder = _REVIEWER_PROMPT_BUILDERS.get(role_suffix)
-        if prompt_builder is None:
-            agent_prompt = build_reviewer_prompt(
-                ctx.files, agent=ctx.agents.get(pane_role)
-            )
-            command_prompt = build_reviewer_prompt(ctx.files, is_review=True)
-            return f"{agent_prompt}\n\n{command_prompt}"
-        return prompt_builder(ctx.files, ctx.agents.get(pane_role))
+        return PhaseResult(
+            {
+                "active_reviews": active_reviews,
+                "review_results": review_results,
+            }
+        )
 
     def _build_reviewer_specs(
         self,
@@ -197,21 +189,65 @@ class ReviewingHandler(BaseToolHandler):
         """
         review_iteration = int(state.get("review_iteration", 0))
         specs: list[ReviewerSpec] = []
-        for role_suffix in reviewer_roles:
-            pane_role = _REVIEWER_ROLE_MAP[role_suffix]
+        for pane_role in reviewer_roles:
             if active_reviews.get(pane_role) != "pending":
                 continue
 
-            full_prompt = self._build_single_reviewer_prompt(
-                role_suffix, pane_role, review_iteration, ctx
-            )
+            # Extract short role name: "reviewer_logic" -> "logic"
+            short_role = pane_role.replace("reviewer_", "")
 
-            # Write the prompt to a role-specific file
-            prompt_filename = f"review_{role_suffix}_prompt.md"
+            # Follow-up prompt: when we're past the first review iteration AND the
+            # previous iteration's archived review for this role exists (Issue #119)
+            if review_iteration > 0:
+                prev_iter = review_iteration - 1
+                prev_archive = (
+                    ctx.files.review_dir / f"review_{prev_iter}_{pane_role}.md"
+                )
+                fix_request = ctx.files.fix_request
+                if prev_archive.is_file() and fix_request.is_file():
+                    fix_request_rel = str(ctx.files.relative_path(fix_request))
+                    full_prompt = build_reviewer_followup_prompt(
+                        ctx.files,
+                        pane_role=pane_role,
+                        fix_request_rel=fix_request_rel,
+                        review_iteration=review_iteration,
+                        agent=ctx.agents.get(pane_role),
+                    )
+                    # Write and dispatch (short filename: review_logic_prompt.md)
+                    prompt_filename = f"review_{short_role}_prompt.md"
+                    prompt_path = ctx.files.review_dir / prompt_filename
+                    prompt_path.parent.mkdir(parents=True, exist_ok=True)
+                    prompt_path.write_text(full_prompt, encoding="utf-8")
+                    prompt_file = Path(ctx.files.relative_path(prompt_path))
+                    specs.append(
+                        ReviewerSpec(
+                            role=pane_role,
+                            prompt_file=prompt_file,
+                            display_label=role_display_label(
+                                ctx.files.feature_dir, pane_role, state=state
+                            ),
+                        )
+                    )
+                    continue
+
+            # Initial prompt (fallback or first iteration)
+            prompt_builder = _REVIEWER_PROMPT_BUILDERS_BY_ROLE.get(pane_role)
+            if prompt_builder is None:
+                # Fallback: generic reviewer
+                agent_prompt = build_reviewer_prompt(
+                    ctx.files, agent=ctx.agents.get(pane_role)
+                )
+                command_prompt = build_reviewer_prompt(ctx.files, is_review=True)
+                full_prompt = f"{agent_prompt}\n\n{command_prompt}"
+            else:
+                full_prompt = prompt_builder(ctx.files, ctx.agents.get(pane_role))
+
+            # Write the prompt to a role-specific file (short filename)
+            prompt_filename = f"review_{short_role}_prompt.md"
             prompt_path = ctx.files.review_dir / prompt_filename
             prompt_path.parent.mkdir(parents=True, exist_ok=True)
             prompt_path.write_text(full_prompt, encoding="utf-8")
-            prompt_file = ctx.files.relative_path(prompt_path)
+            prompt_file = Path(ctx.files.relative_path(prompt_path))
 
             specs.append(
                 ReviewerSpec(
@@ -223,6 +259,47 @@ class ReviewingHandler(BaseToolHandler):
                 )
             )
         return specs
+
+    # -------------------------------------------------------------------------
+    # _ingest_review_yaml — shared YAML parsing for resume and _handle_review
+    # -------------------------------------------------------------------------
+
+    def _ingest_review_yaml(
+        self,
+        review_dir,
+        role: str,
+        review_results: dict,
+        active_reviews: dict,
+        review_iteration: int,
+    ) -> None:
+        """Parse a role-specific review YAML and seed review_results if valid."""
+        review_file = review_dir / f"review_{role}.yaml"
+        if not review_file.exists():
+            return
+        if role in review_results:
+            return
+
+        try:
+            data = yaml.safe_load(review_file.read_text(encoding="utf-8"))
+        except (yaml.YAMLError, OSError):
+            return
+        if not isinstance(data, dict):
+            return
+        verdict = data.get("verdict", "").lower()
+        if verdict not in ("pass", "fail"):
+            return
+
+        review_text = self._generate_review_text(data)
+        archive_path = review_dir / f"review_{review_iteration}_{role}.md"
+        if review_text is not None:
+            archive_path.write_text(review_text, encoding="utf-8")
+
+        review_results[role] = {
+            "verdict": verdict,
+            "review_text": review_text or "",
+        }
+        if role in active_reviews:
+            active_reviews[role] = "completed"
 
     # -------------------------------------------------------------------------
     # handle_event — dispatch to file or tool event handlers
@@ -263,31 +340,13 @@ class ReviewingHandler(BaseToolHandler):
         review_dir = ctx.files.review_dir
         for review_file in sorted(review_dir.glob("review_reviewer_*.yaml")):
             role_name = review_file.stem[len("review_") :]
-
-            if role_name in review_results:
-                continue
-
-            try:
-                data = yaml.safe_load(review_file.read_text(encoding="utf-8"))
-            except (yaml.YAMLError, OSError):
-                continue
-            if not isinstance(data, dict):
-                continue
-            verdict = data.get("verdict", "").lower()
-            if verdict not in ("pass", "fail"):
-                continue
-
-            review_text = self._generate_review_text(data)
-            archive_path = review_dir / f"review_{review_iteration}_{role_name}.md"
-            if review_text is not None:
-                archive_path.write_text(review_text, encoding="utf-8")
-
-            review_results[role_name] = {
-                "verdict": verdict,
-                "review_text": review_text or "",
-            }
-            if role_name in active_reviews:
-                active_reviews[role_name] = "completed"
+            self._ingest_review_yaml(
+                review_dir,
+                role_name,
+                review_results,
+                active_reviews,
+                review_iteration,
+            )
 
         any_failed = any(r.get("verdict") == "fail" for r in review_results.values())
         if any_failed:
@@ -400,13 +459,16 @@ class ReviewingHandler(BaseToolHandler):
         """Send summary prompt to reviewer and wait for summary.md.
 
         Only called when ALL active reviewers have passed.
-        Sends to reviewer_logic as the coordinator role.
+        Sends to the first nominated role as coordinator.
         """
-        plan_meta = load_plan_meta(ctx.files.planning_dir)
-        reviewer_roles = select_reviewer_roles(plan_meta)
-        # Use the first role as coordinator (typically "logic")
-        first = reviewer_roles[0] if reviewer_roles else "logic"
-        coordinator_role = _REVIEWER_ROLE_MAP.get(first, "reviewer_logic")
+        nominated = state.get("reviewer_nominations") or []
+        coordinator_role = (
+            nominated[0]
+            if isinstance(nominated, list)
+            and nominated
+            and nominated[0] in _ALLOWED_REVIEWER_ROLES
+            else "reviewer_logic"
+        )
 
         # All reviewers have passed — the coder panes are no longer needed.
         # Tear them down before dispatching the summary so we don't leak
@@ -444,12 +506,8 @@ class ReviewingHandler(BaseToolHandler):
         ctx: PipelineContext,
     ) -> tuple[dict, str | None]:
         """Summary is ready — kill all reviewer panes and move to completing."""
-        plan_meta = load_plan_meta(ctx.files.planning_dir)
-        reviewer_roles = select_reviewer_roles(plan_meta)
-
-        # Kill all reviewer panes
-        for role_suffix in reviewer_roles:
-            pane_role = _REVIEWER_ROLE_MAP[role_suffix]
+        # Kill every known reviewer pane — safer than guessing which ones ran.
+        for pane_role in _ALLOWED_REVIEWER_ROLES:
             ctx.runtime.kill_primary(pane_role)
 
         return {"awaiting_summary": False}, "completing"

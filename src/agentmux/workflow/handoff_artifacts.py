@@ -96,7 +96,6 @@ def generate_execution_plan_yaml(data: dict[str, Any]) -> dict[str, Any]:
         )
     return {
         "groups": converted_groups,
-        "review_strategy": data.get("review_strategy", {}),
         "needs_design": data.get("needs_design", False),
         "needs_docs": data.get("needs_docs", False),
         "doc_files": data.get("doc_files", []),

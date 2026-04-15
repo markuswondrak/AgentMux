@@ -18,6 +18,7 @@ from agentmux.workflow.phase_helpers import (
     handle_research_request,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import (
     build_architect_prompt,
     write_prompt_file,
@@ -66,7 +67,7 @@ class ArchitectingHandler(BaseToolHandler):
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering architecting phase."""
         prompt_file = write_prompt_file(
             ctx.files.feature_dir,
@@ -74,7 +75,7 @@ class ArchitectingHandler(BaseToolHandler):
             build_architect_prompt(ctx.files, ctx.agents.get("architect")),
         )
         send_to_role(ctx, "architect", prompt_file)
-        return {}
+        return PhaseResult({})
 
     def _handle_architecture(
         self,
@@ -94,6 +95,13 @@ class ArchitectingHandler(BaseToolHandler):
         ctx.runtime.deactivate("architect")
         ctx.runtime.kill_primary("architect")
 
+        # Extract reviewer nominations from the tool event payload
+        payload = event.payload.get("payload", {})
+        reviewers = payload.get("reviewers")
+        updates: dict[str, object] = {"last_event": EVENT_ARCHITECTURE_WRITTEN}
+        if isinstance(reviewers, list) and reviewers:
+            updates["reviewer_nominations"] = reviewers
+
         _ = md_path  # used by the orchestrator directly; no transformation needed
         # Transition to planning phase (planner takes over)
-        return {"last_event": EVENT_ARCHITECTURE_WRITTEN}, "planning"
+        return updates, "planning"

@@ -12,19 +12,13 @@
 |-------|------|----------|-------------|
 | `version` | int | yes | Must be `2`. |
 | `plan_overview` | string | yes | Human-readable summary of the plan. Becomes the content of `plan.md`. |
-| `review_strategy` | dict | yes | Review configuration. See [review_strategy fields](#review_strategy-fields). |
 | `needs_design` | bool | yes | Whether a design phase is required before implementation. Controls `planning → designing` vs `planning → implementing` transition. |
 | `needs_docs` | bool | yes | Whether documentation updates are in scope. Informational only — does not affect transitions. |
 | `doc_files` | string[] | yes | Planned documentation files to create or update. May be empty (`[]`). |
 | `groups` | list[dict] | yes | Execution groups defining the scheduling order. See [groups fields](#groups-fields). Must have at least one group. |
 | `subplans` | list[dict] | yes | Sub-plans for the coder agents. See [subplans fields](#subplans-fields). Must have at least one sub-plan. |
 
-## `review_strategy` fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `severity` | string | yes | Risk level: `"low"`, `"medium"`, or `"high"`. Controls reviewer type selection. |
-| `focus` | string[] | no | Specific review focus areas. Valid values: `"security"`, `"performance"`, `"testing"`, `"error-handling"`, `"accessibility"`, `"documentation"`, `"maintainability"`. When `severity` is `medium` or `high` and `focus` contains `"security"` or `"performance"`, the expert reviewer is selected. |
+> **Note:** The `review_strategy` field has been removed. The architect nominates reviewers through `submit_architecture(reviewers=[...])` during the architecting phase.
 
 ## `groups` fields
 
@@ -68,9 +62,6 @@ version: 2
 plan_overview: |
   Add JWT authentication to the API. Covers token generation, validation
   middleware, and protected route guards.
-review_strategy:
-  severity: medium
-  focus: [security]
 needs_design: false
 needs_docs: true
 doc_files: [docs/auth.md]

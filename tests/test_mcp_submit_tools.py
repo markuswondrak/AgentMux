@@ -66,7 +66,6 @@ _VALID_PLAN = {
             "tasks": ["Create module", "Write tests"],
         }
     ],
-    "review_strategy": {"severity": "medium", "focus": ["security"]},
     "needs_design": False,
     "needs_docs": True,
     "doc_files": ["docs/api.md"],
@@ -122,6 +121,48 @@ class TestSubmitArchitecture(SubmitToolTestBase):
         with self.assertRaises(ValueError) as ctx:
             submit_architecture()
         self.assertIn("empty", str(ctx.exception))
+
+    def test_reviewers_valid_list_writes_to_log(self):
+        self._write_md()
+        from agentmux.integrations.mcp_server import submit_architecture
+
+        result = submit_architecture(reviewers=["reviewer_logic", "reviewer_expert"])
+        self.assertIn("Architecture submitted", result)
+        entries = self._read_log_entries()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["tool"], "submit_architecture")
+        self.assertEqual(
+            entries[0]["payload"],
+            {"reviewers": ["reviewer_logic", "reviewer_expert"]},
+        )
+
+    def test_reviewers_empty_list_ok(self):
+        self._write_md()
+        from agentmux.integrations.mcp_server import submit_architecture
+
+        result = submit_architecture(reviewers=[])
+        self.assertIn("Architecture submitted", result)
+        entries = self._read_log_entries()
+        # Empty list is explicitly written to the payload (architect nominated "none")
+        self.assertEqual(entries[0]["payload"], {"reviewers": []})
+
+    def test_reviewers_none_ok(self):
+        self._write_md()
+        from agentmux.integrations.mcp_server import submit_architecture
+
+        result = submit_architecture(reviewers=None)
+        self.assertIn("Architecture submitted", result)
+        entries = self._read_log_entries()
+        self.assertEqual(entries[0]["payload"], {})
+
+    def test_reviewers_unknown_role_raises(self):
+        self._write_md()
+        from agentmux.integrations.mcp_server import submit_architecture
+
+        with self.assertRaises(ValueError) as ctx:
+            submit_architecture(reviewers=["reviewer_logic", "bogus"])
+        self.assertIn("bogus", str(ctx.exception))
+        self.assertIn("reviewer_expert", str(ctx.exception))
 
 
 class TestSubmitPlan(SubmitToolTestBase):

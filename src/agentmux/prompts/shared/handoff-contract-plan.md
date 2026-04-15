@@ -8,10 +8,6 @@ plan_overview: |
   # Implementation Plan
 
   Overview of all planned work.
-review_strategy:
-  severity: medium   # low | medium | high
-  focus:
-    - security       # optional focus areas
 needs_design: false
 needs_docs: true
 doc_files:
@@ -44,3 +40,5 @@ subplans:
 After writing the file, call `mcp__agentmux__submit_plan()` (no arguments needed).
 
 Each sub-plan in `subplans` must be referenced exactly once in `groups[].plans[]` via its `index`. Indices must start at 1 and be contiguous (1, 2, 3, …).
+
+> **Note:** Reviewer selection is no longer configured via `review_strategy`. The architect nominates reviewers through `submit_architecture(reviewers=[...])` during the architecting phase.

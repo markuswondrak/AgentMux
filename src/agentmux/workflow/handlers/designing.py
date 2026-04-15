@@ -8,6 +8,7 @@ from agentmux.agent_labels import role_display_label
 from agentmux.workflow.event_catalog import EVENT_DESIGN_WRITTEN
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.phase_helpers import send_to_role
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import build_designer_prompt, write_prompt_file
 
 if TYPE_CHECKING:
@@ -33,7 +34,7 @@ class DesigningHandler:
     def get_event_specs(self) -> tuple[EventSpec, ...]:
         return _SPECS
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering designing phase.
 
         Sends designer prompt.
@@ -51,7 +52,7 @@ class DesigningHandler:
                 ctx.files.feature_dir, "designer", state=state
             ),
         )
-        return {}
+        return PhaseResult({})
 
     def handle_event(
         self,

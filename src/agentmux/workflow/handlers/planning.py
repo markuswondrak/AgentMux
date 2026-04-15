@@ -28,6 +28,7 @@ from agentmux.workflow.phase_helpers import (
     load_plan_meta,
     send_to_role,
 )
+from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import (
     build_change_prompt,
     build_planner_prompt,
@@ -75,7 +76,7 @@ class PlanningHandler(BaseToolHandler):
     def get_event_specs(self) -> Sequence[EventSpec]:
         return ()
 
-    def enter(self, state: dict, ctx: PipelineContext) -> dict:
+    def enter(self, state: dict, ctx: PipelineContext) -> PhaseResult:
         """Called when entering planning phase.
 
         Sends planner prompt (initial or changes).
@@ -95,7 +96,7 @@ class PlanningHandler(BaseToolHandler):
             else build_planner_prompt(ctx.files, ctx.agents.get("planner")),
         )
         send_to_role(ctx, "planner", prompt_file)
-        return {}
+        return PhaseResult({})
 
     def _handle_plan(
         self,

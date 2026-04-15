@@ -280,9 +280,14 @@ class TestResumeSupport:
                 "reviewer_quality": "completed",
                 "reviewer_expert": "completed",
             },
+            "reviewer_nominations": [
+                "reviewer_logic",
+                "reviewer_quality",
+                "reviewer_expert",
+            ],
         }
 
-        with patch.object(handler, "_request_summary", return_value={}):
+        with patch.object(handler, "_request_summary", return_value=({}, None)):
             handler.enter(state, ctx)
         # send_reviewers_many should NOT be called
         ctx.runtime.send_reviewers_many.assert_not_called()
