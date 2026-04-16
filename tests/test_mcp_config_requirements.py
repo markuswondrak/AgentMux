@@ -461,6 +461,100 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 # install() should not be called when config is unchanged
                 mock_install.assert_not_called()
 
+    def test_runtime_mcp_config_injects_feature_dir_when_provided(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+
+            config_path = _create_runtime_mcp_config(
+                [self._server()], project_dir, feature_dir=feature_dir
+            )
+
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux"]["env"]
+            self.assertIn("FEATURE_DIR", server_env)
+            self.assertEqual(str(feature_dir), server_env["FEATURE_DIR"])
+            self.assertIn("PROJECT_DIR", server_env)
+            self.assertEqual(str(project_dir), server_env["PROJECT_DIR"])
+
+    def test_runtime_mcp_config_omits_feature_dir_when_not_provided(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+
+            config_path = _create_runtime_mcp_config([self._server()], project_dir)
+
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux"]["env"]
+            self.assertNotIn("FEATURE_DIR", server_env)
+
+    def test_setup_mcp_injects_feature_dir_and_project_dir_for_non_claude(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            agents = {
+                "architect": AgentConfig(
+                    role="architect",
+                    cli="codex",
+                    model="gpt-5.3-codex",
+                    args=["-a", "never"],
+                ),
+            }
+
+            env_without_pythonpath = {
+                k: v for k, v in os.environ.items() if k != "PYTHONPATH"
+            }
+            with patch.dict(os.environ, env_without_pythonpath, clear=True):
+                updated = setup_mcp(
+                    agents,
+                    [self._server()],
+                    ["architect"],
+                    feature_dir,
+                    project_dir,
+                )
+
+            self.assertEqual(str(feature_dir), updated["architect"].env["FEATURE_DIR"])
+            self.assertEqual(str(project_dir), updated["architect"].env["PROJECT_DIR"])
+
+    def test_setup_mcp_injects_feature_dir_for_claude_in_mcp_json(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            agents = {
+                "architect": AgentConfig(
+                    role="architect",
+                    cli="claude",
+                    model="opus",
+                    args=[],
+                ),
+            }
+
+            updated = setup_mcp(
+                agents,
+                [self._server()],
+                ["architect"],
+                feature_dir,
+                project_dir,
+            )
+
+            # Claude agent env should have FEATURE_DIR
+            self.assertEqual(str(feature_dir), updated["architect"].env["FEATURE_DIR"])
+            # Generated mcp_servers_architect.json should also have FEATURE_DIR
+            mcp_config_path_str = updated["architect"].args[
+                updated["architect"].args.index("--mcp-config") + 1
+            ]
+            mcp_config = json.loads(Path(mcp_config_path_str).read_text())
+            server_env = mcp_config["mcpServers"]["agentmux"]["env"]
+            self.assertEqual(str(feature_dir), server_env["FEATURE_DIR"])
+
 
 class OpenCodeAgentConfiguratorTests(unittest.TestCase):
     """Tests for OpenCodeAgentConfigurator class."""
