@@ -304,6 +304,36 @@ def build_reviewer_expert_prompt(
     return _expand_session_includes(rendered, files.feature_dir)
 
 
+def build_reviewer_followup_prompt(
+    files: RuntimeFiles,
+    pane_role: str,
+    fix_request_rel: str,
+    review_iteration: int,
+    agent: AgentConfig | None = None,
+) -> str:
+    """Build a compact follow-up prompt for a reviewer after a fix iteration.
+
+    Unlike `build_reviewer_<role>_prompt`, this deliberately omits the big
+    initial includes (context.md, architecture.md, plan.md). It only references
+    the aggregated fix_request so the reviewer can focus on whether their prior
+    findings (still in session context) were resolved.
+    """
+    del agent  # reserved for future per-agent tweaks; unused today
+    rendered = _render_template(
+        _load_template(
+            "commands",
+            "review_followup",
+            project_dir=files.project_dir,
+        ),
+        {
+            "review_role": pane_role,
+            "review_iteration": str(review_iteration),
+            "fix_request_file": fix_request_rel,
+        },
+    )
+    return _expand_session_includes(rendered, files.feature_dir)
+
+
 def build_reviewer_summary_prompt(
     files: RuntimeFiles, agent: AgentConfig | None = None
 ) -> str:

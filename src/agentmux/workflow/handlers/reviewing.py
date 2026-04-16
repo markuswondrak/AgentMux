@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
@@ -24,6 +25,7 @@ from agentmux.workflow.phase_helpers import (
 from agentmux.workflow.phase_result import PhaseResult
 from agentmux.workflow.prompts import (
     build_reviewer_expert_prompt,
+    build_reviewer_followup_prompt,
     build_reviewer_logic_prompt,
     build_reviewer_prompt,
     build_reviewer_quality_prompt,
@@ -131,7 +133,17 @@ class ReviewingHandler(BaseToolHandler):
                         state, ctx, review_results
                     )
                 else:
-                    updates, next_phase = self._request_summary(state, ctx)
+                    result = self._request_summary(state, ctx)
+                    # _request_summary returns tuple (dict, str | None) or PhaseResult
+                    if isinstance(result, PhaseResult):
+                        updates = result.updates
+                        next_phase = result.next_phase
+                    elif isinstance(result, dict):
+                        # Handle dict-only return (e.g., from mocks)
+                        updates = result
+                        next_phase = None
+                    else:
+                        updates, next_phase = result
                 # Ensure ingested results are carried forward
                 updates["review_results"] = review_results
                 updates["active_reviews"] = active_reviews
@@ -167,12 +179,58 @@ class ReviewingHandler(BaseToolHandler):
         ctx: PipelineContext,
         state: dict,
     ) -> list[ReviewerSpec]:
-        """Build ReviewerSpec list for roles that still need reviewing."""
+        """Build ReviewerSpec list for roles that still need reviewing.
+
+        When ``state['review_iteration'] > 0`` and the previous iteration's
+        archived review for this role exists, dispatch a compact follow-up
+        prompt (Issue #119) instead of the full initial prompt. Otherwise —
+        and as a defensive fallback when the archive is missing — use the
+        initial reviewer prompt.
+        """
+        review_iteration = int(state.get("review_iteration", 0))
         specs: list[ReviewerSpec] = []
         for pane_role in reviewer_roles:
             if active_reviews.get(pane_role) != "pending":
                 continue
 
+            # Extract short role name: "reviewer_logic" -> "logic"
+            short_role = pane_role.replace("reviewer_", "")
+
+            # Follow-up prompt: when we're past the first review iteration AND the
+            # previous iteration's archived review for this role exists (Issue #119)
+            if review_iteration > 0:
+                prev_iter = review_iteration - 1
+                prev_archive = (
+                    ctx.files.review_dir / f"review_{prev_iter}_{pane_role}.md"
+                )
+                fix_request = ctx.files.fix_request
+                if prev_archive.is_file() and fix_request.is_file():
+                    fix_request_rel = str(ctx.files.relative_path(fix_request))
+                    full_prompt = build_reviewer_followup_prompt(
+                        ctx.files,
+                        pane_role=pane_role,
+                        fix_request_rel=fix_request_rel,
+                        review_iteration=review_iteration,
+                        agent=ctx.agents.get(pane_role),
+                    )
+                    # Write and dispatch (short filename: review_logic_prompt.md)
+                    prompt_filename = f"review_{short_role}_prompt.md"
+                    prompt_path = ctx.files.review_dir / prompt_filename
+                    prompt_path.parent.mkdir(parents=True, exist_ok=True)
+                    prompt_path.write_text(full_prompt, encoding="utf-8")
+                    prompt_file = Path(ctx.files.relative_path(prompt_path))
+                    specs.append(
+                        ReviewerSpec(
+                            role=pane_role,
+                            prompt_file=prompt_file,
+                            display_label=role_display_label(
+                                ctx.files.feature_dir, pane_role, state=state
+                            ),
+                        )
+                    )
+                    continue
+
+            # Initial prompt (fallback or first iteration)
             prompt_builder = _REVIEWER_PROMPT_BUILDERS_BY_ROLE.get(pane_role)
             if prompt_builder is None:
                 # Fallback: generic reviewer
@@ -184,12 +242,12 @@ class ReviewingHandler(BaseToolHandler):
             else:
                 full_prompt = prompt_builder(ctx.files, ctx.agents.get(pane_role))
 
-            # Write the prompt to a role-specific file
-            prompt_filename = f"review_{pane_role}_prompt.md"
+            # Write the prompt to a role-specific file (short filename)
+            prompt_filename = f"review_{short_role}_prompt.md"
             prompt_path = ctx.files.review_dir / prompt_filename
             prompt_path.parent.mkdir(parents=True, exist_ok=True)
             prompt_path.write_text(full_prompt, encoding="utf-8")
-            prompt_file = ctx.files.relative_path(prompt_path)
+            prompt_file = Path(ctx.files.relative_path(prompt_path))
 
             specs.append(
                 ReviewerSpec(
