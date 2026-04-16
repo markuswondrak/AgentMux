@@ -214,9 +214,11 @@ class ReviewingHandler(BaseToolHandler):
                     )
                     # Write and dispatch (short filename: review_logic_prompt.md)
                     prompt_filename = f"review_{short_role}_prompt.md"
-                    prompt_path = ctx.files.review_dir / prompt_filename
-                    prompt_path.parent.mkdir(parents=True, exist_ok=True)
-                    prompt_path.write_text(full_prompt, encoding="utf-8")
+                    prompt_path = write_prompt_file(
+                        ctx.files.feature_dir,
+                        ctx.files.relative_path(ctx.files.review_dir / prompt_filename),
+                        full_prompt,
+                    )
                     specs.append(
                         ReviewerSpec(
                             role=pane_role,
@@ -242,9 +244,11 @@ class ReviewingHandler(BaseToolHandler):
 
             # Write the prompt to a role-specific file (short filename)
             prompt_filename = f"review_{short_role}_prompt.md"
-            prompt_path = ctx.files.review_dir / prompt_filename
-            prompt_path.parent.mkdir(parents=True, exist_ok=True)
-            prompt_path.write_text(full_prompt, encoding="utf-8")
+            prompt_path = write_prompt_file(
+                ctx.files.feature_dir,
+                ctx.files.relative_path(ctx.files.review_dir / prompt_filename),
+                full_prompt,
+            )
 
             specs.append(
                 ReviewerSpec(
