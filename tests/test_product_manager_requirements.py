@@ -283,24 +283,25 @@ class ProductManagerRequirementsTests(unittest.TestCase):
                 ctx.runtime.calls[-1],
             )
 
-    def test_infer_resume_phase_handles_product_management_marker(self) -> None:
+    def test_infer_resume_phase_returns_stored_phase_for_pm_sessions(self) -> None:
+        """PM completion is signalled via tool call; state.json phase is truth."""
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             (feature_dir / PRODUCT_MANAGEMENT_DIR).mkdir(parents=True, exist_ok=True)
 
+            # Non-failed phase is returned as-is regardless of product_manager flag
             state = {"phase": "planning", "product_manager": True}
+            self.assertEqual("planning", infer_resume_phase(feature_dir, state))
+
+            state = {"phase": "product_management", "product_manager": True}
             self.assertEqual(
                 "product_management", infer_resume_phase(feature_dir, state)
             )
 
-            (feature_dir / PRODUCT_MANAGEMENT_DIR / "done").touch()
-            self.assertEqual("planning", infer_resume_phase(feature_dir, state))
-
-    def test_infer_resume_phase_skips_pm_when_architecture_exists_without_done_marker(
+    def test_infer_resume_phase_skips_pm_when_architecture_exists(
         self,
     ) -> None:
-        """PM completion historically omitted 01_product_management/done;
-        infer must not loop to PM."""
+        """In a failed-state walk, PM is considered done when architecture.md exists."""
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
             (feature_dir / PRODUCT_MANAGEMENT_DIR).mkdir(parents=True, exist_ok=True)

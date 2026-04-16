@@ -202,16 +202,6 @@ def load_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
 
 
 def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:
-    # product_management is a flag-gated optional entry point that may override
-    # any stored phase (including non-failed ones).
-    if (
-        bool(state.get("product_manager"))
-        and not (
-            feature_dir / SESSION_DIR_NAMES["product_management"] / "done"
-        ).exists()
-    ):
-        return "product_management"
-
     phase = str(state.get("phase", "planning"))
     if phase != "failed":
         return phase

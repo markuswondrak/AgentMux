@@ -460,10 +460,6 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                 project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
             )
             feature_dir.mkdir(parents=True)
-            (feature_dir / "01_product_management").mkdir(parents=True, exist_ok=True)
-            (feature_dir / "01_product_management" / "done").write_text(
-                "", encoding="utf-8"
-            )
             planning_dir = feature_dir / "04_planning"
             planning_dir.mkdir(parents=True, exist_ok=True)
             architecting_dir = feature_dir / ARCHITECTING_DIR
@@ -559,10 +555,6 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                 project_dir / ".agentmux" / ".sessions" / "20260101-120000-demo"
             )
             feature_dir.mkdir(parents=True)
-            (feature_dir / "01_product_management").mkdir(parents=True, exist_ok=True)
-            (feature_dir / "01_product_management" / "done").write_text(
-                "", encoding="utf-8"
-            )
             planning_dir = feature_dir / PLANNING_DIR
             planning_dir.mkdir(parents=True, exist_ok=True)
             architecting_dir = feature_dir / ARCHITECTING_DIR
