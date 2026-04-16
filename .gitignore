@@ -15,3 +15,9 @@ build/
 
 # OS
 .DS_Store
+
+# Website build artifacts
+website/node_modules/
+website/.vitepress/dist/
+website/.vitepress/cache/
+website/docs/

@@ -40,7 +40,7 @@ Implementation executes the execution plan produced by planning. Coders receive 
 
 ## Fixing {#fixing}
 
-After a `review_fail` event (and below the review loop cap), the pipeline re-enters `06_implementation/` for a fixing pass. The fix prompt is injected based on `07_review/fix_request.md` (see [review.md](review.md)). Fixing completion is signaled by writing `done_1`.
+After a `review_fail` event (and below the review loop cap), the pipeline re-enters `06_implementation/` for a fixing pass. The fix prompt is injected based on `07_review/fix_request.md` (see [07_review.md](07_review.md)). Fixing completion is signaled by writing `done_1`.
 
 ## Transitions
 
