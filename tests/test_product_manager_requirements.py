@@ -296,6 +296,23 @@ class ProductManagerRequirementsTests(unittest.TestCase):
             (feature_dir / PRODUCT_MANAGEMENT_DIR / "done").touch()
             self.assertEqual("planning", infer_resume_phase(feature_dir, state))
 
+    def test_infer_resume_phase_skips_pm_when_architecture_exists_without_done_marker(
+        self,
+    ) -> None:
+        """PM completion historically omitted 01_product_management/done;
+        infer must not loop to PM."""
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            (feature_dir / PRODUCT_MANAGEMENT_DIR).mkdir(parents=True, exist_ok=True)
+            arch_dir = feature_dir / "02_architecting"
+            arch_dir.mkdir(parents=True, exist_ok=True)
+            (arch_dir / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+
+            state = {"phase": "reviewing", "product_manager": True}
+            self.assertEqual("reviewing", infer_resume_phase(feature_dir, state))
+
     def test_runtime_create_uses_product_manager_as_initial_pane_when_selected(
         self,
     ) -> None:

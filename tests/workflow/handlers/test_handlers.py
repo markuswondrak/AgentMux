@@ -122,11 +122,14 @@ class TestProductManagementHandler:
         handler = ProductManagementHandler()
         event = WorkflowEvent(kind="pm_done", payload={"payload": {}})
 
+        mock_ctx.files.product_management_dir.mkdir(parents=True, exist_ok=True)
+
         updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
         mock_ctx.runtime.kill_primary.assert_called_once_with("product-manager")
         assert updates == {"last_event": EVENT_PM_COMPLETED}
         assert next_phase == "architecting"
+        assert (mock_ctx.files.product_management_dir / "done").is_file()
 
     def test_handle_code_research_request(
         self, mock_ctx: MagicMock, empty_state: dict

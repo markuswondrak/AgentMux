@@ -44,7 +44,7 @@ def send_text(target_pane: str, text: str) -> None:
 
 def send_prompt(
     target_pane: str | None,
-    prompt_file: Path,
+    prompt_file: Path | str,
     *,
     prefix_command: str | None = None,
 ) -> None:
@@ -59,7 +59,8 @@ def send_prompt(
     if prefix_command:
         send_text(target_pane, prefix_command)
         time.sleep(1.0)
-    prompt_reference = f"Read and follow the instructions in {prompt_file.resolve()}"
+    path = Path(prompt_file)
+    prompt_reference = f"Read and follow the instructions in {path.resolve()}"
     send_text(target_pane, prompt_reference)
 
 

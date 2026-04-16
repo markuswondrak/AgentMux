@@ -44,6 +44,27 @@ class TmuxPromptReferencesTests(unittest.TestCase):
             )
             self.assertNotIn("line 1", sent[0])
 
+    def test_send_prompt_accepts_str_prompt_path(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            prompt_file = Path(td) / "coder_prompt.md"
+            prompt_file.write_text("content", encoding="utf-8")
+            sent: list[str] = []
+
+            with (
+                patch("agentmux.runtime.pane_io.tmux_pane_exists", return_value=True),
+                patch(
+                    "agentmux.runtime.pane_io.send_text",
+                    side_effect=lambda _pane, text: sent.append(text),
+                ),
+            ):
+                send_prompt("%1", str(prompt_file))
+
+            self.assertEqual(1, len(sent))
+            self.assertEqual(
+                f"Read and follow the instructions in {prompt_file.resolve()}",
+                sent[0],
+            )
+
     def test_tmux_new_session_enables_pane_border_titles(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td) / "feature"
