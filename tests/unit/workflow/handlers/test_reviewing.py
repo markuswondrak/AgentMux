@@ -37,7 +37,8 @@ class FakeContext:
         self.files.completion_dir = tmp_path / "08_completion"
         self.files.completion_dir.mkdir(parents=True)
         self.files.summary = self.files.completion_dir / "summary.md"
-        self.files.relative_path = lambda p: p.relative_to(tmp_path)
+        # Match production FeaturePaths.relative_path (str, forward slashes).
+        self.files.relative_path = lambda p: p.relative_to(tmp_path).as_posix()
         self.files.project_dir = self.project_dir
         self.files.feature_dir = tmp_path
 
@@ -306,6 +307,15 @@ class TestResumeSupport:
             handler.enter(state, ctx)
         # send_reviewers_many SHOULD be called
         ctx.runtime.send_reviewers_many.assert_called_once()
+        (specs,) = ctx.runtime.send_reviewers_many.call_args[0]
+        expected_prompt = ctx.files.review_dir / "review_logic_prompt.md"
+        for spec in specs:
+            assert isinstance(spec.prompt_file, Path)
+            assert spec.prompt_file.is_absolute(), (
+                "ReviewerSpec.prompt_file must be absolute so send_prompt().resolve() "
+                "points at the real file (not cwd-relative)."
+            )
+            assert spec.prompt_file == expected_prompt
 
 
 class TestParallelVerdictFlow:

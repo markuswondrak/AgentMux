@@ -29,7 +29,8 @@ class FakeIntegrationContext:
         self.files.completion_dir = tmp_path / "08_completion"
         self.files.completion_dir.mkdir(parents=True)
         self.files.summary = self.files.completion_dir / "summary.md"
-        self.files.relative_path = lambda p: p.relative_to(tmp_path)
+        # Match production FeaturePaths.relative_path (str, forward slashes).
+        self.files.relative_path = lambda p: p.relative_to(tmp_path).as_posix()
 
         self.runtime = MagicMock()
         self.max_review_iterations = max_review_iterations

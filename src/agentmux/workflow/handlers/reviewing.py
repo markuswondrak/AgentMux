@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
@@ -218,11 +217,10 @@ class ReviewingHandler(BaseToolHandler):
                     prompt_path = ctx.files.review_dir / prompt_filename
                     prompt_path.parent.mkdir(parents=True, exist_ok=True)
                     prompt_path.write_text(full_prompt, encoding="utf-8")
-                    prompt_file = Path(ctx.files.relative_path(prompt_path))
                     specs.append(
                         ReviewerSpec(
                             role=pane_role,
-                            prompt_file=prompt_file,
+                            prompt_file=prompt_path,
                             display_label=role_display_label(
                                 ctx.files.feature_dir, pane_role, state=state
                             ),
@@ -247,12 +245,11 @@ class ReviewingHandler(BaseToolHandler):
             prompt_path = ctx.files.review_dir / prompt_filename
             prompt_path.parent.mkdir(parents=True, exist_ok=True)
             prompt_path.write_text(full_prompt, encoding="utf-8")
-            prompt_file = Path(ctx.files.relative_path(prompt_path))
 
             specs.append(
                 ReviewerSpec(
                     role=pane_role,
-                    prompt_file=prompt_file,
+                    prompt_file=prompt_path,
                     display_label=role_display_label(
                         ctx.files.feature_dir, pane_role, state=state
                     ),
