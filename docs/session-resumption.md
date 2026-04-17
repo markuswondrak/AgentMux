@@ -33,3 +33,7 @@ agentmux resume <feature-dir-or-name>  # Resume specific session by name or path
 15. `implementation_single_coder` is persisted on entering the implementing phase; on resume, the handler restores this setting so the same dispatch mode (whole-plan vs per-group) is used regardless of current agent configuration
 16. After the resumed phase is entered and unapplied tool events are replayed, any still-dispatched research subtasks are restarted from their persisted `03_research/<type>-<topic>/prompt.md` directories
 17. If the prior run failed because a registered tmux agent pane disappeared, the interruption metadata in `state.json` is cleared on resume and a fresh pane is created only when the resumed phase next needs that role
+
+## Worktree Resume
+
+When `state.json` contains `"worktree_enabled": true`, the resume flow calls `WorktreeManager.recreate_if_missing(worktree_path, branch_name)` instead of `GitBranchManager.ensure_branch`.  If the worktree directory was deleted since the last session (e.g. manual cleanup, disk migration), it is transparently re-created at `worktree_path` before the orchestrator restarts.

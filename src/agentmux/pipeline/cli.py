@@ -127,6 +127,7 @@ def handle_run(args: argparse.Namespace, project_dir: Path) -> int:
         name=getattr(args, "name", None),
         keep_session=bool(getattr(args, "keep_session", False)),
         product_manager=bool(getattr(args, "product_manager", False)),
+        worktree=bool(getattr(args, "worktree", False)),
     )
 
 
@@ -331,6 +332,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--product-manager",
         action="store_true",
         help="Enable product-management phase before planning.",
+    )
+    run_parser.add_argument(
+        "--worktree",
+        action="store_true",
+        help="Create a git worktree for this session (enables parallel sessions).",
     )
 
     return parser

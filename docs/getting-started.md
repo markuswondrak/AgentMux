@@ -120,6 +120,24 @@ After review passes, AgentMux asks for approval (unless approval skipping is con
 
 For the full phase catalog with artifacts and transitions, see [Workflow Phases](phases/index.md). For file event protocol details, see [File Protocol](file-protocol.md). For approval/commit flow, see [Completion Phase](phases/08_completion.md).
 
+## Parallel Sessions with `--worktree`
+
+The `--worktree` flag creates a [git worktree](https://git-scm.com/docs/git-worktree) for the session instead of switching the main checkout:
+
+```bash
+agentmux run --worktree "add user auth"
+```
+
+The worktree is created at:
+
+```
+<parent-dir>/<repo>-worktrees/<feature-slug>/
+```
+
+This lets you run multiple independent AgentMux sessions in the same repository at the same time — each session lives on its own branch in its own directory, so there are no branch-switching conflicts between sessions.  You can attach to each session's tmux session separately and observe them in parallel.
+
+When a worktree session resumes (via `agentmux resume`), the worktree directory is automatically re-created if it was deleted since the last run.
+
 ## Tmux Essentials
 
 If you are new to tmux, these commands are enough to observe runs:

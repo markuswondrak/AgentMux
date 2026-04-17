@@ -520,6 +520,10 @@ class ResumeApplicationFlowTests(unittest.TestCase):
                     return_value=None,
                 ) as start_mock,
                 patch(
+                    "agentmux.integrations.worktree_manager.WorktreeManager.prune_orphaned",
+                    return_value=[],
+                ),
+                patch(
                     "agentmux.pipeline.application.subprocess.run",
                     return_value=None,
                 ) as attach_mock,
@@ -829,6 +833,10 @@ class ExitMessagingTests(unittest.TestCase):
                     app,
                     "_start_background_orchestrator",
                     return_value=None,
+                ),
+                patch(
+                    "agentmux.integrations.worktree_manager.WorktreeManager.prune_orphaned",
+                    return_value=[],
                 ),
                 patch(
                     "agentmux.pipeline.application.subprocess.run",

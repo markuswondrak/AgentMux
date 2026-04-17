@@ -132,17 +132,7 @@ class ReviewingHandler(BaseToolHandler):
                         state, ctx, review_results
                     )
                 else:
-                    result = self._request_summary(state, ctx)
-                    # _request_summary returns tuple (dict, str | None) or PhaseResult
-                    if isinstance(result, PhaseResult):
-                        updates = result.updates
-                        next_phase = result.next_phase
-                    elif isinstance(result, dict):
-                        # Handle dict-only return (e.g., from mocks)
-                        updates = result
-                        next_phase = None
-                    else:
-                        updates, next_phase = result
+                    updates, next_phase = self._request_summary(state, ctx)
                 # Ensure ingested results are carried forward
                 updates["review_results"] = review_results
                 updates["active_reviews"] = active_reviews
@@ -178,14 +168,7 @@ class ReviewingHandler(BaseToolHandler):
         ctx: PipelineContext,
         state: dict,
     ) -> list[ReviewerSpec]:
-        """Build ReviewerSpec list for roles that still need reviewing.
-
-        When ``state['review_iteration'] > 0`` and the previous iteration's
-        archived review for this role exists, dispatch a compact follow-up
-        prompt (Issue #119) instead of the full initial prompt. Otherwise —
-        and as a defensive fallback when the archive is missing — use the
-        initial reviewer prompt.
-        """
+        """Build ReviewerSpec list for roles that still need reviewing."""
         review_iteration = int(state.get("review_iteration", 0))
         specs: list[ReviewerSpec] = []
         for pane_role in reviewer_roles:
