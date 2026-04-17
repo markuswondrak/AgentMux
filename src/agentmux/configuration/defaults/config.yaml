@@ -246,12 +246,12 @@ providers:
     batch_command:
       verb: "-p"
       mode: flag
-    default_role_args:
-      - --trust
     role_args:
       code-researcher:
+        - --trust
         - --force
       web-researcher:
+        - --trust
         - --force
   qwen:
     command: qwen

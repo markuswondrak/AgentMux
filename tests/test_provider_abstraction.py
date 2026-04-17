@@ -897,6 +897,10 @@ def test_cursor_provider_in_providers():
     assert p.batch_command is not None
     assert p.batch_command.verb == "-p"
     assert p.batch_command.mode == BatchCommandMode.FLAG
+    # --trust is headless-only; not in global defaults (interactive panes)
+    assert not p.default_role_args
+    assert p.default_args["code-researcher"] == ["--trust", "--force"]
+    assert p.default_args["web-researcher"] == ["--trust", "--force"]
 
 
 def test_resolve_agent_threads_trust_key():
@@ -979,6 +983,38 @@ def test_load_layered_config_cursor_trust_key():
             loaded = load_layered_config(project_dir)
 
     assert loaded.agents["coder"].trust_key == "a"
+
+
+def test_load_layered_config_cursor_trust_flag_only_on_batch_researchers() -> None:
+    """Interactive roles omit --trust; batch researchers get --trust and --force."""
+    import tempfile
+    from pathlib import Path
+    from unittest.mock import patch
+
+    import yaml
+
+    from agentmux.configuration import load_layered_config
+
+    config = {
+        "version": 2,
+        "defaults": {"provider": "cursor", "model": "gemini-3-flash"},
+    }
+    with tempfile.TemporaryDirectory() as td:
+        project_dir = Path(td)
+        config_dir = project_dir / ".agentmux"
+        config_dir.mkdir()
+        (config_dir / "config.yaml").write_text(yaml.dump(config), encoding="utf-8")
+        with patch(
+            "agentmux.configuration.USER_CONFIG_PATH",
+            project_dir / "nonexistent.yaml",
+        ):
+            loaded = load_layered_config(project_dir)
+
+    for role in ("planner", "architect", "coder"):
+        args = loaded.agents[role].args
+        assert "--trust" not in args, f"{role} must not use --trust"
+    assert loaded.agents["code-researcher"].args == ["--trust", "--force"]
+    assert loaded.agents["web-researcher"].args == ["--trust", "--force"]
 
 
 if __name__ == "__main__":
