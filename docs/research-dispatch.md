@@ -10,14 +10,13 @@ The `agentmux` MCP server exposes research dispatch tools and structured submiss
 
 ### Research dispatch
 
-- `agentmux_research_dispatch_code(topic, context, questions, feature_dir, scope_hints)`
-- `agentmux_research_dispatch_web(topic, context, questions, feature_dir, scope_hints)`
+- `agentmux_research_dispatch_code(topic, context, questions, scope_hints)`
+- `agentmux_research_dispatch_web(topic, context, questions, scope_hints)`
 
 Validation and behavior:
 
 - `topic` must be a slug: lowercase alphanumeric words joined by `-` (for example `auth-module`)
 - `questions` must include at least one non-empty item
-- `feature_dir` should be the session directory shown in the architect or product-manager prompt
 - `scope_hints` may be omitted, passed as a single string, or passed as a list of strings; list form is preferred
 - dispatch writes `03_research/<type>-<topic>/request.md` with `## Context`, `## Questions`, and `## Scope hints`
 
@@ -27,7 +26,7 @@ Typical flow:
 2. Stop and wait idle. AgentMux will send the owner agent a completion message when each topic finishes.
 3. Read `summary.md` first. `detail.md` remains available when deeper implementation context is needed.
 
-Research completion stays file-driven: the orchestrator detects `done`, updates task state, and sends a follow-up message pointing the owner agent to `summary.md`. `detail.md` remains available as a secondary artifact. AgentMux passes the active session directory explicitly as `feature_dir`, so the server does not rely on provider-specific environment propagation.
+Research completion stays file-driven: the orchestrator detects `done`, updates task state, and sends a follow-up message pointing the owner agent to `summary.md`. `detail.md` remains available as a secondary artifact. The session directory is injected as `FEATURE_DIR` into the MCP server process env by the orchestrator — agents do not need to pass it as a tool argument.
 
 Completed research topics are also used for coder handoff: coder prompts include references to `03_research/<type>-<topic>/summary.md` (and `detail.md` when present) for topics that have a `done` marker.
 
@@ -55,6 +54,6 @@ AgentMux expects an MCP registration named `agentmux` for the effective `archite
 
 `agentmux init` and interactive pipeline startup prompt to create that entry only when it is missing. The registered command uses the current Python interpreter and launches `-m agentmux.integrations.mcp_server`.
 
-For each run, AgentMux may inject `PYTHONPATH` into the launched `architect` / `product-manager` process so the MCP server can import the project checkout. Feature routing now comes from the `feature_dir` MCP tool argument.
+For each run, AgentMux injects `PYTHONPATH`, `FEATURE_DIR`, and `PROJECT_DIR` into the agent process env and into the per-role MCP server config so the MCP server subprocess can locate session files without requiring agents to re-pass the path.
 
 For Claude, default provider args allow MCP calls via `mcp__agentmux__*` in `--allowedTools`.

@@ -130,7 +130,6 @@ def research_dispatch_code(
     topic: str,
     context: str,
     questions: list[str],
-    feature_dir: str | None = None,
     scope_hints: str | list[str] | None = None,
 ) -> str:
     """Dispatch a code-research task."""
@@ -144,7 +143,7 @@ def research_dispatch_code(
         "scope_hints": normalized_scope_hints,
         "research_type": "code",
     }
-    append_tool_event(_log_path(feature_dir), "research_dispatch_code", payload)
+    append_tool_event(_log_path(), "research_dispatch_code", payload)
     return f"Code research on '{normalized_topic}' dispatched."
 
 
@@ -153,7 +152,6 @@ def research_dispatch_web(
     topic: str,
     context: str,
     questions: list[str],
-    feature_dir: str | None = None,
     scope_hints: str | list[str] | None = None,
 ) -> str:
     """Dispatch a web-research task."""
@@ -167,7 +165,7 @@ def research_dispatch_web(
         "scope_hints": normalized_scope_hints,
         "research_type": "web",
     }
-    append_tool_event(_log_path(feature_dir), "research_dispatch_web", payload)
+    append_tool_event(_log_path(), "research_dispatch_web", payload)
     return f"Web research on '{normalized_topic}' dispatched."
 
 
