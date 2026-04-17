@@ -6,7 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from ...shared.models import AgentConfig, ProjectPaths
-from .configurators import _python_command
+from .configurators import _provider_key, _python_command
 from .models import ROLE_TOOLS, McpServerSpec
 
 
@@ -55,6 +55,75 @@ def _role_servers(servers: list[McpServerSpec], role: str) -> list[McpServerSpec
         )
         for s in servers
     ]
+
+
+def _inject_cursor_mcp_env(
+    project_dir: Path,
+    role_servers_list: list[list[McpServerSpec]],
+    feature_dir: Path,
+) -> None:
+    """Embed session env vars into .cursor/mcp.json for each MCP server.
+
+    Cursor CLI does not inherit the parent process env when spawning MCP server
+    subprocesses, so FEATURE_DIR, PROJECT_DIR, PYTHONPATH, and
+    AGENTMUX_ALLOWED_TOOLS must be written directly into .cursor/mcp.json.
+
+    When multiple cursor roles share the same server, AGENTMUX_ALLOWED_TOOLS
+    values are merged (union) so the single shared config file covers all roles.
+    """
+    config_path = project_dir / ".cursor" / "mcp.json"
+    if not config_path.exists():
+        return
+
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+
+    mcp_servers = data.get("mcpServers")
+    if not isinstance(mcp_servers, dict):
+        return
+
+    # Collect merged AGENTMUX_ALLOWED_TOOLS and representative spec per server
+    merged_tools: dict[str, set[str]] = {}
+    base_specs: dict[str, McpServerSpec] = {}
+    for role_servers in role_servers_list:
+        for spec in role_servers:
+            if spec.name not in base_specs:
+                base_specs[spec.name] = spec
+                merged_tools[spec.name] = set()
+            allowed = spec.env.get("AGENTMUX_ALLOWED_TOOLS", "")
+            if allowed:
+                merged_tools[spec.name].update(t for t in allowed.split(",") if t)
+
+    changed = False
+    for server_name, spec in base_specs.items():
+        if server_name not in mcp_servers:
+            continue
+
+        server_env: dict[str, str] = {
+            "PYTHONPATH": _compose_pythonpath(
+                project_dir, os.environ.get("PYTHONPATH")
+            ),
+            "PROJECT_DIR": str(project_dir),
+            "FEATURE_DIR": str(feature_dir),
+        }
+        for k, v in spec.env.items():
+            if k != "AGENTMUX_ALLOWED_TOOLS":
+                server_env[k] = v
+        tools = merged_tools.get(server_name, set())
+        if tools:
+            server_env["AGENTMUX_ALLOWED_TOOLS"] = ",".join(sorted(tools))
+
+        entry = mcp_servers[server_name]
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("env") != server_env:
+            entry["env"] = server_env
+            changed = True
+
+    if changed:
+        config_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def create_runtime_mcp_config(
@@ -143,6 +212,7 @@ def setup_mcp(
     starts from the JSON config) inherits them too.
     """
     updated_agents = dict(agents)
+    cursor_role_servers: list[list[McpServerSpec]] = []
     for role in roles:
         agent = updated_agents.get(role)
         if agent is None:
@@ -167,7 +237,15 @@ def setup_mcp(
             )
             args.extend(["--mcp-config", str(role_config_path)])
 
+        # Track cursor agents so we can update .cursor/mcp.json after the loop
+        if _provider_key(agent) == "cursor":
+            cursor_role_servers.append(role_specific_servers)
+
         updated_agents[role] = replace(agent, env=env, args=args)
+
+    if cursor_role_servers:
+        _inject_cursor_mcp_env(project_dir, cursor_role_servers, feature_dir)
+
     return updated_agents
 
 

@@ -555,6 +555,159 @@ class McpConfigRequirementsTests(unittest.TestCase):
             server_env = mcp_config["mcpServers"]["agentmux"]["env"]
             self.assertEqual(str(feature_dir), server_env["FEATURE_DIR"])
 
+    def test_setup_mcp_injects_env_into_cursor_mcp_json_for_cursor_agent(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            # Create .cursor/mcp.json as it would be after `agentmux init`
+            cursor_mcp_dir = project_dir / ".cursor"
+            cursor_mcp_dir.mkdir()
+            cursor_mcp_json = cursor_mcp_dir / "mcp.json"
+            cursor_mcp_json.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "agentmux": {
+                                "type": "stdio",
+                                "command": sys.executable,
+                                "args": ["-m", "agentmux.integrations.mcp_server"],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=["--trust"],
+                    provider="cursor",
+                ),
+            }
+
+            updated = setup_mcp(
+                agents,
+                [self._server()],
+                ["planner"],
+                feature_dir,
+                project_dir,
+            )
+
+            # Cursor agent process env still gets FEATURE_DIR/PROJECT_DIR
+            self.assertEqual(str(feature_dir), updated["planner"].env["FEATURE_DIR"])
+            self.assertEqual(str(project_dir), updated["planner"].env["PROJECT_DIR"])
+
+            # .cursor/mcp.json must now have an env section with session vars
+            config = json.loads(cursor_mcp_json.read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux"]["env"]
+            self.assertEqual(str(feature_dir), server_env["FEATURE_DIR"])
+            self.assertEqual(str(project_dir), server_env["PROJECT_DIR"])
+            self.assertIn("PYTHONPATH", server_env)
+            self.assertIn("AGENTMUX_ALLOWED_TOOLS", server_env)
+            # planner role tools
+            tools = set(server_env["AGENTMUX_ALLOWED_TOOLS"].split(","))
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
+
+            self.assertEqual(tools, set(ROLE_TOOLS["planner"]))
+
+    def test_setup_mcp_skips_cursor_injection_when_no_cursor_mcp_json(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            # .cursor/mcp.json does NOT exist
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=["--trust"],
+                    provider="cursor",
+                ),
+            }
+
+            # Must not raise even when .cursor/mcp.json is absent
+            updated = setup_mcp(
+                agents,
+                [self._server()],
+                ["planner"],
+                feature_dir,
+                project_dir,
+            )
+
+            # Agent process env is still injected correctly
+            self.assertEqual(str(feature_dir), updated["planner"].env["FEATURE_DIR"])
+
+    def test_setup_mcp_merges_allowed_tools_for_multiple_cursor_roles(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            cursor_mcp_dir = project_dir / ".cursor"
+            cursor_mcp_dir.mkdir()
+            cursor_mcp_json = cursor_mcp_dir / "mcp.json"
+            cursor_mcp_json.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "agentmux": {
+                                "type": "stdio",
+                                "command": sys.executable,
+                                "args": ["-m", "agentmux.integrations.mcp_server"],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=["--trust"],
+                    provider="cursor",
+                ),
+                "coder": AgentConfig(
+                    role="coder",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=["--trust"],
+                    provider="cursor",
+                ),
+            }
+
+            setup_mcp(
+                agents,
+                [self._server()],
+                ["planner", "coder"],
+                feature_dir,
+                project_dir,
+            )
+
+            config = json.loads(cursor_mcp_json.read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux"]["env"]
+            tools = set(server_env["AGENTMUX_ALLOWED_TOOLS"].split(","))
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
+
+            expected = set(ROLE_TOOLS["planner"]) | set(ROLE_TOOLS["coder"])
+            self.assertEqual(tools, expected)
+
 
 class OpenCodeAgentConfiguratorTests(unittest.TestCase):
     """Tests for OpenCodeAgentConfigurator class."""

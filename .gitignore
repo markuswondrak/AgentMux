@@ -21,3 +21,4 @@ website/node_modules/
 website/.vitepress/dist/
 website/.vitepress/cache/
 website/docs/
+.cursor/mcp.json
