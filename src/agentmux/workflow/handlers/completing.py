@@ -86,6 +86,49 @@ class CompletingHandler:
 
         Launches native TUI or auto-approves if configured.
         """
+        # Ensure the completion UI has a summary to display. The UI reads
+        # 08_completion/summary.md and otherwise shows "_No summary available._".
+        summary_path = ctx.files.completion_dir / "summary.md"
+        if not summary_path.exists():
+            review_results = (
+                state.get("review_results") if isinstance(state, dict) else None
+            )
+            lines: list[str] = []
+            if isinstance(review_results, dict) and review_results:
+                lines.append("## Review results")
+                for role, result in sorted(review_results.items()):
+                    if not isinstance(result, dict):
+                        continue
+                    verdict = str(result.get("verdict", "unknown"))
+                    lines.append(f"- **{role}**: {verdict}")
+                lines.append("")
+                # Include a short excerpt so users can see context quickly.
+                for role, result in sorted(review_results.items()):
+                    if not isinstance(result, dict):
+                        continue
+                    review_text = str(result.get("review_text", "")).strip()
+                    if not review_text:
+                        continue
+                    lines.append(f"### {role}")
+                    # Keep it short; the full details live in 07_review/ archives.
+                    snippet = "\n".join(review_text.splitlines()[:20]).strip()
+                    lines.append(snippet)
+                    lines.append("")
+            else:
+                # Fallback: if we have an aggregated fix request, show that.
+                fix_path = ctx.files.fix_request
+                if fix_path.exists():
+                    lines.append("## Review feedback")
+                    lines.append(fix_path.read_text(encoding="utf-8").strip())
+                    lines.append("")
+
+            if lines:
+                summary_path.parent.mkdir(parents=True, exist_ok=True)
+                summary_path.write_text(
+                    "\n".join(lines).rstrip() + "\n",
+                    encoding="utf-8",
+                )
+
         approval_path = ctx.files.completion_dir / "approval.json"
         if approval_path.exists():
             approval_path.unlink()

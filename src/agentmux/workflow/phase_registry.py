@@ -45,14 +45,16 @@ from .phase_helpers import select_reviewer_roles
 
 
 def _pm_done(feature_dir: Path, state: dict[str, Any]) -> bool:
-    """True if the PM phase is not enabled or its done marker exists.
+    """True if the PM phase is not enabled or a downstream artifact exists.
 
-    This check runs as part of "failed" state recovery (the registry walk).
-    The unconditional PM pre-check in infer_resume_phase() handles non-failed states.
+    PM completion is signalled via the submit_pm_done MCP tool call, which
+    transitions state.json to the next phase. No done-marker file is written.
+    We use architecture.md as a proxy: if it exists, the architect has started
+    and PM is unambiguously done.
     """
     if not bool(state.get("product_manager")):
         return True  # Phase not requested for this run
-    return (feature_dir / "01_product_management" / "done").exists()
+    return (feature_dir / "02_architecting" / "architecture.md").exists()
 
 
 def _first_available_role(roles: tuple[str, ...], agents: dict[str, Any]) -> str | None:

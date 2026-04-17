@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48">
+  <defs>
+    <linearGradient id="lg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0051ae"/>
+      <stop offset="1" stop-color="#0969da"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="4" width="40" height="40" rx="10" fill="url(#lg)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 33 L16 13 L23 33"/>
+    <path d="M11 26 L21 26"/>
+    <path d="M27 33 L27 13 L33 21 L27 21"/>
+  </g>
+  <text x="52" y="32" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="700" letter-spacing="-0.02em" fill="#171c22">AgentMux</text>
+</svg>

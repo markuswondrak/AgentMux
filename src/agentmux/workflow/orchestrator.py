@@ -95,19 +95,42 @@ class PipelineOrchestrator:
     def _handle_interruption(self, event: WorkflowEvent, ctx: PipelineContext) -> None:
         """Handle pane exit interruption.
 
-        Notifies the appropriate agent if a researcher subagent crashed,
-        persists the interruption report, and sets the exit code.
+        For batch agent (researcher) panes that already produced ``summary.md``,
+        treats the exit as a normal task completion: finishes the task, notifies
+        the owner, and continues the pipeline without canceling.
+
+        For any other unexpected pane exit (genuine crash, or researcher that
+        exited before producing output), persists an interruption report and
+        sets the exit code to 130.
         """
         payload = event.payload
         role = str(payload.get("role", ""))
         task_id = payload.get("task_id")
         pane_scope = str(payload.get("pane_scope", ""))
 
-        # Check if this is a researcher subagent that crashed
         if role in BATCH_AGENT_ROLES and task_id and pane_scope == "parallel":
             state = load_state(ctx.files.state)
             owner = self._determine_research_owner(state, role)
 
+            # Determine which research directory this task used
+            prefix = "code-" if role == "code-researcher" else "web-"
+            research_dir = ctx.files.research_dir / f"{prefix}{task_id}"
+            summary_exists = (research_dir / "summary.md").exists()
+
+            if summary_exists and owner:
+                # Researcher finished successfully — treat as normal completion
+                from ..sessions.state_store import write_state
+                from .phase_helpers import notify_research_complete
+
+                state_updates, _ = notify_research_complete(
+                    role, str(task_id), state, ctx, owner
+                )
+                if state_updates:
+                    state.update(state_updates)
+                    write_state(ctx.files.state, state)
+                return
+
+            # No output produced (crash) — notify owner and cancel
             if owner:
                 message = str(payload.get("message", "Task failed")).strip()
                 ctx.runtime.notify(

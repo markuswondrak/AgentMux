@@ -50,7 +50,7 @@ def mock_ctx(tmp_path: Path) -> MagicMock:
     ctx.files.context = tmp_path / "context.md"
     ctx.files.architecture = tmp_path / "02_architecting" / "architecture.md"
     ctx.files.project_dir = tmp_path.parent
-    ctx.files.relative_path = lambda p: str(p.relative_to(tmp_path))
+    ctx.files.relative_path = lambda p: p.relative_to(tmp_path).as_posix()
     ctx.files.state = tmp_path / "state.json"
     ctx.agents = {}
     ctx.max_review_iterations = 3

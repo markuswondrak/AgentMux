@@ -3,6 +3,7 @@ version: 2
 defaults:
   session_name: agentmux
   provider: copilot
+  model: gpt-5.4
   max_review_iterations: 3
 
 roles:

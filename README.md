@@ -5,6 +5,8 @@
 
 **Run a full multi-agent software pipeline using the AI subscriptions you already have.**
 
+**Website & Docs:** https://markuswondrak.github.io/AgentMux/
+
 AgentMux orchestrates a structured PM → Architect → Plan → Code → Review → Done workflow across `claude`, `codex`, `gemini`, `opencode`, `copilot`, and `qwen` — driving them through tmux, not the API. No pay-per-token. No new credentials. Just your existing CLI tools working in concert.
 
 ---

@@ -64,4 +64,5 @@ See [Artifact: review.yaml](../artifacts/review-yaml.md) for the full schema and
 
 - If `review.md` is missing when downstream prompts need it, AgentMux materializes it automatically from `review.yaml`.
 - The reviewer also writes `08_completion/summary.md` after a pass verdict (while still in `reviewing` phase with `awaiting_summary: true` in state), before the pipeline transitions to `completing`.
+- **Post-fix follow-up prompt**: When re-entering `reviewing` after a `fixing` iteration (`review_iteration > 0`) and the previous iteration's role-specific archive `review_{prev}_{pane_role}.md` exists, the handler dispatches a compact follow-up prompt built from `prompts/commands/review_followup.md` instead of the full initial prompt. It references only the reviewer's own prior archive and the aggregated `fix_request.md` — no `context.md`, `architecture.md`, or `plan.md` includes. If the archive is missing (e.g. the previous round was killed), the handler falls back to the initial prompt.
 - See [Handoff Contracts](../handoff-contracts.md#review) for full validation rules applied to `review.yaml`.
