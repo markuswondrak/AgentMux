@@ -16,6 +16,7 @@ import yaml
 
 from agentmux.workflow.handlers.reviewing import ReviewingHandler
 from agentmux.workflow.handoff_artifacts import review_yaml_has_verdict
+from agentmux.workflow.phase_result import PhaseResult
 
 
 class FakeContext:
@@ -316,6 +317,34 @@ class TestResumeSupport:
                 "points at the real file (not cwd-relative)."
             )
             assert spec.prompt_file == expected_prompt
+
+    def test_enter_clears_stale_review_results_for_new_iteration(self, tmp_path):
+        """When re-entering reviewing (not resume), stale review_results must not
+        block new YAML ingestion.
+        """
+        ctx = FakeContext(tmp_path)
+        handler = ReviewingHandler()
+
+        state = {
+            "last_event": "review_failed",  # not a resume path
+            "review_iteration": 1,
+            "reviewer_nominations": ["reviewer_logic", "reviewer_expert"],
+            # stale results from prior iteration (logic failed previously)
+            "review_results": {
+                "reviewer_logic": {"verdict": "fail", "review_text": "old fail"},
+                "reviewer_expert": {"verdict": "pass", "review_text": "old pass"},
+            },
+        }
+
+        result = handler.enter(state, ctx)
+        assert isinstance(result, PhaseResult)
+        updates = result.updates
+        # On a fresh entry (not resume), we expect a clean slate so new review
+        # YAMLs can be ingested.
+        assert updates["review_results"] == {}, (
+            "stale review_results should be cleared for non-resume re-dispatch; "
+            "otherwise _ingest_review_yaml will ignore new files."
+        )
 
 
 class TestParallelVerdictFlow:
@@ -626,6 +655,10 @@ class TestFollowupPromptAfterFix:
         assert "# Context" not in content
         # Iteration number is shown so the reviewer knows it's a re-review.
         assert "iteration" in content.lower()
+
+        # Must include role arg in submit_review call (critical: omitting role
+        # would cause the tool to read the wrong YAML on follow-up submissions).
+        assert 'submit_review(role="reviewer_logic")' in content
 
     def test_followup_falls_back_to_initial_when_archive_missing(self, tmp_path):
         """Fallback: no prior archive → initial prompt is used (no crash)."""

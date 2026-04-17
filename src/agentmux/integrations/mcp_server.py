@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 
 from ..runtime.tool_events import append_tool_event
+from ..shared.debug_log import debug_log_ndjson
 from ..shared.models import SESSION_DIR_NAMES
 from ..workflow.preference_memory import apply_preference_entries
 
@@ -291,13 +292,25 @@ def submit_review(
     """
     feature = _feature_dir()
     review_dir = feature / SESSION_DIR_NAMES["review"]
+    if role and role not in _ALLOWED_REVIEWER_ROLES:
+        raise ValueError(
+            f"Invalid role {role!r}. Must be one of {sorted(_ALLOWED_REVIEWER_ROLES)}"
+        )
     filename = f"review_{role}.yaml" if role else "review.yaml"
     yaml_path = review_dir / filename
     data = _read_yaml_for_signal(yaml_path, "review")
     verdict = data.get("verdict", "unknown")
     if preferences:
         apply_preference_entries(_project_dir(), preferences)
-    append_tool_event(_log_path(), "submit_review", {})
+    payload: dict[str, Any] = {}
+    if role:
+        payload["role"] = role
+    debug_log_ndjson(
+        feature,
+        message="submit_review",
+        data={"role": role, "filename": filename, "verdict": str(verdict)},
+    )
+    append_tool_event(_log_path(), "submit_review", payload)
     return f"Review submitted (verdict: {verdict})."
 
 

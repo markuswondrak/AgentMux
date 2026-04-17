@@ -1355,6 +1355,110 @@ class TestFixingHandler:
 class TestCompletingHandler:
     """Tests for CompletingHandler."""
 
+    def test_enter_writes_fallback_summary_when_missing(
+        self, mock_ctx: MagicMock, empty_state: dict
+    ) -> None:
+        """If 08_completion/summary.md is missing, enter() should create it.
+
+        The completion UI reads summary.md; without it, users see
+        "_No summary available._".
+        """
+        handler = CompletingHandler()
+
+        # Ensure summary is absent
+        summary_path = mock_ctx.files.completion_dir / "summary.md"
+        if summary_path.exists():
+            summary_path.unlink()
+
+        state = {
+            **empty_state,
+            "review_results": {
+                "reviewer_logic": {
+                    "verdict": "fail",
+                    "review_text": "verdict: fail\n\n## Summary\n\nLogic issue.\n",
+                },
+                "reviewer_expert": {
+                    "verdict": "pass",
+                    "review_text": "verdict: pass\n\n## Summary\n\nAll good.\n",
+                },
+            },
+        }
+
+        handler.enter(state, mock_ctx)
+
+        assert summary_path.exists(), "enter() must create 08_completion/summary.md"
+        text = summary_path.read_text(encoding="utf-8")
+        assert "reviewer_logic" in text
+        assert "reviewer_expert" in text
+        assert "fail" in text
+        assert "pass" in text
+
+    def test_enter_writes_fix_request_fallback_when_review_results_absent(
+        self, mock_ctx: MagicMock, empty_state: dict
+    ) -> None:
+        """Fallback: if review_results is absent but fix_request exists, use it."""
+        handler = CompletingHandler()
+
+        summary_path = mock_ctx.files.completion_dir / "summary.md"
+        if summary_path.exists():
+            summary_path.unlink()
+
+        fix_request = mock_ctx.files.fix_request
+        fix_request.parent.mkdir(parents=True, exist_ok=True)
+        fix_request.write_text("Logic issues found in module X.", encoding="utf-8")
+
+        handler.enter(empty_state, mock_ctx)
+
+        assert summary_path.exists(), (
+            "should create summary.md from fix_request fallback"
+        )
+        text = summary_path.read_text(encoding="utf-8")
+        assert "Logic issues found in module X." in text
+
+    def test_enter_writes_no_summary_when_neither_exists(
+        self, mock_ctx: MagicMock, empty_state: dict
+    ) -> None:
+        """If neither review_results nor fix_request exists, no summary is written."""
+        handler = CompletingHandler()
+
+        summary_path = mock_ctx.files.completion_dir / "summary.md"
+        if summary_path.exists():
+            summary_path.unlink()
+
+        handler.enter(empty_state, mock_ctx)
+
+        assert not summary_path.exists(), (
+            "should not write summary.md when no data available"
+        )
+
+    def test_enter_writes_only_verdict_bullets_when_review_text_empty(
+        self, mock_ctx: MagicMock, empty_state: dict
+    ) -> None:
+        """review_results with empty review_text → verdict bullets only, no headers."""
+        handler = CompletingHandler()
+
+        summary_path = mock_ctx.files.completion_dir / "summary.md"
+        if summary_path.exists():
+            summary_path.unlink()
+
+        state = {
+            **empty_state,
+            "review_results": {
+                "reviewer_logic": {"verdict": "pass", "review_text": ""},
+                "reviewer_quality": {"verdict": "pass", "review_text": "   "},
+            },
+        }
+
+        handler.enter(state, mock_ctx)
+
+        assert summary_path.exists()
+        text = summary_path.read_text(encoding="utf-8")
+        assert "reviewer_logic" in text
+        assert "reviewer_quality" in text
+        # No section headers for roles with empty text
+        assert "### reviewer_logic" not in text
+        assert "### reviewer_quality" not in text
+
     def test_enter_sends_confirmation_prompt(
         self, mock_ctx: MagicMock, empty_state: dict
     ) -> None:

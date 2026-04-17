@@ -275,6 +275,32 @@ class TestSubmitReview(_FeatureDirMixin, unittest.TestCase):
         entries = self._read_log_entries()
         self.assertEqual(entries[0]["payload"], {})
 
+    def test_role_param_includes_role_in_payload(self):
+        """When called with role=..., the tool event payload must include role."""
+        import yaml
+
+        role = "reviewer_logic"
+        path = self.feature_dir / "07_review" / f"review_{role}.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(self._VALID_PASS))
+
+        _ = mrs.submit_review(role=role)
+        entries = self._read_log_entries()
+        self.assertEqual(entries[0]["tool"], "submit_review")
+        self.assertEqual(entries[0]["payload"], {"role": role})
+
+    def test_invalid_role_raises_value_error(self):
+        """An unrecognised role must raise ValueError before reading any YAML."""
+        with self.assertRaises(ValueError) as ctx:
+            mrs.submit_review(role="reviewer_unknown")
+        self.assertIn("Invalid role", str(ctx.exception))
+        self.assertIn("reviewer_unknown", str(ctx.exception))
+
+    def test_path_traversal_role_raises_value_error(self):
+        """A traversal-style role must be rejected before any path is constructed."""
+        with self.assertRaises(ValueError):
+            mrs.submit_review(role="../../../../etc/passwd")
+
     def test_fail_without_findings_raises(self):
         self._write_yaml({"verdict": "fail", "summary": "Bad"})
         with self.assertRaises(ValueError) as ctx:

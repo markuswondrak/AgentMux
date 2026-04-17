@@ -16,7 +16,7 @@ Task:
 2. Do not open issues outside your role's scope.
 3. Write `07_review/review_[[placeholder:review_role]].yaml` with `verdict: pass` or `verdict: fail`.
    On `fail`, list only the findings that are still unresolved (or newly introduced by the fix).
-4. FINAL STEP ONLY — once the YAML is fully written, call `mcp__agentmux__submit_review()` to signal completion.
+4. FINAL STEP ONLY — once the YAML is fully written, call `mcp__agentmux__submit_review(role="[[placeholder:review_role]]")` to signal completion.
 
 [[placeholder:project_instructions]]
 
