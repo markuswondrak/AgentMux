@@ -46,6 +46,14 @@ Groups reference sub-plans by `index`. Indices must start at 1 and be contiguous
 - **Required fields:** `verdict` (`"pass"` or `"fail"`), `summary`
 - **Conditional fields:** `findings` (required on `fail` — list of `{location, issue, severity, recommendation}`), `commit_message` (optional on `pass`)
 
+**Parallel reviewer usage:** When running parallel reviewers (`reviewer_logic`, `reviewer_quality`, `reviewer_expert`), each reviewer must pass the `role` parameter:
+
+```python
+submit_review(role="reviewer_logic")
+```
+
+This causes the tool to read `07_review/review_<role>.yaml` (instead of the legacy `review.yaml`) and serializes `{"role": "<role>"}` into the tool event payload in `tool_events.jsonl`. This allows the orchestrator to correlate submissions from concurrent reviewers. Calling `submit_review()` without `role` reads the legacy `07_review/review.yaml`. Invalid role values raise a `ValueError`.
+
 ## Preference persistence via submit tool parameter
 
 All four submit tools (`submit_architecture`, `submit_pm_done`, `submit_plan`, `submit_review`) accept an optional `preferences` parameter:

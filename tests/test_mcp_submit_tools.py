@@ -392,6 +392,8 @@ class TestSubmitReview(SubmitToolTestBase):
         entries = self._read_log_entries()
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["tool"], "submit_review")
+        # Role should be present so orchestrator can correlate parallel reviewers
+        self.assertEqual(entries[0]["payload"], {"role": "reviewer_quality"})
 
 
 if __name__ == "__main__":

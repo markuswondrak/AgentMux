@@ -16,6 +16,7 @@ import yaml
 
 from agentmux.workflow.handlers.reviewing import ReviewingHandler
 from agentmux.workflow.handoff_artifacts import review_yaml_has_verdict
+from agentmux.workflow.phase_result import PhaseResult
 
 
 class FakeContext:
@@ -317,6 +318,34 @@ class TestResumeSupport:
             )
             assert spec.prompt_file == expected_prompt
 
+    def test_enter_clears_stale_review_results_for_new_iteration(self, tmp_path):
+        """When re-entering reviewing (not resume), stale review_results must not
+        block new YAML ingestion.
+        """
+        ctx = FakeContext(tmp_path)
+        handler = ReviewingHandler()
+
+        state = {
+            "last_event": "review_failed",  # not a resume path
+            "review_iteration": 1,
+            "reviewer_nominations": ["reviewer_logic", "reviewer_expert"],
+            # stale results from prior iteration (logic failed previously)
+            "review_results": {
+                "reviewer_logic": {"verdict": "fail", "review_text": "old fail"},
+                "reviewer_expert": {"verdict": "pass", "review_text": "old pass"},
+            },
+        }
+
+        result = handler.enter(state, ctx)
+        assert isinstance(result, PhaseResult)
+        updates = result.updates
+        # On a fresh entry (not resume), we expect a clean slate so new review
+        # YAMLs can be ingested.
+        assert updates["review_results"] == {}, (
+            "stale review_results should be cleared for non-resume re-dispatch; "
+            "otherwise _ingest_review_yaml will ignore new files."
+        )
+
 
 class TestParallelVerdictFlow:
     """Tests for parallel review flow — multiple reviewers running simultaneously."""
@@ -558,3 +587,113 @@ class TestReviewYamlHasVerdictParallel:
             encoding="utf-8",
         )
         assert review_yaml_has_verdict(review_dir) is False
+
+
+class TestFollowupPromptAfterFix:
+    """Post-fix follow-up prompt dispatch (Issue #119)."""
+
+    def test_initial_prompt_used_on_first_iteration(self, tmp_path):
+        """review_iteration == 0 → initial reviewer prompt (full context)."""
+        ctx = FakeContext(tmp_path)
+
+        handler = ReviewingHandler()
+        state = {
+            "review_iteration": 0,
+            "last_event": "implementation_completed",
+            "review_results": {},
+        }
+        handler.enter(state, ctx)
+
+        prompt_path = ctx.files.review_dir / "review_logic_prompt.md"
+        assert prompt_path.exists()
+        prompt_content = prompt_path.read_text(encoding="utf-8")
+        # Initial prompt includes architecture.md content via [[include:...]]
+        assert "# Architecture" in prompt_content
+        # Initial prompt identifies this role
+        assert "Logic" in prompt_content or "logic" in prompt_content
+        # Not a follow-up prompt
+        assert "Follow-up" not in prompt_content
+
+    def test_followup_prompt_used_after_fix(self, tmp_path):
+        """review_iteration > 0 + prior archive exists → compact follow-up prompt."""
+        ctx = FakeContext(tmp_path)
+
+        # Previous iteration's archive — what the reviewer wrote last round.
+        prev_archive = ctx.files.review_dir / "review_0_reviewer_logic.md"
+        prev_archive.write_text(
+            "# Previous findings\n\n- Logic bug in handler X\n",
+            encoding="utf-8",
+        )
+        # Aggregated fix request the coder worked from.
+        fix_request_path = ctx.files.review_dir / "fix_request.md"
+        fix_request_path.write_text(
+            "## Review: reviewer_logic (verdict: fail)\n\n- Logic bug in handler X\n",
+            encoding="utf-8",
+        )
+        ctx.files.fix_request = fix_request_path
+
+        handler = ReviewingHandler()
+        state = {
+            "review_iteration": 1,
+            "last_event": "implementation_completed",
+            "review_results": {},
+        }
+        handler.enter(state, ctx)
+
+        prompt_path = ctx.files.review_dir / "review_logic_prompt.md"
+        assert prompt_path.exists()
+        content = prompt_path.read_text(encoding="utf-8")
+
+        # Must reference the previous review archive (content or path).
+        assert "Logic bug in handler X" in content
+        # Follow-up marker must be present.
+        assert "Follow-up" in content
+        # Must include the aggregated fix_request content.
+        assert "Review: reviewer_logic" in content
+        # Must NOT re-include the big initial-prompt fragments.
+        assert "# Architecture" not in content
+        assert "# Context" not in content
+        # Iteration number is shown so the reviewer knows it's a re-review.
+        assert "iteration" in content.lower()
+
+        # Must include role arg in submit_review call (critical: omitting role
+        # would cause the tool to read the wrong YAML on follow-up submissions).
+        assert 'submit_review(role="reviewer_logic")' in content
+
+    def test_followup_falls_back_to_initial_when_archive_missing(self, tmp_path):
+        """Fallback: no prior archive → initial prompt is used (no crash)."""
+        ctx = FakeContext(tmp_path)
+
+        handler = ReviewingHandler()
+        state = {
+            "review_iteration": 1,
+            "last_event": "implementation_completed",
+            "review_results": {},
+        }
+        # No review_0_reviewer_logic.md exists.
+        handler.enter(state, ctx)
+
+        prompt_path = ctx.files.review_dir / "review_logic_prompt.md"
+        assert prompt_path.exists()
+        content = prompt_path.read_text(encoding="utf-8")
+        # Fallback to initial prompt (contains architecture.md include).
+        assert "# Architecture" in content
+        assert "Follow-up" not in content
+
+    def test_resume_path_still_skips_completed(self, tmp_path):
+        """Resume with all-completed reviews must NOT trigger a dispatch."""
+        ctx = FakeContext(tmp_path)
+
+        handler = ReviewingHandler()
+        state = {
+            "last_event": "resumed",
+            "review_iteration": 1,
+            "review_results": {
+                "reviewer_logic": {"verdict": "pass", "review_text": "OK"},
+            },
+            "active_reviews": {"reviewer_logic": "completed"},
+        }
+
+        with patch.object(handler, "_request_summary", return_value=({}, None)):
+            handler.enter(state, ctx)
+        ctx.runtime.send_reviewers_many.assert_not_called()

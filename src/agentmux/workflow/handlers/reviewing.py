@@ -9,6 +9,7 @@ import yaml
 
 from agentmux.agent_labels import role_display_label
 from agentmux.runtime import ReviewerSpec
+from agentmux.shared.debug_log import debug_log_ndjson
 from agentmux.workflow.event_catalog import (
     EVENT_RESUMED,
     EVENT_REVIEW_FAILED,
@@ -97,12 +98,17 @@ class ReviewingHandler(BaseToolHandler):
         """
         reviewer_roles = select_reviewer_roles(state)
 
-        # Determine which roles still need reviewing (resume support)
-        review_results = dict(state.get("review_results", {}))
+        # Determine which roles still need reviewing (resume support).
+        #
+        # On a fresh (non-resume) entry into reviewing we intentionally start from
+        # a clean slate: stale review_results from a previous iteration must not
+        # block ingestion of new review YAMLs because _ingest_review_yaml is
+        # idempotent per role (it skips roles already present in review_results).
+        is_resume = state.get("last_event") == EVENT_RESUMED
+        review_results = dict(state.get("review_results", {})) if is_resume else {}
         active_reviews = {role: "pending" for role in reviewer_roles}
 
         # On resume: ingest pre-existing YAML verdicts before deleting anything
-        is_resume = state.get("last_event") == EVENT_RESUMED
         if is_resume:
             review_iteration = int(state.get("review_iteration", 0))
             for role in list(active_reviews.keys()):
@@ -138,7 +144,9 @@ class ReviewingHandler(BaseToolHandler):
                 updates["active_reviews"] = active_reviews
                 return PhaseResult(updates, next_phase)
 
-        # Clear stale review outputs for roles we're about to re-dispatch
+        # Delete stale review YAMLs for roles we're about to re-dispatch so
+        # freshly-written files aren't confused with prior-iteration artifacts.
+        # review_results is already {} for non-resume, so no pop is needed.
         for role in reviewer_roles:
             if active_reviews.get(role) == "pending":
                 review_file = ctx.files.review_dir / f"review_{role}.yaml"
@@ -320,6 +328,16 @@ class ReviewingHandler(BaseToolHandler):
         review_results = dict(state.get("review_results", {}))
         active_reviews = dict(state.get("active_reviews", {}))
         review_iteration = int(state.get("review_iteration", 0))
+        debug_log_ndjson(
+            ctx.files.feature_dir,
+            message="reviewing._handle_review",
+            data={
+                "review_iteration": review_iteration,
+                "tool_payload_keys": sorted(list((event.payload or {}).keys())),
+                "review_results_roles": sorted(list(review_results.keys())),
+                "active_reviews": dict(active_reviews),
+            },
+        )
 
         review_dir = ctx.files.review_dir
         for review_file in sorted(review_dir.glob("review_reviewer_*.yaml")):
