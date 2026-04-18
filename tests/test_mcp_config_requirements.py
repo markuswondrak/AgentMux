@@ -614,7 +614,8 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 server_env,
                 (
                     "FEATURE_DIR must not be written into .cursor/mcp.json "
-                    "— it changes every session and triggers Cursor's MCP approval modal"
+                    "— it changes every session and triggers Cursor's MCP "
+                    "approval modal"
                 ),
             )
             self.assertNotIn(
