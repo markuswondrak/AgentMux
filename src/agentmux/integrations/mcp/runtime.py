@@ -6,7 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from ...shared.models import AgentConfig, ProjectPaths
-from .configurators import _python_command
+from .configurators import _provider_key, _python_command
 from .models import ROLE_TOOLS, McpServerSpec
 
 
@@ -55,6 +55,93 @@ def _role_servers(servers: list[McpServerSpec], role: str) -> list[McpServerSpec
         )
         for s in servers
     ]
+
+
+def _inject_cursor_mcp_env(
+    project_dir: Path,
+) -> None:
+    """Embed stable env vars into .cursor/mcp.json for each MCP server.
+
+    Cursor CLI does not inherit the parent process env when spawning MCP server
+    subprocesses, so PYTHONPATH and PROJECT_DIR must be written directly into
+    .cursor/mcp.json. These values are project-specific but stable (do not
+    change between sessions), so they do not trigger Cursor's MCP approval modal
+    on subsequent runs.
+
+    Session-specific values (FEATURE_DIR, AGENTMUX_ALLOWED_TOOLS) are NOT
+    written here; they go into .agentmux/.active_session via
+    _write_cursor_active_session().  Any stale copies of those keys left by
+    older versions of AgentMux are removed here as a one-time migration.
+    """
+    config_path = project_dir / ".cursor" / "mcp.json"
+    if not config_path.exists():
+        return
+
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+
+    mcp_servers = data.get("mcpServers")
+    if not isinstance(mcp_servers, dict):
+        return
+
+    stable_env: dict[str, str] = {
+        "PYTHONPATH": _compose_pythonpath(project_dir, os.environ.get("PYTHONPATH")),
+        "PROJECT_DIR": str(project_dir),
+    }
+
+    changed = False
+    for _server_name, entry in mcp_servers.items():
+        if not isinstance(entry, dict):
+            continue
+        current_env: dict[str, str] = dict(entry.get("env") or {})
+        new_env = {k: v for k, v in current_env.items()}
+        new_env.update(stable_env)
+        # Remove session-specific keys that must not live in the persistent config
+        new_env.pop("FEATURE_DIR", None)
+        new_env.pop("AGENTMUX_ALLOWED_TOOLS", None)
+        if new_env != current_env:
+            entry["env"] = new_env
+            changed = True
+
+    if changed:
+        config_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_cursor_active_session(
+    project_dir: Path,
+    role_servers_list: list[list[McpServerSpec]],
+    feature_dir: Path,
+) -> None:
+    """Write session-specific MCP values to .agentmux/.active_session.
+
+    Cursor CLI does not pass environment variables to its MCP server
+    subprocesses.  FEATURE_DIR and AGENTMUX_ALLOWED_TOOLS change on every
+    session, so instead of writing them into .cursor/mcp.json (which triggers
+    Cursor's MCP approval modal on each change), they are written here.  The
+    MCP server reads this file as a fallback when the env vars are absent.
+
+    Only one active Cursor session per project is supported at a time — a
+    concurrent second session would overwrite this file.
+    """
+    merged_tools: set[str] = set()
+    for role_servers in role_servers_list:
+        for spec in role_servers:
+            allowed = spec.env.get("AGENTMUX_ALLOWED_TOOLS", "")
+            if allowed:
+                merged_tools.update(t for t in allowed.split(",") if t)
+
+    session_data: dict[str, str] = {"feature_dir": str(feature_dir)}
+    if merged_tools:
+        session_data["allowed_tools"] = ",".join(sorted(merged_tools))
+
+    active_session_path = project_dir / ".agentmux" / ".active_session"
+    active_session_path.parent.mkdir(parents=True, exist_ok=True)
+    # Atomic write: write to a temp file alongside the target, then rename
+    tmp_path = active_session_path.with_suffix(".active_session.tmp")
+    tmp_path.write_text(json.dumps(session_data, indent=2) + "\n", encoding="utf-8")
+    tmp_path.rename(active_session_path)
 
 
 def create_runtime_mcp_config(
@@ -130,6 +217,7 @@ def setup_mcp(
     _ = feature_dir
 
     updated_agents = dict(agents)
+    cursor_role_servers: list[list[McpServerSpec]] = []
     for role in roles:
         agent = updated_agents.get(role)
         if agent is None:
@@ -150,7 +238,16 @@ def setup_mcp(
             )
             args.extend(["--mcp-config", str(role_config_path)])
 
+        # Track cursor agents so we can update .cursor/mcp.json after the loop
+        if _provider_key(agent) == "cursor":
+            cursor_role_servers.append(role_specific_servers)
+
         updated_agents[role] = replace(agent, env=env, args=args)
+
+    if cursor_role_servers:
+        _inject_cursor_mcp_env(project_dir)
+        _write_cursor_active_session(project_dir, cursor_role_servers, feature_dir)
+
     return updated_agents
 
 

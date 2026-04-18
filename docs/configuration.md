@@ -153,6 +153,10 @@ Supported models: `claude-sonnet-4.6`, `claude-opus-4.6`, `gpt-5.4`, `gemini-2.5
 
 `qwen` is a built-in provider. The bundled defaults use `qwen3-max` as the provider default model and pass `--yolo` for every role. When research-enabled roles need MCP setup, AgentMux manages the persistent registration in `~/.qwen/settings.json`.
 
+## Cursor CLI provider
+
+The built-in `cursor` provider runs the Cursor CLI binary `agent`. That CLI only allows `--trust` together with headless/`--print` usage; interactive tmux panes therefore do **not** receive `--trust` in the default configuration. Trust prompts in the pane are handled via `trust_snippet` (default `"Allow"`) and `trust_key` (default `a`), which drive automatic key acceptance in tmux. Batch research roles (`code-researcher`, `web-researcher`) pass the prompt file with `-p` and include `--trust` and `--force` in built-in `role_args` only for those roles.
+
 ### Provider default settings
 
 Providers can define `default_model` and `default_role_args` that apply to all roles automatically:

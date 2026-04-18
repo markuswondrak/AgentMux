@@ -602,13 +602,17 @@ roles:
         with (
             patch(
                 "agentmux.runtime.pane_io.capture_pane",
-                side_effect=["some output", "Trust this folder?"],
+                # First two are the snippet-detection loop; third is the clear poll
+                # returning content without the snippet so we exit cleanly.
+                side_effect=["some output", "Trust this folder?", "Agent ready"],
             ),
             patch(
                 "agentmux.runtime.pane_io.run_command",
                 side_effect=lambda args, cwd=None, check=True: commands.append(args),
             ),
+            patch("agentmux.runtime.pane_io.time") as mock_time,
         ):
+            mock_time.time.return_value = 0
             accept_trust_prompt("%1", snippet="Trust this folder?", timeout_seconds=0.5)
 
         self.assertEqual(
@@ -885,6 +889,201 @@ roles:
         self.assertIn("qwen", cmd)
         self.assertIn("--yolo", cmd)
         self.assertNotIn("--model", cmd)
+
+
+def test_cursor_provider_in_providers():
+    """cursor provider exists with correct cli, trust_key, and batch_command."""
+    from agentmux.configuration.providers import PROVIDERS, BatchCommandMode
+
+    p = PROVIDERS["cursor"]
+    assert p.cli == "agent"
+    assert p.trust_key == "a"
+    assert p.batch_command is not None
+    assert p.batch_command.verb == "-p"
+    assert p.batch_command.mode == BatchCommandMode.FLAG
+    # --trust is headless-only; not in global defaults (interactive panes)
+    assert not p.default_role_args
+    assert p.default_args["code-researcher"] == ["--trust", "--force"]
+    assert p.default_args["web-researcher"] == ["--trust", "--force"]
+
+
+def test_resolve_agent_threads_trust_key():
+    """resolve_agent with cursor provider produces AgentConfig with trust_key='a'."""
+    from agentmux.configuration.providers import get_provider, resolve_agent
+
+    provider = get_provider("cursor")
+    cfg = resolve_agent(provider, role="coder", model=None, extra_args=[])
+    assert cfg.trust_key == "a"
+
+
+def test_resolve_agent_default_trust_key():
+    """resolve_agent with claude returns AgentConfig with trust_key='Enter'."""
+    from agentmux.configuration.providers import get_provider, resolve_agent
+
+    provider = get_provider("claude")
+    cfg = resolve_agent(provider, role="coder", model=None, extra_args=[])
+    assert cfg.trust_key == "Enter"
+
+
+def test_accept_trust_prompt_uses_trust_key():
+    """When snippet matches, send-keys uses the provided trust_key, not 'Enter'."""
+    from unittest.mock import call, patch
+
+    from agentmux.runtime.pane_io import accept_trust_prompt
+
+    cap_patch = patch(
+        "agentmux.runtime.pane_io.capture_pane", return_value="Allow something here"
+    )
+    with cap_patch, patch("agentmux.runtime.pane_io.run_command") as mock_run:
+        accept_trust_prompt("pane-id", snippet="Allow", trust_key="a")
+        send_keys_calls = [c for c in mock_run.call_args_list if "send-keys" in str(c)]
+        assert any("a" in str(c) for c in send_keys_calls), (
+            f"Expected 'a' in send-keys calls: {mock_run.call_args_list}"
+        )
+        assert (
+            call(["tmux", "send-keys", "-t", "pane-id", "Enter"])
+            not in mock_run.call_args_list
+        )
+
+
+def test_accept_trust_prompt_default_enter():
+    """When no trust_key given, send-keys defaults to 'Enter'."""
+    from unittest.mock import call, patch
+
+    from agentmux.runtime.pane_io import accept_trust_prompt
+
+    cap_patch = patch(
+        "agentmux.runtime.pane_io.capture_pane", return_value="Allow something here"
+    )
+    with cap_patch, patch("agentmux.runtime.pane_io.run_command") as mock_run:
+        accept_trust_prompt("pane-id", snippet="Allow")
+        enter_call = call(["tmux", "send-keys", "-t", "pane-id", "Enter"])
+        assert enter_call in mock_run.call_args_list
+
+
+def test_load_layered_config_cursor_trust_key():
+    """load_layered_config with cursor provider sets trust_key='a' on AgentConfig."""
+    import tempfile
+    from pathlib import Path
+    from unittest.mock import patch
+
+    import yaml
+
+    from agentmux.configuration import load_layered_config
+
+    config = {
+        "version": 2,
+        "defaults": {"provider": "cursor", "model": "claude-3-5-sonnet"},
+    }
+    with tempfile.TemporaryDirectory() as td:
+        project_dir = Path(td)
+        config_dir = project_dir / ".agentmux"
+        config_dir.mkdir()
+        (config_dir / "config.yaml").write_text(yaml.dump(config), encoding="utf-8")
+        with patch(
+            "agentmux.configuration.USER_CONFIG_PATH",
+            project_dir / "nonexistent.yaml",
+        ):
+            loaded = load_layered_config(project_dir)
+
+    assert loaded.agents["coder"].trust_key == "a"
+
+
+def test_load_layered_config_cursor_trust_flag_only_on_batch_researchers() -> None:
+    """Interactive roles omit --trust; batch researchers get --trust and --force."""
+    import tempfile
+    from pathlib import Path
+    from unittest.mock import patch
+
+    import yaml
+
+    from agentmux.configuration import load_layered_config
+
+    config = {
+        "version": 2,
+        "defaults": {"provider": "cursor", "model": "gemini-3-flash"},
+    }
+    with tempfile.TemporaryDirectory() as td:
+        project_dir = Path(td)
+        config_dir = project_dir / ".agentmux"
+        config_dir.mkdir()
+        (config_dir / "config.yaml").write_text(yaml.dump(config), encoding="utf-8")
+        with patch(
+            "agentmux.configuration.USER_CONFIG_PATH",
+            project_dir / "nonexistent.yaml",
+        ):
+            loaded = load_layered_config(project_dir)
+
+    for role in ("planner", "architect", "coder"):
+        args = loaded.agents[role].args
+        assert "--trust" not in args, f"{role} must not use --trust"
+    assert loaded.agents["code-researcher"].args == ["--trust", "--force"]
+    assert loaded.agents["web-researcher"].args == ["--trust", "--force"]
+
+
+def test_accept_trust_prompt_waits_for_snippet_to_clear_after_pressing_key():
+    """After pressing the trust key, accept_trust_prompt waits until the snippet
+    text is no longer visible in the pane (prevents sending prompts to transient
+    'Applying your selection...' states)."""
+    from unittest.mock import patch
+
+    from agentmux.runtime.pane_io import accept_trust_prompt
+
+    # Simulate: first call shows snippet, then it clears
+    capture_side_effects = iter(
+        [
+            "MCP Server Approval Required [a] Approve all servers",  # found — press key
+            "MCP Server Approval Required [a] Approve all servers",  # still showing
+            "Applying your selection...",  # transitioning (no snippet)
+        ]
+    )
+    with (
+        patch(
+            "agentmux.runtime.pane_io.capture_pane",
+            side_effect=capture_side_effects,
+        ),
+        patch("agentmux.runtime.pane_io.run_command") as mock_run,
+        patch("agentmux.runtime.pane_io.time") as mock_time,
+    ):
+        mock_time.time.return_value = 0
+        accept_trust_prompt(
+            "pane-id",
+            snippet="Approve all servers",
+            trust_key="a",
+            timeout_seconds=1.0,
+            clear_timeout_seconds=5.0,
+        )
+        send_keys_calls = [c for c in mock_run.call_args_list if "send-keys" in str(c)]
+        assert any("a" in str(c) for c in send_keys_calls), (
+            f"Expected key 'a' to be sent: {mock_run.call_args_list}"
+        )
+
+
+def test_accept_trust_prompt_no_wait_for_clear_when_snippet_never_found():
+    """If the snippet is never found, no key is pressed and we don't wait for clear."""
+    from unittest.mock import patch
+
+    from agentmux.runtime.pane_io import accept_trust_prompt
+
+    with (
+        patch(
+            "agentmux.runtime.pane_io.capture_pane",
+            return_value="Normal agent input ready",
+        ),
+        patch("agentmux.runtime.pane_io.run_command") as mock_run,
+        patch("agentmux.runtime.pane_io.time") as mock_time,
+    ):
+        mock_time.time.return_value = 999  # immediately past deadline
+        accept_trust_prompt(
+            "pane-id",
+            snippet="Approve all servers",
+            trust_key="a",
+            timeout_seconds=0.0,
+        )
+        send_keys_calls = [c for c in mock_run.call_args_list if "send-keys" in str(c)]
+        assert send_keys_calls == [], (
+            f"No key should be sent when snippet not found: {mock_run.call_args_list}"
+        )
 
 
 if __name__ == "__main__":

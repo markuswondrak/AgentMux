@@ -322,5 +322,81 @@ class TestGenerateSubplanMd(unittest.TestCase):
         self.assertIn("## Dependencies", result)
 
 
+class TestGenerateConsolidatedReviewMd(unittest.TestCase):
+    """Tests for generate_consolidated_review_md()."""
+
+    def test_empty_results_returns_pass_verdict(self):
+        from agentmux.workflow.handoff_artifacts import generate_consolidated_review_md
+
+        result = generate_consolidated_review_md({})
+        self.assertEqual(result, "verdict: pass\n")
+
+    def test_single_reviewer_returns_review_text_as_is(self):
+        from agentmux.workflow.handoff_artifacts import generate_consolidated_review_md
+
+        review_text = "verdict: pass\n\n## Summary\n\nAll good.\n"
+        result = generate_consolidated_review_md(
+            {"reviewer_logic": {"verdict": "pass", "review_text": review_text}}
+        )
+        self.assertEqual(result, review_text)
+
+    def test_single_reviewer_with_empty_review_text_returns_pass(self):
+        from agentmux.workflow.handoff_artifacts import generate_consolidated_review_md
+
+        result = generate_consolidated_review_md(
+            {"reviewer_logic": {"verdict": "pass", "review_text": ""}}
+        )
+        self.assertEqual(result, "verdict: pass\n")
+
+    def test_multiple_reviewers_starts_with_verdict_pass(self):
+        from agentmux.workflow.handoff_artifacts import generate_consolidated_review_md
+
+        result = generate_consolidated_review_md(
+            {
+                "reviewer_logic": {"verdict": "pass", "review_text": "Logic OK"},
+                "reviewer_quality": {"verdict": "pass", "review_text": "Quality OK"},
+            }
+        )
+        self.assertTrue(result.startswith("verdict: pass"))
+
+    def test_multiple_reviewers_includes_per_role_sections(self):
+        from agentmux.workflow.handoff_artifacts import generate_consolidated_review_md
+
+        result = generate_consolidated_review_md(
+            {
+                "reviewer_logic": {"verdict": "pass", "review_text": "Logic OK"},
+                "reviewer_quality": {"verdict": "pass", "review_text": "Quality OK"},
+            }
+        )
+        self.assertIn("### reviewer_logic", result)
+        self.assertIn("Logic OK", result)
+        self.assertIn("### reviewer_quality", result)
+        self.assertIn("Quality OK", result)
+
+    def test_multiple_reviewers_mentions_both_roles_in_summary(self):
+        from agentmux.workflow.handoff_artifacts import generate_consolidated_review_md
+
+        result = generate_consolidated_review_md(
+            {
+                "reviewer_logic": {"verdict": "pass", "review_text": "Logic OK"},
+                "reviewer_quality": {"verdict": "pass", "review_text": "Quality OK"},
+            }
+        )
+        self.assertIn("reviewer_logic", result)
+        self.assertIn("reviewer_quality", result)
+
+    def test_role_with_no_review_text_falls_back_to_verdict_line(self):
+        from agentmux.workflow.handoff_artifacts import generate_consolidated_review_md
+
+        result = generate_consolidated_review_md(
+            {
+                "reviewer_logic": {"verdict": "pass", "review_text": ""},
+                "reviewer_quality": {"verdict": "pass", "review_text": "Quality OK"},
+            }
+        )
+        self.assertIn("### reviewer_logic", result)
+        self.assertIn("verdict: pass", result)
+
+
 if __name__ == "__main__":
     unittest.main()
