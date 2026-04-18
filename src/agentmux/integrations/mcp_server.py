@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -22,13 +23,40 @@ TOPIC_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 mcp = FastMCP("agentmux") if FastMCP is not None else None
 
 
+def _read_active_session(key: str) -> str:
+    """Read a value from .agentmux/.active_session for the current project.
+
+    Used as a fallback when FEATURE_DIR or AGENTMUX_ALLOWED_TOOLS are absent
+    from the process environment (e.g., when the MCP server is launched by
+    Cursor as a subprocess without inheriting the parent process env).
+
+    Returns an empty string on any failure (missing file, invalid JSON, etc.)
+    so callers can decide whether to raise or proceed.
+    """
+    project_dir_raw = os.environ.get("PROJECT_DIR", "").strip()
+    if not project_dir_raw:
+        return ""
+    active_session_path = Path(project_dir_raw) / ".agentmux" / ".active_session"
+    if not active_session_path.exists():
+        return ""
+    try:
+        data = json.loads(active_session_path.read_text(encoding="utf-8"))
+        return str(data.get(key, "")).strip()
+    except Exception:
+        return ""
+
+
 def _get_allowed_tools() -> frozenset[str] | None:
     """Return the set of allowed tool names, or None if all tools are allowed.
 
-    Reads AGENTMUX_ALLOWED_TOOLS from the environment (comma-separated list).
-    When the var is absent or empty, all tools are registered (dev/fallback mode).
+    Reads AGENTMUX_ALLOWED_TOOLS from the environment first, then falls back
+    to .agentmux/.active_session (for Cursor MCP subprocess use).
+    When the value is absent or empty, all tools are registered (dev/fallback
+    mode).
     """
     raw = os.environ.get("AGENTMUX_ALLOWED_TOOLS", "").strip()
+    if not raw:
+        raw = _read_active_session("allowed_tools")
     if not raw:
         return None
     return frozenset(t.strip() for t in raw.split(",") if t.strip())
@@ -54,6 +82,8 @@ def _tool(name: str):
 
 def _feature_dir(feature_dir: str | None = None) -> Path:
     raw = (feature_dir or os.environ.get("FEATURE_DIR", "")).strip()
+    if not raw:
+        raw = _read_active_session("feature_dir")
     if not raw:
         raise RuntimeError("feature_dir is required.")
     path = Path(raw).expanduser()

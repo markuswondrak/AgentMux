@@ -208,6 +208,22 @@ class TestLayeredConfigDefaults:
                 loaded = load_layered_config(project_dir)
         assert loaded.agents["coder"].trust_key == "a"
 
+    def test_builtin_cursor_trust_snippet_matches_mcp_approval_text(self) -> None:
+        """Built-in cursor trust_snippet must match '[a] Approve all servers' modal."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            _write_project_config(
+                project_dir,
+                {"version": 2, "defaults": {"provider": "cursor"}},
+            )
+            with patch(_NO_USER, Path(td) / "no-user.yaml"):
+                loaded = load_layered_config(project_dir)
+        snippet = loaded.agents["coder"].trust_snippet
+        assert snippet is not None, "Cursor must have a trust_snippet"
+        assert "Approve all servers" in snippet, (
+            f"trust_snippet {snippet!r} must match Cursor MCP approval modal text"
+        )
+
 
 class TestLayeredConfigUserLayer:
     def test_user_overrides_default_model(self) -> None:

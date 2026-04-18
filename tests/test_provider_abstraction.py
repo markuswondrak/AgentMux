@@ -602,13 +602,17 @@ roles:
         with (
             patch(
                 "agentmux.runtime.pane_io.capture_pane",
-                side_effect=["some output", "Trust this folder?"],
+                # First two are the snippet-detection loop; third is the clear poll
+                # returning content without the snippet so we exit cleanly.
+                side_effect=["some output", "Trust this folder?", "Agent ready"],
             ),
             patch(
                 "agentmux.runtime.pane_io.run_command",
                 side_effect=lambda args, cwd=None, check=True: commands.append(args),
             ),
+            patch("agentmux.runtime.pane_io.time") as mock_time,
         ):
+            mock_time.time.return_value = 0
             accept_trust_prompt("%1", snippet="Trust this folder?", timeout_seconds=0.5)
 
         self.assertEqual(
@@ -1015,6 +1019,71 @@ def test_load_layered_config_cursor_trust_flag_only_on_batch_researchers() -> No
         assert "--trust" not in args, f"{role} must not use --trust"
     assert loaded.agents["code-researcher"].args == ["--trust", "--force"]
     assert loaded.agents["web-researcher"].args == ["--trust", "--force"]
+
+
+def test_accept_trust_prompt_waits_for_snippet_to_clear_after_pressing_key():
+    """After pressing the trust key, accept_trust_prompt waits until the snippet
+    text is no longer visible in the pane (prevents sending prompts to transient
+    'Applying your selection...' states)."""
+    from unittest.mock import patch
+
+    from agentmux.runtime.pane_io import accept_trust_prompt
+
+    # Simulate: first call shows snippet, then it clears
+    capture_side_effects = iter(
+        [
+            "MCP Server Approval Required [a] Approve all servers",  # found — press key
+            "MCP Server Approval Required [a] Approve all servers",  # still showing
+            "Applying your selection...",  # transitioning (no snippet)
+        ]
+    )
+    with (
+        patch(
+            "agentmux.runtime.pane_io.capture_pane",
+            side_effect=capture_side_effects,
+        ),
+        patch("agentmux.runtime.pane_io.run_command") as mock_run,
+        patch("agentmux.runtime.pane_io.time") as mock_time,
+    ):
+        mock_time.time.return_value = 0
+        accept_trust_prompt(
+            "pane-id",
+            snippet="Approve all servers",
+            trust_key="a",
+            timeout_seconds=1.0,
+            clear_timeout_seconds=5.0,
+        )
+        send_keys_calls = [c for c in mock_run.call_args_list if "send-keys" in str(c)]
+        assert any("a" in str(c) for c in send_keys_calls), (
+            f"Expected key 'a' to be sent: {mock_run.call_args_list}"
+        )
+
+
+def test_accept_trust_prompt_no_wait_for_clear_when_snippet_never_found():
+    """If the snippet is never found, no key is pressed and we don't wait for clear."""
+    from unittest.mock import patch
+
+    from agentmux.runtime.pane_io import accept_trust_prompt
+
+    with (
+        patch(
+            "agentmux.runtime.pane_io.capture_pane",
+            return_value="Normal agent input ready",
+        ),
+        patch("agentmux.runtime.pane_io.run_command") as mock_run,
+        patch("agentmux.runtime.pane_io.time") as mock_time,
+    ):
+        mock_time.time.return_value = 999  # immediately past deadline
+        accept_trust_prompt(
+            "pane-id",
+            snippet="Approve all servers",
+            trust_key="a",
+            timeout_seconds=0.0,
+        )
+        send_keys_calls = [c for c in mock_run.call_args_list if "send-keys" in str(c)]
+        assert send_keys_calls == [], (
+            f"No key should be sent when snippet not found: {mock_run.call_args_list}"
+        )
 
 
 if __name__ == "__main__":

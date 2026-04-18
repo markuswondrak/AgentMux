@@ -241,7 +241,7 @@ providers:
   cursor:
     command: agent
     model_flag: --model
-    trust_snippet: "Allow"
+    trust_snippet: "Approve all servers"
     trust_key: "a"
     batch_command:
       verb: "-p"
