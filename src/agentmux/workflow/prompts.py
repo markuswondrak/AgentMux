@@ -432,13 +432,18 @@ def build_coder_subplan_prompt(
     return _expand_session_includes(rendered, files.feature_dir)
 
 
-def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
+def build_coder_whole_plan_prompt(
+    files: RuntimeFiles, agent: AgentConfig | None = None
+) -> str:
     """Build a single combined prompt for single-coder mode (e.g. copilot).
 
     Reads all sub-plans from execution_plan.yaml and embeds their content
     inline so one coder instance can implement the full plan using internal
     sub-agents.  The coder is instructed to write each done_N marker as it
     finishes the corresponding plan.
+
+    When ``agent.sub_agent_tool`` is set, item 14 instructs parallel sub-agent
+    work via that tool; otherwise it describes sequential delegation.
     """
     execution_plan = load_execution_plan(files.planning_dir)
 
@@ -507,18 +512,35 @@ def build_coder_whole_plan_prompt(files: RuntimeFiles) -> str:
         "Each call signals to the orchestrator that the corresponding plan is complete."
     )
 
-    post_discipline_items = (
-        "12. If implementation reveals that requirements or a plan need adjustment "
-        "(e.g. a requirement turns out to be infeasible as written, or tasks need "
-        "reordering), update `requirements.md` and the embedded plan's task list "
-        "accordingly so they stay in sync with reality.\n"
-        f"13. {completion_instruction}\n"
+    sequential_subagent_item = (
         "14. Sub-agent delegation: For each plan, spawn a dedicated sub-agent and "
         "delegate that plan's full implementation to it. The sub-agent works through "
         "the plan's task checklist end-to-end "
         "(TDD → implement → validate → check off). "
         "Only move to the next plan once the sub-agent for the current plan has "
         "completed and its tasks are checked off."
+    )
+    if agent is not None and agent.sub_agent_tool:
+        tool = agent.sub_agent_tool
+        subagent_item_14 = (
+            f"14. Sub-agent delegation: For each plan, use the `/{tool}` command "
+            "to spawn a dedicated sub-agent and delegate that plan's full "
+            "implementation to it. You may run multiple plans in parallel — each "
+            "sub-agent should work through its plan's task checklist end-to-end "
+            "(TDD → implement → validate → check off). "
+            "Do not wait for one plan to finish before starting another unless "
+            "your environment requires it."
+        )
+    else:
+        subagent_item_14 = sequential_subagent_item
+
+    post_discipline_items = (
+        "12. If implementation reveals that requirements or a plan need adjustment "
+        "(e.g. a requirement turns out to be infeasible as written, or tasks need "
+        "reordering), update `requirements.md` and the embedded plan's task list "
+        "accordingly so they stay in sync with reality.\n"
+        f"13. {completion_instruction}\n"
+        f"{subagent_item_14}"
     )
 
     rendered = _render_template(

@@ -253,6 +253,8 @@ def _normalize_provider(name: str, raw: Any) -> dict[str, Any]:
         result["batch_command"] = _parse_batch_command_config(raw["batch_command"])
     if raw.get("single_coder") is not None:
         result["single_coder"] = bool(raw["single_coder"])
+    if raw.get("sub_agent_tool") is not None:
+        result["sub_agent_tool"] = str(raw["sub_agent_tool"])
     if raw.get("default_model") is not None:
         result["default_model"] = str(raw["default_model"])
     if raw.get("default_role_args") is not None:
@@ -462,6 +464,10 @@ def _resolve_loaded_config(
             role_specific_args = provider.get("role_args", {}).get(role, [])
             args = list(default_role_args) + list(role_specific_args)
 
+        sub_agent_tool = provider.get("sub_agent_tool")
+        if sub_agent_tool is not None:
+            sub_agent_tool = str(sub_agent_tool)
+
         agents[role] = AgentConfig(
             role=role,
             cli=str(provider.get("command", provider_name)),
@@ -472,6 +478,7 @@ def _resolve_loaded_config(
             provider=provider_name,
             batch_command=_build_batch_command_from_provider(provider),
             single_coder=bool(provider.get("single_coder", False)),
+            sub_agent_tool=sub_agent_tool,
         )
 
     return LoadedConfig(

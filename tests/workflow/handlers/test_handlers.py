@@ -722,6 +722,9 @@ class TestImplementingHandler:
             mock_send.assert_called_once()
             call_kwargs = mock_send.call_args[1]
             assert call_kwargs.get("prefix_command") == "/fleet"
+            mock_build.assert_called_once_with(
+                mock_ctx.files, agent=mock_ctx.agents["coder"]
+            )
 
     def test_enter_single_coder_non_copilot_no_fleet_prefix(
         self, mock_ctx: MagicMock
@@ -780,6 +783,9 @@ class TestImplementingHandler:
             mock_send.assert_called_once()
             call_kwargs = mock_send.call_args[1]
             assert call_kwargs.get("prefix_command") is None
+            mock_build.assert_called_once_with(
+                mock_ctx.files, agent=mock_ctx.agents["coder"]
+            )
 
     def test_enter_resume_uses_state_single_coder_true(
         self, mock_ctx: MagicMock
