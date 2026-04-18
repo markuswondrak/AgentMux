@@ -16,7 +16,7 @@ agentmux resume <feature-dir-or-name>  # Resume specific session by name or path
 1. `list_resumable_sessions(project_dir)` scans `.agentmux/.sessions/` for all feature directories with `state.json` and returns them sorted by recency
 2. `select_session(sessions)` presents an interactive menu (or auto-selects if only one exists)
 3. For `resume <feature-dir-or-name>`, non-absolute names are resolved against `.agentmux/.sessions/<name>` first, then `<project>/<name>` as a fallback
-4. `infer_resume_phase(feature_dir, state)` examines workflow artifacts (`01_product_management/done`, `04_planning/plan.md`, `04_planning/execution_plan.yaml`, `06_implementation/done_*`, `07_review/review.md` / `07_review/review.yaml`, etc.) together with persisted workflow state to determine the correct phase to resume into
+4. `infer_resume_phase(feature_dir, state)` examines workflow artifacts (`01_product_management/done`, `04_planning/plan.md`, `04_planning/execution_plan.yaml`, `06_implementation/done_*`, `07_review/review.md` / `07_review/review.yaml`, etc.) together with persisted workflow state to determine the correct phase to resume into (when `state.json` records a non-failed phase such as `validating`, that value is used directly — optional phases resume like any other)
 5. If `"product_manager": true` in state and `01_product_management/done` is missing, resume returns `product_management`; once `done` exists, resume falls through to normal `04_planning` / `06_implementation` inference
 6. `execution_plan.yaml` is used as planner-authored intent metadata during inference:
    - `needs_design: true` resumes into `designing` when `05_design/design.md` is still missing

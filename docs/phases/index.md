@@ -14,6 +14,7 @@ This is the canonical reference for AgentMux's workflow phases. Each phase has i
 | 4 | `planning` | `04_planning/` | no | [04_planning.md](04_planning.md) |
 | 5 | `designing` | `05_design/` | yes (`needs_design: true` in plan.yaml) | [05_design.md](05_design.md) |
 | 6 | `implementing` | `06_implementation/` | no | [06_implementation.md](06_implementation.md) |
+| 6a | `validating` | `06_implementation/` | yes (depends on config / schedule) | [validating.md](validating.md) |
 | 7 | `reviewing` | `07_review/` | no | [07_review.md](07_review.md) |
 | 6b | `fixing` | `06_implementation/` | yes (after review fail) | [06_implementation.md § Fixing](06_implementation.md#fixing) |
 | 8 | `completing` | `08_completion/` | no | [08_completion.md](08_completion.md) |
@@ -23,7 +24,7 @@ This is the canonical reference for AgentMux's workflow phases. Each phase has i
 ## State machine
 
 ```
-[product_management?] → architecting → planning → [designing?] → implementing → reviewing
+[product_management?] → architecting → planning → [designing?] → implementing → [validating?] → reviewing
                                                                                     │
                                         ┌── review_pass ─────────────────────────→ completing
                                         │

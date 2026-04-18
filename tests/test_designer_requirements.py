@@ -371,6 +371,7 @@ class DesignerRequirementsTests(unittest.TestCase):
                 "planning",
                 "designing",
                 "implementing",
+                "validating",
                 "reviewing",
                 "fixing",
                 "completing",

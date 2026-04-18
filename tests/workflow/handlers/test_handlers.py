@@ -663,7 +663,7 @@ class TestImplementingHandler:
 
         mock_ctx.runtime.finish_many.assert_called_once_with("coder")
         mock_ctx.runtime.deactivate.assert_called_once_with("coder")
-        assert next_phase == "reviewing"
+        assert next_phase == "validating"
 
     def test_enter_single_coder_copilot_sends_fleet_prefix(
         self, mock_ctx: MagicMock
@@ -1349,7 +1349,7 @@ class TestFixingHandler:
 
         mock_ctx.runtime.finish_many.assert_called_once_with("coder")
         mock_ctx.runtime.deactivate.assert_called_once_with("coder")
-        assert next_phase == "reviewing"
+        assert next_phase == "validating"
 
 
 class TestCompletingHandler:

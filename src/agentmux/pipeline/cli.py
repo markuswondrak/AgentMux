@@ -113,6 +113,23 @@ def handle_issue(args: argparse.Namespace, project_dir: Path) -> int:
     )
 
 
+def handle_validate(args: argparse.Namespace, project_dir: Path) -> int:
+    """Run configured validation commands (same suite as the pipeline)."""
+    from ..configuration import load_layered_config
+    from ..workflow.validation import run_validation
+
+    config_path = Path(args.config).resolve() if getattr(args, "config", None) else None
+    loaded = load_layered_config(project_dir, explicit_config_path=config_path)
+    commands = loaded.workflow_settings.validation.commands
+    if not commands:
+        print("No validation commands configured.", file=sys.stderr)
+        return 2
+    result = run_validation(commands, cwd=project_dir)
+    if result.passed:
+        return 0
+    return 1
+
+
 def handle_run(args: argparse.Namespace, project_dir: Path) -> int:
     """Handle the default run command (prompt-based workflow)."""
     config_path = Path(args.config).resolve() if getattr(args, "config", None) else None
@@ -232,6 +249,20 @@ COMMANDS: list[Command] = [
                 ("--keep-session",),
                 action="store_true",
                 help="Keep the tmux session running after completion.",
+            ),
+        ],
+    ),
+    Command(
+        name="validate",
+        help=(
+            "Run configured validation commands (tests, linting) "
+            "for the current project."
+        ),
+        handler=handle_validate,
+        arguments=[
+            Argument(
+                ("--config",),
+                help="Optional config override path.",
             ),
         ],
     ),

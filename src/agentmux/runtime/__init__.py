@@ -17,6 +17,7 @@ from ..shared.models import BATCH_AGENT_ROLES, AgentConfig
 from .content_zone import ContentZone, _find_pane_by_title, set_pane_identity
 from .pane_io import send_prompt, send_text
 from .tmux_control import (
+    _spawn_hidden_pane,
     create_agent_pane,
     create_batch_agent_pane,
     create_completion_pane,
@@ -70,6 +71,8 @@ class AgentRuntime(Protocol):
     def finish_task(self, role: str, task_id: str) -> None: ...
 
     def show_completion_ui(self, feature_dir: Path) -> None: ...
+
+    def run_validation_pane(self, cmd: str, label: str) -> tuple[str, int]: ...
 
     def shutdown(self, keep_session: bool) -> None: ...
 
@@ -700,6 +703,16 @@ class TmuxAgentRuntime:
         self._track_process_pid(pane_id, pid)
         self._zone.show(pane_id)
         self._persist_snapshot()
+
+    def run_validation_pane(self, cmd: str, label: str) -> tuple[str, int]:
+        """Run a shell command in an untracked pane (shown, not registered)."""
+        pane_id, pid = _spawn_hidden_pane(
+            self.session_name, self.project_dir, cmd, label=label
+        )
+        set_pane_identity(pane_id, role="validation", display_label=label)
+        self._zone.show(pane_id)
+        self._persist_snapshot()
+        return pane_id, pid
 
     def kill_tracked_processes(self, timeout: float = 5.0) -> list[int]:
         """Kill all tracked agent processes.

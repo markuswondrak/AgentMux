@@ -3,10 +3,21 @@ version: 2
 defaults:
   session_name: agentmux
   provider: copilot
-  model: gpt-5.4
   max_review_iterations: 3
 
 roles:
+  product-manager:
+    provider: cursor
+    model: gemini-3.1-pro
+
+  planner:
+    provider: cursor
+    model: auto
+
+  coder:
+    provider: cursor
+    model: auto
+
   web-researcher:
     provider: opencode
   code-researcher:
