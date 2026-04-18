@@ -257,7 +257,7 @@ class ImplementingHandler(BaseToolHandler):
         """Handle a subplan completion."""
         schedule = _build_implementation_schedule(planning_dir=ctx.files.planning_dir)
         if not schedule:
-            return {}, "reviewing"
+            return {}, "validating"
 
         # Update completed subplans
         completed = self._completed_subplans(state)
@@ -276,7 +276,7 @@ class ImplementingHandler(BaseToolHandler):
                 ctx.runtime.finish_many("coder")
                 ctx.runtime.deactivate("coder")
                 updates["last_event"] = EVENT_IMPLEMENTATION_COMPLETED
-                return updates, "reviewing"
+                return updates, "validating"
             return updates, None
 
         group_index = int(state.get("implementation_group_index", 0))
@@ -342,7 +342,7 @@ class ImplementingHandler(BaseToolHandler):
                 "last_event": EVENT_IMPLEMENTATION_COMPLETED,
             }
             ctx.runtime.deactivate("coder")
-            return updates, "reviewing"
+            return updates, "validating"
 
         # Move to next group
         _set_implementation_progress(

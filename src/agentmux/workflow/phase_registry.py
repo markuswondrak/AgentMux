@@ -11,6 +11,7 @@ To add a new phase:
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,8 @@ from .event_catalog import (
     EVENT_PM_COMPLETED,
     EVENT_REVIEW_FAILED,
     EVENT_REVIEW_PASSED,
+    EVENT_VALIDATION_FAILED,
+    EVENT_VALIDATION_PASSED,
     WORKFLOW_EVENT_CATALOG,
 )
 from .handlers.architecting import ArchitectingHandler
@@ -36,6 +39,7 @@ from .handlers.implementing import ImplementingHandler
 from .handlers.planning import PlanningHandler
 from .handlers.product_management import ProductManagementHandler
 from .handlers.reviewing import ReviewingHandler
+from .handlers.validating import ValidatingHandler
 from .handoff_artifacts import review_yaml_has_verdict
 from .phase_helpers import select_reviewer_roles
 
@@ -126,6 +130,40 @@ def _fixing_done(feature_dir: Path, state: dict[str, Any]) -> bool:
     if not in_fix_iteration:
         return True  # Not in a fix iteration — phase not needed
     return (feature_dir / "06_implementation" / "done_1").exists()
+
+
+def _validating_done(feature_dir: Path, state: dict[str, Any]) -> bool:
+    """True when automated validation finished or is not configured."""
+
+    from ..configuration import infer_project_dir, load_layered_config  # noqa: PLC0415
+
+    try:
+        project_dir = infer_project_dir(feature_dir)
+        cfg = load_layered_config(project_dir)
+        commands = cfg.workflow_settings.validation.commands
+    except (OSError, ValueError):
+        commands = ()
+    if not commands:
+        return True
+
+    result_path = feature_dir / "06_implementation" / "validation_result.json"
+    if not result_path.exists():
+        return False
+
+    try:
+        raw = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(raw, dict):
+        return False
+
+    passed = raw.get("passed")
+    if passed is True:
+        return True
+    if passed is False:
+        done_after_fix = (feature_dir / "06_implementation" / "done_1").exists()
+        return not done_after_fix
+    return False
 
 
 def _designing_needed_and_done(feature_dir: Path, state: dict[str, Any]) -> bool:
@@ -254,6 +292,14 @@ PHASE_REGISTRY: tuple[PhaseDescriptor, ...] = (
         resume_check=ResumeCheck(custom=_implementing_done),
         research_owner="architect",
         emitted_events=(EVENT_IMPLEMENTATION_COMPLETED,),
+    ),
+    PhaseDescriptor(
+        name="validating",
+        dir_name="06_implementation",
+        handler_class=ValidatingHandler,
+        primary_roles=(),
+        resume_check=ResumeCheck(custom=_validating_done),
+        emitted_events=(EVENT_VALIDATION_PASSED, EVENT_VALIDATION_FAILED),
     ),
     PhaseDescriptor(
         name="reviewing",

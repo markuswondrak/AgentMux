@@ -17,6 +17,8 @@ from agentmux.workflow.event_catalog import (
     EVENT_REVIEW_PASSED,
     EVENT_RUN_CANCELED,
     EVENT_RUN_FAILED,
+    EVENT_VALIDATION_FAILED,
+    EVENT_VALIDATION_PASSED,
     VALID_LAST_EVENTS,
     WORKFLOW_EVENT_CATALOG,
     WorkflowEventDefinition,
@@ -32,6 +34,8 @@ ALL_CONSTANTS = [
     EVENT_PLAN_WRITTEN,
     EVENT_DESIGN_WRITTEN,
     EVENT_IMPLEMENTATION_COMPLETED,
+    EVENT_VALIDATION_FAILED,
+    EVENT_VALIDATION_PASSED,
     EVENT_REVIEW_FAILED,
     EVENT_REVIEW_PASSED,
     EVENT_CHANGES_REQUESTED,
@@ -42,14 +46,14 @@ ALL_CONSTANTS = [
 
 class TestEventConstants:
     def test_all_constants_are_keys_in_catalog(self) -> None:
-        """All 12 EVENT_* constants are keys in WORKFLOW_EVENT_CATALOG."""
+        """All EVENT_* constants are keys in WORKFLOW_EVENT_CATALOG."""
         for const in ALL_CONSTANTS:
             assert const in WORKFLOW_EVENT_CATALOG, (
                 f"{const!r} missing from WORKFLOW_EVENT_CATALOG"
             )
 
-    def test_exactly_12_constants(self) -> None:
-        assert len(ALL_CONSTANTS) == 12
+    def test_exactly_14_constants(self) -> None:
+        assert len(ALL_CONSTANTS) == 14
 
     def test_constant_values(self) -> None:
         assert EVENT_FEATURE_CREATED == "feature_created"
@@ -59,6 +63,8 @@ class TestEventConstants:
         assert EVENT_PLAN_WRITTEN == "plan_written"
         assert EVENT_DESIGN_WRITTEN == "design_written"
         assert EVENT_IMPLEMENTATION_COMPLETED == "implementation_completed"
+        assert EVENT_VALIDATION_FAILED == "validation_failed"
+        assert EVENT_VALIDATION_PASSED == "validation_passed"
         assert EVENT_REVIEW_FAILED == "review_failed"
         assert EVENT_REVIEW_PASSED == "review_passed"
         assert EVENT_CHANGES_REQUESTED == "changes_requested"
@@ -115,6 +121,8 @@ class TestWorkflowEventDefinition:
             EVENT_PLAN_WRITTEN: "plan ready",
             EVENT_DESIGN_WRITTEN: "design ready",
             EVENT_IMPLEMENTATION_COMPLETED: "code done",
+            EVENT_VALIDATION_PASSED: "validation passed",
+            EVENT_VALIDATION_FAILED: "validation failed",
             EVENT_REVIEW_FAILED: "fix needed",
             EVENT_REVIEW_PASSED: "review passed",
             EVENT_CHANGES_REQUESTED: "changes asked",
@@ -155,6 +163,8 @@ class TestPhaseEventWiring:
             EVENT_PLAN_WRITTEN: ("planning",),
             EVENT_DESIGN_WRITTEN: ("designing",),
             EVENT_IMPLEMENTATION_COMPLETED: ("implementing", "fixing"),
+            EVENT_VALIDATION_FAILED: ("validating",),
+            EVENT_VALIDATION_PASSED: ("validating",),
             EVENT_REVIEW_FAILED: ("reviewing",),
             EVENT_REVIEW_PASSED: ("reviewing",),
             EVENT_CHANGES_REQUESTED: ("completing",),

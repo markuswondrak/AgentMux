@@ -9,6 +9,8 @@ Your job:
 6. Verify documentation tasks listed in `04_planning/tasks_<N>.md` are complete when they are part of the approved scope.
 7. FINAL STEP ONLY — once `07_review/review.md` is fully written and nothing else remains, call `mcp__agentmux__submit_review()` to signal completion.
 
+[[include-optional:07_review/validation_status.md]]
+
 [[placeholder:project_instructions]]
 
 Constraints:

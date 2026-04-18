@@ -91,6 +91,26 @@ There is one runtime completion-settings owner: `workflow_settings.completion`.
 - Config input maps directly into `defaults.completion.skip_final_approval`
 - Runtime reads `workflow_settings.completion.skip_final_approval`
 
+## Validation settings {#validation-settings}
+
+Runtime validation settings are owned by `workflow_settings.validation` (`ValidationConfig` in `src/agentmux/shared/models.py`), loaded from the top-level `validation` key in each resolved config layer.
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `commands` | list of strings | `[]` | Shell commands to run as automated validation (order preserved). |
+
+Example:
+
+```yaml
+version: 2
+validation:
+  commands:
+    - ruff check src tests
+    - pytest -q
+```
+
+Normalization and validation rules live in `src/agentmux/configuration/__init__.py` (`validation.commands` must be a list of strings). When `commands` is empty, no commands are scheduled from configuration alone.
+
 ## Project vs user scope
 
 Project config can define `defaults`, `roles`, `github`, and now also `providers` (in v2). This allows teams to ship complete project-specific configurations.

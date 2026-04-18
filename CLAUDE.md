@@ -77,7 +77,7 @@ The pipeline application:
 The workflow progresses through these states (stored in `.agentmux/.sessions/<feature>/state.json`):
 
 ```
-product_management? → architecting → planning → designing? → implementing → reviewing
+product_management? → architecting → planning → designing? → implementing → validating? → reviewing
     → verdict:pass → completing
     → verdict:fail → fixing → reviewing (review loop)
     → loop cap reached → completing
@@ -152,6 +152,7 @@ Deeper context on specific subsystems:
 - `docs/configuration.md` — layered config schema, providers/model selection
 - `docs/tmux-layout.md` — Tmux session layout, pane lifecycle, zone approach
 - `docs/research-dispatch.md` — Code-researcher and web-researcher task dispatch
+- `docs/phases/validating.md` — Automated validation phase (catalog, config, tmux pane)
 - `docs/phases/08_completion.md` — Approval flow, commit selection, cleanup
 - `docs/monitor.md` — Control pane display sections, constants, rendering
 - `docs/prompts.md` — Prompt templates, placeholders, rendering pipeline, and coder research handoff injection

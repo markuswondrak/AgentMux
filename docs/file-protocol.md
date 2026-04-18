@@ -23,6 +23,7 @@ For the full artifact listing per phase (files, writers, readers, formats, and t
 - [Planning](phases/04_planning.md) — `04_planning/`
 - [Design](phases/05_design.md) — `05_design/`
 - [Implementation](phases/06_implementation.md) — `06_implementation/`
+- [Validating](phases/validating.md) — uses `06_implementation/` (optional phase)
 - [Review](phases/07_review.md) — `07_review/`
 - [Completion](phases/08_completion.md) — `08_completion/`
 

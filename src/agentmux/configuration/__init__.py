@@ -12,6 +12,7 @@ from ..shared.models import (
     AgentConfig,
     CompletionSettings,
     GitHubConfig,
+    ValidationConfig,
     WorkflowSettings,
 )
 
@@ -136,6 +137,7 @@ def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {
         "defaults": _normalize_defaults(raw.get("defaults", {})),
         "github": _normalize_github(raw.get("github", {})),
+        "validation": _normalize_validation(raw.get("validation")),
         "providers": {},
         "roles": {},
     }
@@ -372,6 +374,23 @@ def _coerce_bool(value: Any, label: str) -> bool:
     raise ValueError(f"{label} must be a boolean.")
 
 
+def _normalize_validation(raw: Any) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("validation must be a mapping.")
+    data: dict[str, Any] = {}
+    if "commands" in raw:
+        cmds = raw["commands"]
+        if cmds is None:
+            data["commands"] = []
+        elif not isinstance(cmds, list):
+            raise ValueError("validation.commands must be a list of strings.")
+        else:
+            data["commands"] = [str(item) for item in cmds]
+    return data
+
+
 def _normalize_github(raw: Any) -> dict[str, Any]:
     if raw is None:
         return {}
@@ -423,10 +442,17 @@ def _resolve_loaded_config(
     completion_defaults = _normalize_completion_defaults(
         defaults.get("completion"), "defaults.completion"
     )
+    validation_raw = raw.get("validation") or {}
+    if not isinstance(validation_raw, dict):
+        raise ValueError("validation must be a mapping.")
+    commands_raw = validation_raw.get("commands", [])
+    if not isinstance(commands_raw, list):
+        raise ValueError("validation.commands must be a list of strings.")
     workflow_settings = WorkflowSettings(
         completion=CompletionSettings(
             skip_final_approval=completion_defaults.get("skip_final_approval", False),
         ),
+        validation=ValidationConfig(commands=tuple(str(c) for c in commands_raw)),
     )
     compression_defaults = _normalize_compression_defaults(
         defaults.get("compression"), "defaults.compression"
