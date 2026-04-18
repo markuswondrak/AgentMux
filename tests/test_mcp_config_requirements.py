@@ -462,7 +462,8 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 mock_install.assert_not_called()
 
     def test_runtime_mcp_config_includes_project_env_without_feature_dir(self) -> None:
-        """Runtime MCP JSON carries stable project env; session paths are not embedded."""
+        """Runtime MCP JSON carries stable project env;
+        session paths are not embedded."""
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -488,7 +489,9 @@ class McpConfigRequirementsTests(unittest.TestCase):
             server_env = config["mcpServers"]["agentmux"]["env"]
             self.assertNotIn("FEATURE_DIR", server_env)
 
-    def test_setup_mcp_injects_project_dir_and_allowed_tools_for_non_claude(self) -> None:
+    def test_setup_mcp_injects_project_dir_and_allowed_tools_for_non_claude(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
