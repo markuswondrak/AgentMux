@@ -461,7 +461,8 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 # install() should not be called when config is unchanged
                 mock_install.assert_not_called()
 
-    def test_runtime_mcp_config_injects_feature_dir_when_provided(self) -> None:
+    def test_runtime_mcp_config_includes_project_env_without_feature_dir(self) -> None:
+        """Runtime MCP JSON carries stable project env; session paths are not embedded."""
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -469,14 +470,11 @@ class McpConfigRequirementsTests(unittest.TestCase):
             feature_dir.mkdir()
             project_dir.mkdir()
 
-            config_path = _create_runtime_mcp_config(
-                [self._server()], project_dir, feature_dir=feature_dir
-            )
+            config_path = _create_runtime_mcp_config([self._server()], project_dir)
 
             config = json.loads(config_path.read_text(encoding="utf-8"))
             server_env = config["mcpServers"]["agentmux"]["env"]
-            self.assertIn("FEATURE_DIR", server_env)
-            self.assertEqual(str(feature_dir), server_env["FEATURE_DIR"])
+            self.assertNotIn("FEATURE_DIR", server_env)
             self.assertIn("PROJECT_DIR", server_env)
             self.assertEqual(str(project_dir), server_env["PROJECT_DIR"])
 
@@ -490,7 +488,7 @@ class McpConfigRequirementsTests(unittest.TestCase):
             server_env = config["mcpServers"]["agentmux"]["env"]
             self.assertNotIn("FEATURE_DIR", server_env)
 
-    def test_setup_mcp_injects_feature_dir_and_project_dir_for_non_claude(self) -> None:
+    def test_setup_mcp_injects_project_dir_and_allowed_tools_for_non_claude(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -518,10 +516,18 @@ class McpConfigRequirementsTests(unittest.TestCase):
                     project_dir,
                 )
 
-            self.assertEqual(str(feature_dir), updated["architect"].env["FEATURE_DIR"])
-            self.assertEqual(str(project_dir), updated["architect"].env["PROJECT_DIR"])
+            self.assertNotIn("FEATURE_DIR", updated["architect"].env)
+            self.assertNotIn("PROJECT_DIR", updated["architect"].env)
+            self.assertIn("PYTHONPATH", updated["architect"].env)
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
 
-    def test_setup_mcp_injects_feature_dir_for_claude_in_mcp_json(self) -> None:
+            allowed = updated["architect"].env["AGENTMUX_ALLOWED_TOOLS"]
+            self.assertEqual(
+                set(allowed.split(",")),
+                set(ROLE_TOOLS["architect"]),
+            )
+
+    def test_setup_mcp_injects_mcp_json_for_claude_without_feature_dir(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -545,15 +551,21 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 project_dir,
             )
 
-            # Claude agent env should have FEATURE_DIR
-            self.assertEqual(str(feature_dir), updated["architect"].env["FEATURE_DIR"])
-            # Generated mcp_servers_architect.json should also have FEATURE_DIR
+            self.assertNotIn("FEATURE_DIR", updated["architect"].env)
             mcp_config_path_str = updated["architect"].args[
                 updated["architect"].args.index("--mcp-config") + 1
             ]
             mcp_config = json.loads(Path(mcp_config_path_str).read_text())
             server_env = mcp_config["mcpServers"]["agentmux"]["env"]
-            self.assertEqual(str(feature_dir), server_env["FEATURE_DIR"])
+            self.assertNotIn("FEATURE_DIR", server_env)
+            self.assertEqual(str(project_dir), server_env["PROJECT_DIR"])
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
+
+            allowed = server_env["AGENTMUX_ALLOWED_TOOLS"]
+            self.assertEqual(
+                set(allowed.split(",")),
+                set(ROLE_TOOLS["architect"]),
+            )
 
     def test_setup_mcp_injects_env_into_cursor_mcp_json_for_cursor_agent(
         self,
@@ -600,9 +612,11 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 project_dir,
             )
 
-            # Cursor agent process env still gets FEATURE_DIR/PROJECT_DIR
-            self.assertEqual(str(feature_dir), updated["planner"].env["FEATURE_DIR"])
-            self.assertEqual(str(project_dir), updated["planner"].env["PROJECT_DIR"])
+            # Agent process env gets PYTHONPATH + AGENTMUX_ALLOWED_TOOLS; PROJECT_DIR
+            # is written into .cursor/mcp.json for MCP subprocesses, not the agent env.
+            self.assertNotIn("FEATURE_DIR", updated["planner"].env)
+            self.assertNotIn("PROJECT_DIR", updated["planner"].env)
+            self.assertIn("PYTHONPATH", updated["planner"].env)
 
             # .cursor/mcp.json must have stable env only — no session-specific keys
             config = json.loads(cursor_mcp_json.read_text(encoding="utf-8"))
@@ -668,8 +682,11 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 project_dir,
             )
 
-            # Agent process env is still injected correctly
-            self.assertEqual(str(feature_dir), updated["planner"].env["FEATURE_DIR"])
+            self.assertNotIn("FEATURE_DIR", updated["planner"].env)
+            active_session_path = project_dir / ".agentmux" / ".active_session"
+            self.assertTrue(active_session_path.exists())
+            active_data = json.loads(active_session_path.read_text(encoding="utf-8"))
+            self.assertEqual(str(feature_dir), active_data["feature_dir"])
 
     def test_setup_mcp_merges_allowed_tools_for_multiple_cursor_roles(
         self,
@@ -1230,8 +1247,7 @@ class CursorActiveSessionTests(unittest.TestCase):
             self.assertTrue(active_session_path.exists())
             data = json.loads(active_session_path.read_text(encoding="utf-8"))
             self.assertEqual(str(feature_dir), data["feature_dir"])
-            # Agent process env still carries FEATURE_DIR for non-MCP-subprocess use
-            self.assertEqual(str(feature_dir), updated["planner"].env["FEATURE_DIR"])
+            self.assertNotIn("FEATURE_DIR", updated["planner"].env)
 
     def test_setup_mcp_removes_stale_feature_dir_from_cursor_mcp_json(
         self,
