@@ -304,7 +304,7 @@ class TestResumeSupport:
             "review_results": {},
         }
 
-        with patch.object(handler, "_request_summary", return_value={}):
+        with patch.object(handler, "_request_summary", return_value=({}, None)):
             handler.enter(state, ctx)
         # send_reviewers_many SHOULD be called
         ctx.runtime.send_reviewers_many.assert_called_once()
@@ -694,7 +694,7 @@ class TestFollowupPromptAfterFix:
             "active_reviews": {"reviewer_logic": "completed"},
         }
 
-        with patch.object(handler, "_request_summary", return_value={}):
+        with patch.object(handler, "_request_summary", return_value=({}, None)):
             handler.enter(state, ctx)
         ctx.runtime.send_reviewers_many.assert_not_called()
 

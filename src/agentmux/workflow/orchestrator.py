@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 import threading
 from contextlib import ExitStack
+from pathlib import Path
 
 from ..integrations.compression import cleanup_compression
 from ..integrations.mcp import cleanup_mcp
+from ..integrations.worktree_manager import WorktreeManager
 from ..runtime.event_bus import EventBus, SessionEvent, build_wake_listener
 from ..runtime.file_events import CreatedFilesLogListener, FileEventSource
 from ..runtime.interruption_sources import (
@@ -95,42 +97,19 @@ class PipelineOrchestrator:
     def _handle_interruption(self, event: WorkflowEvent, ctx: PipelineContext) -> None:
         """Handle pane exit interruption.
 
-        For batch agent (researcher) panes that already produced ``summary.md``,
-        treats the exit as a normal task completion: finishes the task, notifies
-        the owner, and continues the pipeline without canceling.
-
-        For any other unexpected pane exit (genuine crash, or researcher that
-        exited before producing output), persists an interruption report and
-        sets the exit code to 130.
+        Notifies the appropriate agent if a researcher subagent crashed,
+        persists the interruption report, and sets the exit code.
         """
         payload = event.payload
         role = str(payload.get("role", ""))
         task_id = payload.get("task_id")
         pane_scope = str(payload.get("pane_scope", ""))
 
+        # Check if this is a researcher subagent that crashed
         if role in BATCH_AGENT_ROLES and task_id and pane_scope == "parallel":
             state = load_state(ctx.files.state)
             owner = self._determine_research_owner(state, role)
 
-            # Determine which research directory this task used
-            prefix = "code-" if role == "code-researcher" else "web-"
-            research_dir = ctx.files.research_dir / f"{prefix}{task_id}"
-            summary_exists = (research_dir / "summary.md").exists()
-
-            if summary_exists and owner:
-                # Researcher finished successfully — treat as normal completion
-                from ..sessions.state_store import write_state
-                from .phase_helpers import notify_research_complete
-
-                state_updates, _ = notify_research_complete(
-                    role, str(task_id), state, ctx, owner
-                )
-                if state_updates:
-                    state.update(state_updates)
-                    write_state(ctx.files.state, state)
-                return
-
-            # No output produced (crash) — notify owner and cancel
             if owner:
                 message = str(payload.get("message", "Task failed")).strip()
                 ctx.runtime.notify(
@@ -282,7 +261,8 @@ class PipelineOrchestrator:
         """Run the pipeline - event-driven, no loop.
 
         Uses ExitStack to ensure cleanup happens in correct LIFO order:
-        bus.stop → cleanup_mcp → cleanup_compression → shutdown → cleanup_feature_dir
+        bus.stop → cleanup_mcp → cleanup_compression → shutdown →
+        cleanup_feature_dir → cleanup_worktree
         """
         self._ctx = ctx
         self._exit_code = None
@@ -290,6 +270,13 @@ class PipelineOrchestrator:
         wake_event = threading.Event()
         bus = self.build_event_bus(ctx.files, ctx.runtime, wake_event)
         bus.register(self._on_event)
+
+        # Read state before ExitStack so cleanup metadata is available even if
+        # state.json is deleted by handle_feature_dir_cleanup.
+        state_for_cleanup = load_state(ctx.files.state)
+        worktree_enabled = state_for_cleanup.get("worktree_enabled")
+        worktree_path_str = state_for_cleanup.get("worktree_path")
+        main_repo_dir_str = state_for_cleanup.get("main_repo_dir")
 
         def handle_feature_dir_cleanup():
             """Clean up feature dir if flagged in state and not keeping session."""
@@ -299,9 +286,23 @@ class PipelineOrchestrator:
             if state.get("cleanup_feature_dir"):
                 cleanup_feature_dir(ctx.files.feature_dir)
 
+        def handle_worktree_cleanup():
+            """Remove the linked worktree after feature-dir cleanup (LIFO last)."""
+            if not worktree_enabled or keep_session or not worktree_path_str:
+                return
+            try:
+                wm = WorktreeManager(
+                    Path(main_repo_dir_str or str(ctx.files.project_dir))
+                )
+                wm.remove(Path(worktree_path_str))
+            except Exception as exc:  # noqa: BLE001
+                print(f"Warning: Failed to remove worktree: {exc}")
+
         with ExitStack() as stack:
             # Register callbacks in REVERSE order of desired execution (LIFO)
-            # Order: bus.stop, cleanup_mcp, cleanup_compression, shutdown, cleanup_dir
+            # Order: bus.stop, cleanup_mcp, cleanup_compression, shutdown,
+            #        cleanup_feature_dir, cleanup_worktree
+            stack.callback(handle_worktree_cleanup)
             stack.callback(handle_feature_dir_cleanup)
             stack.callback(ctx.runtime.shutdown, keep_session)
             stack.callback(cleanup_compression, ctx.files.feature_dir)
