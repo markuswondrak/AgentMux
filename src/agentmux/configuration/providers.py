@@ -18,6 +18,7 @@ class Provider:
     default_model: str | None = None
     default_role_args: list[str] | None = None
     model_args: dict[str, list[str]] | None = None
+    trust_key: str = "Enter"
 
 
 def _build_builtin_providers() -> dict[str, Provider]:
@@ -55,6 +56,7 @@ def _build_builtin_providers() -> dict[str, Provider]:
             default_model=default_model,
             default_role_args=default_role_args if default_role_args else None,
             model_args=model_args if model_args else None,
+            trust_key=str(provider.get("trust_key", "Enter")),
         )
     return result
 
@@ -138,14 +140,22 @@ def get_provider(name: str) -> Provider:
 
 
 def resolve_agent(
-    global_provider: Provider, role: str, role_config: dict
+    global_provider: Provider,
+    role: str,
+    role_config: dict | None = None,
+    *,
+    model: str | None = None,
+    extra_args: list[str] | None = None,
 ) -> AgentConfig:
+    if role_config is None:
+        role_config = {}
     provider_name = role_config.get("provider")
     provider = get_provider(provider_name) if provider_name else global_provider
 
-    # In v2, model is specified directly in role_config, fallback to provider
-    # default, then "sonnet"
-    model = str(role_config.get("model", provider.default_model or "sonnet"))
+    # model kwarg > role_config model > provider default > "sonnet"
+    effective_model = model or str(  # noqa: E501
+        role_config.get("model", provider.default_model or "sonnet")
+    )
 
     args = role_config.get("args")
     if args is None:
@@ -154,17 +164,24 @@ def resolve_agent(
         args = provider.default_args.get(role, provider.default_role_args or [])
 
     # Append model-specific args if defined for this model
-    model_extra = provider.model_args.get(model, []) if provider.model_args else []
+    model_extra = (
+        provider.model_args.get(effective_model, []) if provider.model_args else []
+    )
     if model_extra:
         args = list(args) + model_extra
+
+    # Append extra_args if provided
+    if extra_args:
+        args = list(args) + extra_args
 
     return AgentConfig(
         role=role,
         cli=provider.cli,
-        model=model,
+        model=effective_model,
         model_flag=provider.model_flag,
         args=list(args),
         trust_snippet=provider.trust_snippet,
         batch_command=provider.batch_command,
         single_coder=provider.single_coder,
+        trust_key=provider.trust_key,
     )

@@ -43,7 +43,6 @@ class TestResearchDispatchCode(_FeatureDirMixin, unittest.TestCase):
             topic="auth-module",
             context="Planning auth changes",
             questions=["Where is auth middleware?"],
-            feature_dir=str(self.feature_dir),
             scope_hints=["src/"],
         )
         self.assertEqual("Code research on 'auth-module' dispatched.", result)
@@ -59,7 +58,6 @@ class TestResearchDispatchCode(_FeatureDirMixin, unittest.TestCase):
             topic="test-topic",
             context="x",
             questions=["q"],
-            feature_dir=str(self.feature_dir),
         )
         # No request.md should be created anywhere
         for p in self.feature_dir.rglob("request.md"):
@@ -71,7 +69,6 @@ class TestResearchDispatchCode(_FeatureDirMixin, unittest.TestCase):
                 topic="Bad_Topic",
                 context="x",
                 questions=["q"],
-                feature_dir=str(self.feature_dir),
             )
 
     def test_rejects_empty_questions(self):
@@ -80,7 +77,6 @@ class TestResearchDispatchCode(_FeatureDirMixin, unittest.TestCase):
                 topic="valid-topic",
                 context="x",
                 questions=["", "  "],
-                feature_dir=str(self.feature_dir),
             )
 
 
@@ -92,7 +88,6 @@ class TestResearchDispatchWeb(_FeatureDirMixin, unittest.TestCase):
             topic="sdk-compat",
             context="SDK matrix needed",
             questions=["Which SDKs support MCP?"],
-            feature_dir=str(self.feature_dir),
         )
         self.assertEqual("Web research on 'sdk-compat' dispatched.", result)
         entries = self._read_log_entries()
@@ -105,7 +100,6 @@ class TestResearchDispatchWeb(_FeatureDirMixin, unittest.TestCase):
             topic="test-topic",
             context="x",
             questions=["q"],
-            feature_dir=str(self.feature_dir),
         )
         for p in self.feature_dir.rglob("request.md"):
             self.fail(f"request.md should not exist: {p}")

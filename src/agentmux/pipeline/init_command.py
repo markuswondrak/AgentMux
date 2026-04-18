@@ -12,7 +12,7 @@ from typing import Any
 import yaml
 
 from ..configuration import load_builtin_catalog, load_layered_config
-from ..configuration.providers import get_known_providers
+from ..configuration.providers import PROVIDERS, get_known_providers
 from ..integrations.mcp import (
     DEFAULT_MCP_ROLES,
     DEFAULT_MCP_SERVERS,
@@ -306,8 +306,8 @@ def _stub_path(project_dir: Path, role: str) -> Path:
 
 def detect_clis() -> dict[str, bool]:
     return {
-        provider: shutil.which(provider) is not None
-        for provider in get_known_providers()
+        name: shutil.which(PROVIDERS[name].cli) is not None
+        for name in get_known_providers()
     }
 
 

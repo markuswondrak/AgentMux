@@ -115,6 +115,13 @@ class InferResumePhaseTests(unittest.TestCase):
     def _write_yaml(self, path: Path, text: str) -> None:
         path.write_text(text, encoding="utf-8")
 
+    def _minimal_execution_plan_done(self, planning_dir: Path) -> None:
+        """Orchestrator materialized planning; designing can be skipped."""
+        self._write_yaml(
+            planning_dir / "execution_plan.yaml",
+            "needs_design: false\nneeds_docs: false\ndoc_files: []\n",
+        )
+
     def test_non_failed_phase_returns_as_is(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)
@@ -134,6 +141,21 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
             (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
                 "# Architecture", encoding="utf-8"
+            )
+            state = {"phase": "failed"}
+            self.assertEqual("planning", infer_resume_phase(feature_dir, state))
+
+    def test_failed_with_plan_yaml_but_no_execution_plan_resumes_planning(self) -> None:
+        """plan.yaml alone is not proof the orchestrator finished planning."""
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            (feature_dir / PLANNING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR).mkdir(parents=True, exist_ok=True)
+            (feature_dir / ARCHITECTING_DIR / "architecture.md").write_text(
+                "# Architecture", encoding="utf-8"
+            )
+            (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
+                "version: 2\n", encoding="utf-8"
             )
             state = {"phase": "failed"}
             self.assertEqual("planning", infer_resume_phase(feature_dir, state))
@@ -177,6 +199,7 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
                 "version: 2\n", encoding="utf-8"
             )
+            self._minimal_execution_plan_done(feature_dir / PLANNING_DIR)
             (feature_dir / REVIEW_DIR / "fix_request.md").write_text(
                 "fix this", encoding="utf-8"
             )
@@ -199,6 +222,7 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
                 "version: 2\n", encoding="utf-8"
             )
+            self._minimal_execution_plan_done(feature_dir / PLANNING_DIR)
             (feature_dir / REVIEW_DIR / "fix_request.md").write_text(
                 "fix this", encoding="utf-8"
             )
@@ -223,6 +247,7 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
                 "version: 2\n", encoding="utf-8"
             )
+            self._minimal_execution_plan_done(feature_dir / PLANNING_DIR)
             (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
                 "", encoding="utf-8"
             )
@@ -244,6 +269,7 @@ class InferResumePhaseTests(unittest.TestCase):
             (feature_dir / PLANNING_DIR / "plan.yaml").write_text(
                 "version: 2\n", encoding="utf-8"
             )
+            self._minimal_execution_plan_done(feature_dir / PLANNING_DIR)
             (feature_dir / IMPLEMENTATION_DIR / "done_1").write_text(
                 "", encoding="utf-8"
             )

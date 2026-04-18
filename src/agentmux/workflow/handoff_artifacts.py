@@ -130,6 +130,45 @@ def generate_review_md(data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def generate_consolidated_review_md(review_results: dict[str, Any]) -> str:
+    """Generate a consolidated review.md from parallel reviewer results.
+
+    For a single reviewer, returns their review_text as-is.
+    For multiple reviewers, emits a combined document with per-role sections.
+    All reviewers are expected to have passed when this is called.
+    """
+    if not review_results:
+        return "verdict: pass\n"
+
+    roles = sorted(review_results.keys())
+
+    if len(roles) == 1:
+        review_text = review_results[roles[0]].get("review_text", "")
+        return review_text if review_text else "verdict: pass\n"
+
+    lines = ["verdict: pass", ""]
+    lines.extend(
+        [
+            "## Summary",
+            "",
+            f"Code review completed. Reviewed by: {', '.join(roles)}.",
+            "",
+        ]
+    )
+    for role in roles:
+        result = review_results[role]
+        review_text = (result.get("review_text") or "").strip()
+        lines.append(f"### {role}")
+        lines.append("")
+        if review_text:
+            lines.append(review_text)
+        else:
+            lines.append(f"verdict: {result.get('verdict', 'pass')}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _load_review_yaml_data(review_dir: Path) -> dict[str, Any] | None:
     yaml_path = review_dir / "review.yaml"
     if not yaml_path.exists():

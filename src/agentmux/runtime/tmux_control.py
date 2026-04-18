@@ -166,7 +166,9 @@ def tmux_new_session(
         f"{MONITOR_MAX_WIDTH}"
     )
     _enforce_monitor_min_width(session_name)
-    accept_trust_prompt(primary_pane, snippet=trust_snippet)
+    accept_trust_prompt(
+        primary_pane, snippet=trust_snippet, trust_key=primary_agent.trust_key
+    )
 
     panes: dict[str, str | None] = {
         "_control": control_pane,
@@ -241,7 +243,7 @@ def create_agent_pane(
         session_name, project_dir, build_agent_command(agent), label=agent_name
     )
     set_pane_identity(pane_id, role=agent.role, display_label=display_label)
-    accept_trust_prompt(pane_id, snippet=trust_snippet)
+    accept_trust_prompt(pane_id, snippet=trust_snippet, trust_key=agent.trust_key)
     return pane_id, pid
 
 

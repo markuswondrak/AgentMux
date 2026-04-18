@@ -68,15 +68,31 @@ def accept_trust_prompt(
     target_pane: str,
     *,
     snippet: str | None,
+    trust_key: str = "Enter",
     timeout_seconds: float = 3.0,
+    clear_timeout_seconds: float = 10.0,
 ) -> None:
     if snippet is None:
         return
     deadline = time.time() + timeout_seconds
+    pressed = False
     while time.time() < deadline:
         if snippet in capture_pane(target_pane):
             run_command(["tmux", "select-pane", "-t", target_pane])
-            run_command(["tmux", "send-keys", "-t", target_pane, "Enter"])
+            run_command(["tmux", "send-keys", "-t", target_pane, trust_key])
+            pressed = True
             break
         time.sleep(0.2)
-    time.sleep(0.5)  # let the CLI tool finish starting up before sending keys
+    if not pressed:
+        return
+    # Wait for the snippet to disappear before returning, so subsequent
+    # send_text / _wait_for_pane_ready calls don't fire into a transitional UI.
+    clear_deadline = time.time() + clear_timeout_seconds
+    while time.time() < clear_deadline:
+        if snippet not in capture_pane(target_pane):
+            return
+        time.sleep(0.2)
+    _log(
+        f"accept_trust_prompt: snippet {snippet!r} still visible in {target_pane} "
+        f"after {clear_timeout_seconds}s — proceeding anyway"
+    )
