@@ -93,6 +93,7 @@ class InitRequirementsTests(unittest.TestCase):
         lookup = {
             "claude": "/usr/bin/claude",
             "codex": "/usr/bin/codex",
+            "cursor": None,
             "gemini": None,
             "opencode": None,
             "copilot": None,
@@ -108,6 +109,7 @@ class InitRequirementsTests(unittest.TestCase):
             {
                 "claude": True,
                 "codex": True,
+                "cursor": False,
                 "gemini": False,
                 "opencode": False,
                 "copilot": False,

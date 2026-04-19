@@ -17,7 +17,7 @@ Completion semantics are phase-specific:
 
 - **Architecture** — the architect writes `architecture.md` directly. No YAML is produced; the planner consumes the Markdown file directly.
 - **Plan** — the planner writes one `plan.yaml` (version 2) containing all sub-plans and execution metadata. The orchestrator materializes `plan_N.md`, `tasks_N.md`, `execution_plan.yaml`, and `plan.md` automatically.
-- **Review** — `review.yaml` is the canonical structured review artifact. If `review.md` is missing, AgentMux materializes it from `review.yaml` before summary/completion steps so downstream prompts can continue to read the Markdown companion.
+- **Review** — `review.yaml` is the canonical structured review artifact. If `review.md` is missing when all reviewers have passed, the orchestrator materializes it from the collected review results before dispatching the summary prompt (`_request_summary()` in `handlers/reviewing.py`), so downstream prompts can continue to read the Markdown companion. A consolidated `review.md` is generated: single reviewer → their text verbatim; multiple reviewers → combined document with per-role sections.
 
 ## Contracts
 

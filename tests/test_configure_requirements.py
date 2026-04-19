@@ -334,6 +334,25 @@ class ConfigureRequirementsTests(unittest.TestCase):
                 updated = yaml.safe_load(f)
             self.assertEqual("opus", updated["roles"]["architect"]["model"])
 
+    # =========================================================================
+    # detect_clis tests
+    # =========================================================================
+
+    def test_detect_clis_uses_binary_not_provider_name(self) -> None:
+        # detect_clis calls shutil.which(PROVIDERS[name].cli), not shutil.which(name)
+        import shutil
+
+        from agentmux.pipeline.init_command import detect_clis
+
+        def which_side_effect(name: str) -> str | None:
+            # Only return a path for "agent" (cursor's binary), not "cursor"
+            return "/usr/bin/agent" if name == "agent" else None
+
+        with patch.object(shutil, "which", side_effect=which_side_effect):
+            result = detect_clis()
+        # cursor provider uses cli="agent", so detect_clis should find it
+        assert result.get("cursor") is True
+
     def test_interactive_no_change_no_write(self) -> None:
         """All prompts return existing defaults → YAML not rewritten."""
         with tempfile.TemporaryDirectory() as tmp:
