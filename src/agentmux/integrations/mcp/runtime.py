@@ -109,21 +109,20 @@ def _inject_cursor_mcp_env(
         config_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def _write_cursor_active_session(
+def _write_active_session(
     project_dir: Path,
     role_servers_list: list[list[McpServerSpec]],
     feature_dir: Path,
 ) -> None:
     """Write session-specific MCP values to .agentmux/.active_session.
 
-    Cursor CLI does not pass environment variables to its MCP server
-    subprocesses.  FEATURE_DIR and AGENTMUX_ALLOWED_TOOLS change on every
-    session, so instead of writing them into .cursor/mcp.json (which triggers
-    Cursor's MCP approval modal on each change), they are written here.  The
-    MCP server reads this file as a fallback when the env vars are absent.
+    Provides a universal fallback for MCP servers that cannot inherit env vars
+    from the parent process (e.g. Cursor CLI).  FEATURE_DIR and the merged
+    AGENTMUX_ALLOWED_TOOLS are written here so that the MCP server can read
+    them when the env vars are absent.
 
-    Only one active Cursor session per project is supported at a time — a
-    concurrent second session would overwrite this file.
+    Only one active session per project is supported at a time — a concurrent
+    second session would overwrite this file.
     """
     merged_tools: set[str] = set()
     for role_servers in role_servers_list:
@@ -148,6 +147,7 @@ def create_runtime_mcp_config(
     servers: list[McpServerSpec],
     project_dir: Path,
     role: str | None = None,
+    feature_dir: Path | None = None,
 ) -> Path:
     """Generate a runtime MCP server config JSON under .agentmux/.
 
@@ -155,12 +155,17 @@ def create_runtime_mcp_config(
     each agent gets its own config with a role-specific ``AGENTMUX_ALLOWED_TOOLS``
     env var.  Without *role* the shared ``mcp_servers.json`` is written instead.
 
+    When *feature_dir* is given, ``FEATURE_DIR`` is added to each server's env
+    so that MCP tools can locate session files without requiring the agent to
+    re-pass the path in every tool call.
+
     The file is only rewritten when its content would change.
 
     Args:
         servers: MCP server specifications (may carry role-specific env).
         project_dir: Project root directory where .agentmux/ lives.
         role: Optional role name used to derive the config file name.
+        feature_dir: Optional session feature directory; injected as FEATURE_DIR.
 
     Returns:
         Absolute path to the generated config file.
@@ -176,6 +181,8 @@ def create_runtime_mcp_config(
             "PYTHONPATH": str(project_dir),
             "PROJECT_DIR": str(project_dir),
         }
+        if feature_dir is not None:
+            server_env["FEATURE_DIR"] = str(feature_dir)
         server_env.update(server.env)
         mcp_servers[server.name] = {
             "type": "stdio",
@@ -213,10 +220,20 @@ def setup_mcp(
     so the MCP server process is started with the correct AGENTMUX_ALLOWED_TOOLS.
     For all other CLI providers AGENTMUX_ALLOWED_TOOLS is injected into the agent
     process env, where it is inherited by any MCP server sub-process.
-    """
-    _ = feature_dir
 
+    ``FEATURE_DIR`` and ``PROJECT_DIR`` are injected into every MCP-enabled
+    agent's process env so that MCP tools such as ``submit_research_done`` can
+    locate session files without requiring the agent to re-pass the path in each
+    tool call.  For Claude agents these vars are also written into the per-role
+    ``mcp_servers_<role>.json`` so that the MCP server sub-process (which Claude
+    starts from the JSON config) inherits them too.
+
+    A ``.agentmux/.active_session`` file is always written as a universal
+    fallback for providers (e.g. Cursor) whose MCP server subprocesses do not
+    inherit the parent process env.
+    """
     updated_agents = dict(agents)
+    all_role_servers: list[list[McpServerSpec]] = []
     cursor_role_servers: list[list[McpServerSpec]] = []
     for role in roles:
         agent = updated_agents.get(role)
@@ -224,17 +241,25 @@ def setup_mcp(
             continue
 
         role_specific_servers = _role_servers(servers, role)
+        all_role_servers.append(role_specific_servers)
 
-        # Inject runtime env vars (includes AGENTMUX_ALLOWED_TOOLS for non-Claude)
+        # Inject runtime env vars (PYTHONPATH + AGENTMUX_ALLOWED_TOOLS for non-Claude)
         env = dict(agent.env or {})
         for server in role_specific_servers:
             env.update(_runtime_env(server, project_dir, env))
+
+        # Inject session paths so MCP tools can resolve files without re-passing them
+        env["FEATURE_DIR"] = str(feature_dir)
+        env["PROJECT_DIR"] = str(project_dir)
 
         # For Claude agents, generate a per-role config and pass it via --mcp-config
         args = list(agent.args or [])
         if agent.cli == "claude" and "--mcp-config" not in args:
             role_config_path = create_runtime_mcp_config(
-                role_specific_servers, project_dir, role=role
+                role_specific_servers,
+                project_dir,
+                role=role,
+                feature_dir=feature_dir,
             )
             args.extend(["--mcp-config", str(role_config_path)])
 
@@ -246,7 +271,9 @@ def setup_mcp(
 
     if cursor_role_servers:
         _inject_cursor_mcp_env(project_dir)
-        _write_cursor_active_session(project_dir, cursor_role_servers, feature_dir)
+
+    # Always write .active_session as a universal fallback for all providers
+    _write_active_session(project_dir, all_role_servers, feature_dir)
 
     return updated_agents
 
