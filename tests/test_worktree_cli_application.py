@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,8 +12,8 @@ from agentmux.integrations.worktree_manager import (
     WorktreeBranchConflictError,
     WorktreeResult,
 )
-from agentmux.pipeline.application import PipelineApplication
-from agentmux.pipeline.cli import build_parser, handle_run
+from agentmux.pipeline.application import LauncherArgs, PipelineApplication
+from agentmux.pipeline.cli import build_parser, handle_issue, handle_run
 from agentmux.sessions import PreparedSession
 from agentmux.sessions.state_store import load_runtime_files, write_state
 
@@ -49,13 +48,22 @@ def _make_loaded_config(branch_prefix: str = "feature/") -> MagicMock:
 
 
 class TestWorktreeParserFlag:
-    def test_worktree_flag_in_parser(self) -> None:
+    def test_worktree_flag_in_run_parser(self) -> None:
         parser = build_parser()
 
         args = parser.parse_args(["run", "--worktree", "some feature"])
         assert args.worktree is True
 
         args = parser.parse_args(["run", "some feature"])
+        assert args.worktree is False
+
+    def test_worktree_flag_in_issue_parser(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(["issue", "--worktree", "42"])
+        assert args.worktree is True
+
+        args = parser.parse_args(["issue", "42"])
         assert args.worktree is False
 
 
@@ -96,6 +104,40 @@ class TestHandleRunWorktree:
         )
 
 
+class TestHandleIssueWorktree:
+    def test_handle_issue_passes_worktree_true(self, tmp_path: Path) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["issue", "--worktree", "42"])
+        with patch(
+            "agentmux.pipeline.application.PipelineApplication.run_issue",
+            return_value=0,
+        ) as mock_issue:
+            handle_issue(args, tmp_path)
+        mock_issue.assert_called_once_with(
+            "42",
+            name=None,
+            keep_session=False,
+            product_manager=False,
+            worktree=True,
+        )
+
+    def test_handle_issue_passes_worktree_false(self, tmp_path: Path) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["issue", "42"])
+        with patch(
+            "agentmux.pipeline.application.PipelineApplication.run_issue",
+            return_value=0,
+        ) as mock_issue:
+            handle_issue(args, tmp_path)
+        mock_issue.assert_called_once_with(
+            "42",
+            name=None,
+            keep_session=False,
+            product_manager=False,
+            worktree=False,
+        )
+
+
 # ── _prepare_session new-session worktree tests ────────────────────────────────
 
 
@@ -107,12 +149,8 @@ class TestPrepareSessionNewWorktree:
         app = PipelineApplication(project_dir)
 
         loaded = _make_loaded_config()
-        args = SimpleNamespace(
-            resume=None,
-            issue=None,
+        args = LauncherArgs(
             prompt="my feature",
-            name=None,
-            product_manager=False,
             worktree=True,
         )
 
@@ -154,13 +192,8 @@ class TestPrepareSessionNewWorktree:
         app = PipelineApplication(project_dir)
 
         loaded = _make_loaded_config()
-        args = SimpleNamespace(
-            resume=None,
-            issue=None,
+        args = LauncherArgs(
             prompt="my feature",
-            name=None,
-            product_manager=False,
-            worktree=False,
         )
 
         with (
@@ -186,12 +219,8 @@ class TestPrepareSessionNewWorktree:
         app = PipelineApplication(project_dir)
 
         loaded = _make_loaded_config()
-        args = SimpleNamespace(
-            resume=None,
-            issue=None,
+        args = LauncherArgs(
             prompt="my feature",
-            name=None,
-            product_manager=False,
             worktree=True,
         )
 
@@ -230,15 +259,9 @@ class TestLinkedWorktreeChecks:
         project_dir.mkdir()
         app = PipelineApplication(project_dir)
         loaded = _make_loaded_config()
-        args = SimpleNamespace(
-            resume=None,
-            issue=None,
+        args = LauncherArgs(
             prompt="my feature",
-            name=None,
-            product_manager=False,
             worktree=worktree,
-            keep_session=False,
-            orchestrate=None,
         )
         return app, args, loaded
 
@@ -320,13 +343,8 @@ class TestResumeWorktree:
 
         app = PipelineApplication(project_dir)
         loaded = _make_loaded_config()
-        args = SimpleNamespace(
+        args = LauncherArgs(
             resume=str(feature_dir),
-            issue=None,
-            prompt=None,
-            name=None,
-            product_manager=False,
-            worktree=False,
         )
 
         with (
@@ -370,13 +388,8 @@ class TestResumeWorktree:
 
         app = PipelineApplication(project_dir)
         loaded = _make_loaded_config()
-        args = SimpleNamespace(
+        args = LauncherArgs(
             resume=str(feature_dir),
-            issue=None,
-            prompt=None,
-            name=None,
-            product_manager=False,
-            worktree=False,
         )
 
         with (

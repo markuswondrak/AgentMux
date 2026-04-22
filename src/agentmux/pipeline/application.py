@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 import time
-import types
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +37,26 @@ from ..terminal_ui.screens import goodbye_canceled, goodbye_error, goodbye_succe
 from ..workflow.interruptions import InterruptionService
 from ..workflow.orchestrator import PipelineOrchestrator
 from ..workflow.phase_registry import resolve_phase_startup_role
+
+
+@dataclass
+class LauncherArgs:
+    """Typed arguments for _run_launcher and _prepare_session.
+
+    Exactly one of prompt / issue / resume / orchestrate should be set.
+    """
+
+    # Mode (exactly one set per invocation)
+    prompt: str | None = None
+    issue: str | None = None
+    resume: str | bool | None = None
+    orchestrate: str | None = None
+
+    # Shared session options
+    name: str | None = None
+    keep_session: bool = False
+    product_manager: bool = False
+    worktree: bool = False
 
 
 def _derive_session_name(feature_dir: Path) -> str:
@@ -328,8 +348,8 @@ class PipelineApplication:
 
         return True
 
-    def _run_launcher(self, args, loaded) -> int:
-        if args.resume and getattr(args, "issue", None):
+    def _run_launcher(self, args: LauncherArgs, loaded) -> int:
+        if args.resume and args.issue:
             raise SystemExit("--issue cannot be used with --resume.")
 
         mcp = self._mcp_preparer()
@@ -349,14 +369,14 @@ class PipelineApplication:
             is_linked = (
                 _wm.is_linked_worktree(cwd=Path.cwd()) or _wm.is_linked_worktree()
             )
-            if is_linked and getattr(args, "worktree", False):
+            if is_linked and args.worktree:
                 print(
                     "Error: Cannot use --worktree from inside a linked worktree. "
                     "Run from the main repository.",
                     file=sys.stderr,
                 )
                 return 1
-            if is_linked and not getattr(args, "worktree", False):
+            if is_linked and not args.worktree:
                 print(
                     "Warning: Running from a linked worktree. "
                     "Some git operations may behave unexpectedly.",
@@ -400,7 +420,7 @@ class PipelineApplication:
             args, prepared, agents, session_name=session_name
         )
 
-    def _prepare_session(self, args, loaded) -> PreparedSession:
+    def _prepare_session(self, args: LauncherArgs, loaded) -> PreparedSession:
         if args.resume:
             if args.resume is True:
                 selected = self.ui.select_session(
@@ -437,7 +457,7 @@ class PipelineApplication:
         github = GitHubBootstrapper(
             self.project_dir, loaded.github, output=self.ui.print
         )
-        issue_arg = getattr(args, "issue", None)
+        issue_arg = args.issue
         if issue_arg:
             issue = github.resolve_issue(str(issue_arg))
             prompt = PromptInput(text=issue.prompt_text, slug_source=issue.slug_source)
@@ -469,7 +489,7 @@ class PipelineApplication:
         feature_slug = feature_slug_from_dir(prepared.feature_dir)
         branch_name = f"{loaded.github.branch_prefix}{feature_slug}"
 
-        if getattr(args, "worktree", False):
+        if args.worktree:
             from ..integrations.worktree_manager import (  # noqa: PLC0415
                 WorktreeBranchConflictError,
                 WorktreeManager,
@@ -747,15 +767,12 @@ class PipelineApplication:
         loaded = load_layered_config(
             self.project_dir, explicit_config_path=self.config_path
         )
-        args = types.SimpleNamespace(
+        args = LauncherArgs(
             prompt=prompt,
             name=name,
             keep_session=keep_session,
             product_manager=product_manager,
             worktree=worktree,
-            resume=None,
-            issue=None,
-            orchestrate=None,
         )
         return self._run_launcher(args, loaded)
 
@@ -764,32 +781,31 @@ class PipelineApplication:
         loaded = load_layered_config(
             self.project_dir, explicit_config_path=self.config_path
         )
-        args = types.SimpleNamespace(
+        args = LauncherArgs(
             resume=session if session else True,
-            issue=None,
-            prompt=None,
-            name=None,
-            product_manager=False,
-            orchestrate=None,
             keep_session=keep_session,
         )
         return self._run_launcher(args, loaded)
 
     def run_issue(
-        self, number_or_url, *, name=None, keep_session=False, product_manager=False
+        self,
+        number_or_url,
+        *,
+        name=None,
+        keep_session=False,
+        product_manager=False,
+        worktree=False,
     ) -> int:
         self.ensure_dependencies()
         loaded = load_layered_config(
             self.project_dir, explicit_config_path=self.config_path
         )
-        args = types.SimpleNamespace(
+        args = LauncherArgs(
             issue=number_or_url,
-            resume=None,
-            prompt=None,
             name=name,
-            product_manager=product_manager,
-            orchestrate=None,
             keep_session=keep_session,
+            product_manager=product_manager,
+            worktree=worktree,
         )
         return self._run_launcher(args, loaded)
 
@@ -798,7 +814,5 @@ class PipelineApplication:
         loaded = load_layered_config(
             self.project_dir, explicit_config_path=self.config_path
         )
-        args = types.SimpleNamespace(
-            orchestrate=str(feature_dir), keep_session=keep_session
-        )
+        args = LauncherArgs(orchestrate=str(feature_dir), keep_session=keep_session)
         return self._run_background_orchestrator(args, loaded)
