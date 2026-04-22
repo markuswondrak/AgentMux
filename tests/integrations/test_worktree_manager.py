@@ -106,8 +106,8 @@ class TestCreate:
         assert err.branch_name == branch_name
         assert err.conflicting_path == conflicting
 
-    def test_create_path_already_exists(self, tmp_path: Path) -> None:
-        """Raises RuntimeError on generic git worktree add failure."""
+    def test_create_path_already_exists_generic_error(self, tmp_path: Path) -> None:
+        """Raises RuntimeError on generic git worktree add failure (path not on disk)."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         manager = WorktreeManager(repo_dir)
@@ -121,6 +121,89 @@ class TestCreate:
         )
         with patch("subprocess.run", side_effect=exc), pytest.raises(RuntimeError):
             manager.create(worktree_path, branch_name)
+
+    def test_create_reuses_existing_worktree_correct_branch(
+        self, tmp_path: Path
+    ) -> None:
+        """Returns WorktreeResult when worktree path exists on correct branch."""
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        manager = WorktreeManager(repo_dir)
+        worktree_path = tmp_path / "repo-worktrees" / "feature-x"
+        worktree_path.mkdir(parents=True)
+        branch_name = "feature/feature-x"
+
+        branch_result = MagicMock()
+        branch_result.returncode = 0
+        branch_result.stdout = "feature/feature-x\n"
+
+        with patch("subprocess.run", return_value=branch_result) as mock_run:
+            result = manager.create(worktree_path, branch_name)
+
+        assert isinstance(result, WorktreeResult)
+        assert result.path == worktree_path
+        assert result.branch_name == branch_name
+        # Should only call rev-parse to check branch, not git worktree add
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert "rev-parse" in cmd
+        assert "--abbrev-ref" in cmd
+
+    def test_create_raises_when_existing_worktree_wrong_branch(
+        self, tmp_path: Path
+    ) -> None:
+        """Raises RuntimeError when worktree path exists but on wrong branch."""
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        manager = WorktreeManager(repo_dir)
+        worktree_path = tmp_path / "repo-worktrees" / "feature-x"
+        worktree_path.mkdir(parents=True)
+        branch_name = "feature/feature-x"
+
+        branch_result = MagicMock()
+        branch_result.returncode = 0
+        branch_result.stdout = "feature/other-branch\n"
+
+        with patch("subprocess.run", return_value=branch_result), pytest.raises(
+            RuntimeError, match="already exists.*different branch"
+        ):
+            manager.create(worktree_path, branch_name)
+
+    def test_create_fallback_without_b_when_branch_exists(
+        self, tmp_path: Path
+    ) -> None:
+        """Retries without -b when branch already exists."""
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        manager = WorktreeManager(repo_dir)
+        worktree_path = tmp_path / "repo-worktrees" / "feature-x"
+        branch_name = "feature/feature-x"
+
+        branch_exists_exc = subprocess.CalledProcessError(
+            returncode=255,
+            cmd=["git", "worktree", "add"],
+            stderr="fatal: a branch named 'feature/feature-x' already exists",
+        )
+        success_result = MagicMock()
+        success_result.returncode = 0
+
+        with patch(
+            "subprocess.run", side_effect=[branch_exists_exc, success_result]
+        ) as mock_run:
+            result = manager.create(worktree_path, branch_name)
+
+        assert isinstance(result, WorktreeResult)
+        assert result.path == worktree_path
+        assert result.branch_name == branch_name
+        assert mock_run.call_count == 2
+        # First call: with -b
+        first_cmd = mock_run.call_args_list[0][0][0]
+        assert "-b" in first_cmd
+        # Second call: without -b
+        second_cmd = mock_run.call_args_list[1][0][0]
+        assert "-b" not in second_cmd
+        assert str(worktree_path) in second_cmd
+        assert branch_name in second_cmd
 
 
 class TestRemove:
