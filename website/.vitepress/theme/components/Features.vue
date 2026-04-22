@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { providerCommaList } from '../providers'
+
 interface Feature {
   variant: 'wide' | 'narrow' | 'dark' | 'split'
   icon: string
@@ -26,7 +28,7 @@ const features: Feature[] = [
     variant: 'dark',
     icon: '>_',
     title: 'CLI first',
-    body: 'No bespoke runtime, no proprietary harness. AgentMux drives the existing CLIs you already authenticated against — claude, codex, copilot, gemini, opencode, qwen — through tmux key injection, reusing your subscriptions.',
+    body: `No bespoke runtime, no proprietary harness. AgentMux drives the existing CLIs you already authenticated against — ${providerCommaList} — through tmux key injection, reusing your subscriptions.`,
     chips: ['NO_API_COSTS', 'TMUX_NATIVE'],
   },
   {
