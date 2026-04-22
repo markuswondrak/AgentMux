@@ -213,6 +213,11 @@ def _resolve_loaded_config(
                 provider.role_args.get(role) or []
             )
 
+        # Append model-specific args (e.g. --reasoning-effort for copilot)
+        model_extra = provider.model_args.get(model, [])
+        if model_extra:
+            args = args + list(model_extra)
+
         agents[role] = AgentConfig(
             role=role,
             cli=provider.command,

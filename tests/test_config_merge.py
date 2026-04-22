@@ -445,3 +445,97 @@ class TestLayeredConfigProviderFieldMerge:
                 loaded = load_layered_config(project_dir)
         assert loaded.agents["coder"].args == ["--custom"]
         assert "--permission-mode" in loaded.agents["architect"].args
+
+
+class TestModelArgsApplied:
+    """Verify that provider model_args are appended to resolved agent args."""
+
+    def test_copilot_model_args_applied_via_load_layered_config(self) -> None:
+        """Copilot's model_args (--reasoning-effort high) must appear in agent args."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            _write_project_config(
+                project_dir,
+                {"version": 2, "defaults": {"provider": "copilot"}},
+            )
+            with patch(_NO_USER, Path(td) / "no-user.yaml"):
+                loaded = load_layered_config(project_dir)
+        # Default copilot model is claude-sonnet-4.6 which has model_args
+        coder = loaded.agents["coder"]
+        assert "--reasoning-effort" in coder.args
+        assert "high" in coder.args
+        # default_role_args (--allow-all) should also be present
+        assert "--allow-all" in coder.args
+
+    def test_model_args_not_applied_for_non_matching_model(self) -> None:
+        """model_args should NOT be appended when model has no entry."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            _write_project_config(
+                project_dir,
+                {
+                    "version": 2,
+                    "defaults": {"provider": "copilot"},
+                    "roles": {
+                        "coder": {"model": "claude-haiku-4.5"},
+                    },
+                },
+            )
+            with patch(_NO_USER, Path(td) / "no-user.yaml"):
+                loaded = load_layered_config(project_dir)
+        coder = loaded.agents["coder"]
+        assert "--reasoning-effort" not in coder.args
+        assert "--allow-all" in coder.args
+
+    def test_model_args_applied_when_role_model_matches(self) -> None:
+        """Role-specific model that matches model_args should get those args."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            _write_project_config(
+                project_dir,
+                {
+                    "version": 2,
+                    "defaults": {"provider": "copilot"},
+                    "roles": {
+                        "architect": {"model": "claude-opus-4.6"},
+                        "coder": {"model": "claude-haiku-4.5"},
+                    },
+                },
+            )
+            with patch(_NO_USER, Path(td) / "no-user.yaml"):
+                loaded = load_layered_config(project_dir)
+        # architect uses opus which has model_args
+        architect = loaded.agents["architect"]
+        assert "--reasoning-effort" in architect.args
+        # coder uses haiku (no model_args entry)
+        coder = loaded.agents["coder"]
+        assert "--reasoning-effort" not in coder.args
+
+    def test_project_can_override_model_args(self) -> None:
+        """Project config can override model_args via deep merge."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            _write_project_config(
+                project_dir,
+                {
+                    "version": 2,
+                    "defaults": {"provider": "copilot"},
+                    "providers": {
+                        "copilot": {
+                            "model_args": {
+                                "claude-sonnet-4.6": [
+                                    "--reasoning-effort",
+                                    "medium",
+                                ],
+                            },
+                        },
+                    },
+                },
+            )
+            with patch(_NO_USER, Path(td) / "no-user.yaml"):
+                loaded = load_layered_config(project_dir)
+        coder = loaded.agents["coder"]
+        assert "--reasoning-effort" in coder.args
+        assert "medium" in coder.args
+        # "high" from builtin should be replaced (list replace semantics)
+        assert "high" not in coder.args
