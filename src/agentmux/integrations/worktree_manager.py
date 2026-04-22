@@ -64,6 +64,45 @@ class WorktreeManager:
             pass
         return None
 
+    def _branch_exists(self, branch_name: str) -> bool:
+        """Return True when branch_name exists locally."""
+        result = subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch_name}"],
+            cwd=self.repo_dir,
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode == 0
+
+    def _find_branch_worktree(self, branch_name: str) -> str | None:
+        """Return linked worktree path currently using branch_name, if any."""
+        result = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=self.repo_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        current_worktree: str | None = None
+        current_branch: str | None = None
+
+        for line in result.stdout.splitlines():
+            if not line:
+                if current_branch == f"refs/heads/{branch_name}":
+                    return current_worktree
+                current_worktree = None
+                current_branch = None
+                continue
+            if line.startswith("worktree "):
+                current_worktree = line.removeprefix("worktree ").strip()
+            elif line.startswith("branch "):
+                current_branch = line.removeprefix("branch ").strip()
+
+        if current_branch == f"refs/heads/{branch_name}":
+            return current_worktree
+        return None
+
     def create(self, worktree_path: Path, branch_name: str) -> WorktreeResult:
         """Create a git worktree at worktree_path on branch branch_name.
 
@@ -103,6 +142,13 @@ class WorktreeManager:
                 ) from exc
             if "already exists" in stderr:
                 # Branch exists but isn't checked out elsewhere; attach it.
+                return self._add_existing_branch(worktree_path, branch_name)
+            if self._branch_exists(branch_name):
+                conflicting_path = self._find_branch_worktree(branch_name)
+                if conflicting_path:
+                    raise WorktreeBranchConflictError(
+                        branch_name, conflicting_path
+                    ) from exc
                 return self._add_existing_branch(worktree_path, branch_name)
             raise RuntimeError(f"git worktree add failed: {stderr.strip()}") from exc
         return WorktreeResult(path=worktree_path, branch_name=branch_name)

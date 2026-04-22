@@ -107,7 +107,7 @@ class TestCreate:
         assert err.conflicting_path == conflicting
 
     def test_create_path_already_exists_generic_error(self, tmp_path: Path) -> None:
-        """Raises RuntimeError on generic git worktree add failure (path not on disk)."""
+        """Raises RuntimeError on generic git worktree add failure."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         manager = WorktreeManager(repo_dir)
@@ -164,14 +164,13 @@ class TestCreate:
         branch_result.returncode = 0
         branch_result.stdout = "feature/other-branch\n"
 
-        with patch("subprocess.run", return_value=branch_result), pytest.raises(
-            RuntimeError, match="already exists.*different branch"
+        with (
+            patch("subprocess.run", return_value=branch_result),
+            pytest.raises(RuntimeError, match="already exists.*different branch"),
         ):
             manager.create(worktree_path, branch_name)
 
-    def test_create_fallback_without_b_when_branch_exists(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_fallback_without_b_when_branch_exists(self, tmp_path: Path) -> None:
         """Retries without -b when branch already exists."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
@@ -204,6 +203,139 @@ class TestCreate:
         assert "-b" not in second_cmd
         assert str(worktree_path) in second_cmd
         assert branch_name in second_cmd
+
+    def test_create_fallback_without_b_when_branch_exists_localized(
+        self, tmp_path: Path
+    ) -> None:
+        """Retries without -b when git reports branch-exists in another locale."""
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        manager = WorktreeManager(repo_dir)
+        worktree_path = tmp_path / "repo-worktrees" / "feature-x"
+        branch_name = "feature/feature-x"
+
+        branch_exists_exc = subprocess.CalledProcessError(
+            returncode=255,
+            cmd=["git", "worktree", "add"],
+            stderr=f"fatal: Branch '{branch_name}' existiert bereits",
+        )
+        branch_exists_result = subprocess.CompletedProcess(
+            args=[
+                "git",
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/heads/{branch_name}",
+            ],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        no_conflict_result = subprocess.CompletedProcess(
+            args=["git", "worktree", "list", "--porcelain"],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        success_result = subprocess.CompletedProcess(
+            args=["git", "worktree", "add", str(worktree_path), branch_name],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
+        with patch(
+            "subprocess.run",
+            side_effect=[
+                branch_exists_exc,
+                branch_exists_result,
+                no_conflict_result,
+                success_result,
+            ],
+        ) as mock_run:
+            result = manager.create(worktree_path, branch_name)
+
+        assert isinstance(result, WorktreeResult)
+        assert result.path == worktree_path
+        assert result.branch_name == branch_name
+        assert mock_run.call_count == 4
+        assert mock_run.call_args_list[1][0][0] == [
+            "git",
+            "show-ref",
+            "--verify",
+            "--quiet",
+            f"refs/heads/{branch_name}",
+        ]
+        assert mock_run.call_args_list[2][0][0] == [
+            "git",
+            "worktree",
+            "list",
+            "--porcelain",
+        ]
+        second_add_cmd = mock_run.call_args_list[3][0][0]
+        assert second_add_cmd == [
+            "git",
+            "worktree",
+            "add",
+            str(worktree_path),
+            branch_name,
+        ]
+
+    def test_create_branch_conflict_detected_from_worktree_list(
+        self, tmp_path: Path
+    ) -> None:
+        """Raises conflict when porcelain output shows branch checked out elsewhere."""
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        manager = WorktreeManager(repo_dir)
+        worktree_path = tmp_path / "repo-worktrees" / "feature-x"
+        branch_name = "feature/feature-x"
+        conflicting = "/home/user/repo-worktrees/other"
+
+        branch_conflict_exc = subprocess.CalledProcessError(
+            returncode=255,
+            cmd=["git", "worktree", "add"],
+            stderr="fatal: Branch konnte nicht angelegt werden",
+        )
+        branch_exists_result = subprocess.CompletedProcess(
+            args=[
+                "git",
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/heads/{branch_name}",
+            ],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        conflict_list_result = subprocess.CompletedProcess(
+            args=["git", "worktree", "list", "--porcelain"],
+            returncode=0,
+            stdout=(
+                f"worktree {conflicting}\n"
+                "HEAD abc123\n"
+                f"branch refs/heads/{branch_name}\n\n"
+            ),
+            stderr="",
+        )
+
+        with (
+            patch(
+                "subprocess.run",
+                side_effect=[
+                    branch_conflict_exc,
+                    branch_exists_result,
+                    conflict_list_result,
+                ],
+            ),
+            pytest.raises(WorktreeBranchConflictError) as exc_info,
+        ):
+            manager.create(worktree_path, branch_name)
+
+        err = exc_info.value
+        assert err.branch_name == branch_name
+        assert err.conflicting_path == conflicting
 
 
 class TestRemove:
