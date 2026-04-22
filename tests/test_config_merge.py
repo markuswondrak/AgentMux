@@ -539,3 +539,29 @@ class TestModelArgsApplied:
         assert "medium" in coder.args
         # "high" from builtin should be replaced (list replace semantics)
         assert "high" not in coder.args
+
+    def test_defaults_model_overrides_provider_default_model(self) -> None:
+        """defaults.model must take precedence over provider.default_model.
+
+        Regression: when provider: copilot and defaults.model: claude-opus-4.6,
+        agents should use opus, not the provider's built-in claude-sonnet-4.6.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            _write_project_config(
+                project_dir,
+                {
+                    "version": 2,
+                    "defaults": {
+                        "provider": "copilot",
+                        "model": "claude-opus-4.6",
+                    },
+                },
+            )
+            with patch(_NO_USER, Path(td) / "no-user.yaml"):
+                loaded = load_layered_config(project_dir)
+        assert loaded.agents["coder"].model == "claude-opus-4.6"
+        assert loaded.agents["architect"].model == "claude-opus-4.6"
+        # model_args for opus should be applied
+        assert "--reasoning-effort" in loaded.agents["coder"].args
+        assert "high" in loaded.agents["coder"].args
