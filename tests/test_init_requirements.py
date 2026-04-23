@@ -291,6 +291,31 @@ class InitRequirementsTests(unittest.TestCase):
     # generate_config() — additive / no-overwrite-prompt tests
     # =========================================================================
 
+    def test_generate_config_prepends_schema_directive(self) -> None:
+        """generate_config writes yaml-language-server directive as first line."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            target = generate_config({}, project_dir, console=None, defaults_mode=True)
+            raw = target.read_text(encoding="utf-8")
+
+        self.assertTrue(
+            raw.startswith("# yaml-language-server: $schema="),
+            f"Expected schema directive as first line, got: {raw[:80]!r}",
+        )
+
+    def test_generate_config_directive_idempotent(self) -> None:
+        """Calling generate_config twice does not duplicate the directive."""
+        with tempfile.TemporaryDirectory() as td:
+            project_dir = Path(td)
+            generate_config({}, project_dir, console=None, defaults_mode=True)
+            generate_config({}, project_dir, console=None, defaults_mode=True)
+            raw = (project_dir / ".agentmux" / "config.yaml").read_text(
+                encoding="utf-8"
+            )
+
+        directive_count = raw.count("# yaml-language-server:")
+        self.assertEqual(1, directive_count)
+
     def test_generate_config_additive_no_write_when_identical(self) -> None:
         """Calling generate_config twice with same overrides does not change mtime."""
         with tempfile.TemporaryDirectory() as td:

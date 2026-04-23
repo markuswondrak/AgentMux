@@ -25,7 +25,7 @@ where = ["src"]
 include = ["agentmux*"]
 
 [tool.setuptools.package-data]
-agentmux = ["prompts/**/*.md", "configuration/defaults/*.yaml"]
+agentmux = ["prompts/**/*.md", "configuration/defaults/*.yaml", "configuration/defaults/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
