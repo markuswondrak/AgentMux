@@ -246,7 +246,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             updates, next_phase = handler.handle_event(event, state, ctx)
             state.update(updates)
             write_state(state_path, state)
-            self.assertEqual("reviewing", next_phase)
+            self.assertEqual("validating", next_phase)
 
     def test_parallel_schedule_waits_for_all_markers(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -297,7 +297,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             updates, next_phase = handler.handle_event(event, state, ctx)
             state.update(updates)
             write_state(state_path, state)
-            self.assertEqual("reviewing", next_phase)
+            self.assertEqual("validating", next_phase)
 
     def test_mixed_schedule_dispatches_waves_and_only_finishes_after_last_group(
         self,
@@ -397,7 +397,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             updates, next_phase = handler.handle_event(event, state, ctx)
             state.update(updates)
             write_state(state_path, state)
-            self.assertEqual("reviewing", next_phase)
+            self.assertEqual("validating", next_phase)
 
     def test_resume_during_parallel_group_only_redispatches_pending_work(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -516,7 +516,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             )
             state.update(updates)
             write_state(state_path, state)
-            self.assertEqual("reviewing", next_phase)
+            self.assertEqual("validating", next_phase)
 
     def test_serial_group_with_multiple_plans_executes_sequentially(self) -> None:
         """Serial groups with multiple plans should execute one at a time in order."""
@@ -598,7 +598,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             write_state(state_path, state)
 
             # Now should transition to reviewing
-            self.assertEqual("reviewing", next_phase)
+            self.assertEqual("validating", next_phase)
 
     def test_fixing_phase_completes_on_done_1_even_with_multiple_subplans(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -625,7 +625,7 @@ class StagedExecutionSchedulerTests(unittest.TestCase):
             updates, next_phase = handler.handle_event(event, state, ctx)
             state.update(updates)
             write_state(state_path, state)
-            self.assertEqual("reviewing", next_phase)
+            self.assertEqual("validating", next_phase)
 
 
 if __name__ == "__main__":

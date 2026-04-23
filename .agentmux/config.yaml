@@ -13,8 +13,17 @@ providers:
         - high
 
 roles:
+  product-manager:
+    provider: cursor
+    model: gemini-3.1-pro
+
+  planner:
+    provider: cursor
+    model: auto
+
   coder:
-    model: gpt-5.4
+    provider: cursor
+    model: auto
   web-researcher:
     model: gpt-5.2
   code-researcher:

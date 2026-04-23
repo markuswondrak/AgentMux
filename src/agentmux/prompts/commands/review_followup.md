@@ -18,6 +18,8 @@ Task:
    On `fail`, list only the findings that are still unresolved (or newly introduced by the fix).
 4. FINAL STEP ONLY — once the YAML is fully written, call `mcp__agentmux__submit_review(role="[[placeholder:review_role]]")` to signal completion.
 
+[[include-optional:07_review/validation_status.md]]
+
 [[placeholder:project_instructions]]
 
 Constraints:

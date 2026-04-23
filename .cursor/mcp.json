@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "agentmux": {
+      "type": "stdio",
+      "command": "/home/markus/.local/share/pipx/venvs/agentmux/bin/python",
+      "args": [
+        "-m",
+        "agentmux.integrations.mcp_server"
+      ],
+      "env": {
+        "PYTHONPATH": "/home/markus/workspace/agentmux",
+        "PROJECT_DIR": "/home/markus/workspace/agentmux"
+      }
+    }
+  }
+}

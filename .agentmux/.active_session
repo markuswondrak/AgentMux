@@ -1,0 +1,4 @@
+{
+  "feature_dir": "/home/markus/workspace/agentmux/.agentmux/.sessions/20260418-154554-centralize-test-lint-execution-in-pipeline-inste",
+  "allowed_tools": "research_dispatch_code,research_dispatch_web,submit_done,submit_plan,submit_pm_done"
+}

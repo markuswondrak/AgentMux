@@ -775,7 +775,7 @@ class TestImplementingHandlerToolEvents:
         mock_ctx.runtime.hide_task.assert_called_once_with("coder", 1)
         mock_ctx.runtime.finish_many.assert_called_once_with("coder")
         mock_ctx.runtime.deactivate.assert_called_once_with("coder")
-        assert next_phase == "reviewing"
+        assert next_phase == "validating"
 
     def test_handle_done_idempotent(self, mock_ctx: MagicMock) -> None:
         """done event is idempotent — doesn't overwrite existing done_N marker."""

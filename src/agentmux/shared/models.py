@@ -86,8 +86,16 @@ class CompletionSettings:
 
 
 @dataclass(frozen=True)
+class ValidationConfig:
+    """Shell commands run by the orchestrator for automated validation."""
+
+    commands: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class WorkflowSettings:
     completion: CompletionSettings = field(default_factory=CompletionSettings)
+    validation: ValidationConfig = field(default_factory=ValidationConfig)
 
 
 @dataclass(frozen=True)

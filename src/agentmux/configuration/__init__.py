@@ -13,6 +13,7 @@ from ..shared.models import (
     AgentConfig,
     CompletionSettings,
     GitHubConfig,
+    ValidationConfig,
     WorkflowSettings,
 )
 from ._resolve import resolve_args, resolve_model, resolve_model_extra_args
@@ -177,10 +178,17 @@ def _resolve_loaded_config(
         draft=g.draft,
         branch_prefix=g.branch_prefix,
     )
+    validation_raw = raw.get("validation") or {}
+    if not isinstance(validation_raw, dict):
+        raise ValueError("validation must be a mapping.")
+    commands_raw = validation_raw.get("commands", [])
+    if not isinstance(commands_raw, list):
+        raise ValueError("validation.commands must be a list of strings.")
     workflow_settings = WorkflowSettings(
         completion=CompletionSettings(
             skip_final_approval=d.completion.skip_final_approval,
         ),
+        validation=ValidationConfig(commands=tuple(str(c) for c in commands_raw)),
     )
     compression_enabled = d.compression.enabled
 

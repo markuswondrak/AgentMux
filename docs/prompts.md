@@ -5,7 +5,7 @@
 ## Template directories
 
 - `agentmux/prompts/agents/` — role-level prompts (define what each agent is): `architect.md`, `planner.md`, `product-manager.md`, `reviewer.md`, `coder.md`, `code-researcher.md`, `web-researcher.md`, `designer.md`
-- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `fix.md`, `summary.md`, `change.md`
+- `agentmux/prompts/commands/` — phase-specific command prompts (what to do at each step): `review.md`, `review_followup.md`, `fix.md`, `summary.md`, `change.md`
 - `agentmux/prompts/shared/` — reusable prompt fragments inlined via `[[shared:fragment-name]]`: `handoff-contract-architecture.md`, `handoff-contract-plan.md`, `handoff-contract-review.md`, `coder-discipline.md`, `preference-memory.md`
 
 ## Placeholder syntax
@@ -14,7 +14,7 @@ Built-in prompt templates use `[[placeholder:name]]` value placeholders.
 Built-in templates can also inline session files with:
 
 - `[[include:path]]` — required include; raises `FileNotFoundError` when missing.
-- `[[include-optional:path]]` — optional include; resolves to empty string when missing.
+- `[[include-optional:path]]` — optional include; resolves to empty string when missing. Reviewer command templates (`review.md`, `review_followup.md`) use `[[include-optional:07_review/validation_status.md]]` so a short automated-check success summary is shown when that file exists; omission is silent when it does not.
 
 Render model is three-stage:
 
@@ -162,5 +162,6 @@ Current prompt builders:
 - `build_product_manager_prompt()` renders the PM analysis prompt
 - `build_coder_subplan_prompt()` renders implementing prompts for numbered `coder_prompt_<N>.md` dispatch, including completion marker instructions and optional research handoff references
 - `build_coder_whole_plan_prompt()` renders a single combined prompt for single-coder mode by embedding all plan and tasks content inline into the unified `coder.md` template. When the coder provider is `copilot` with `single_coder: true`, the dispatch sends a `/fleet` prefix command as keystrokes before the prompt file reference, so Copilot CLI decomposes the plan into parallel sub-agent tasks. The prompt instructs copilot to create `done_N` completion markers as each plan finishes.
-- `build_reviewer_prompt(..., is_review=True)` renders the review command prompt
+- `build_reviewer_prompt(..., is_review=True)` renders the review command prompt (optional `07_review/validation_status.md` via `[[include-optional:…]]`)
+- `build_reviewer_followup_prompt()` renders the compact follow-up reviewer prompt after a fix iteration (same optional validation status include as the initial review command)
 - `build_reviewer_summary_prompt()` renders the reviewer summary prompt (writes `08_completion/summary.md` after VERDICT:PASS)

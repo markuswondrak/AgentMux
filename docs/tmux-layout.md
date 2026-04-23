@@ -89,3 +89,7 @@ Visibility is decided in `TmuxAgentRuntime` before prompt dispatch. Primary pane
 ## Trust prompt handling
 
 Trust or confirmation prompts from CLI tools are still answered automatically via `accept_trust_prompt()`, using the provider-specific `trust_snippet` on `AgentConfig`.
+
+## Validation pane (automated checks)
+
+Automated validation commands are **not** mounted as regular agent panes. `TmuxAgentRuntime.run_validation_pane(cmd, label)` spawns a temporary pane, shows it while `cmd` runs in the project directory, and leaves primary / parallel registries unchanged — the pane is not tracked for interruption polling like `coder` or `reviewer_*`. Pane identity is still labeled for borders (`role=validation`, display label from the caller). See [Phase: Validating](phases/validating.md).

@@ -86,5 +86,5 @@ class FixingHandler(BaseToolHandler):
                 done_n_path.touch()
             ctx.runtime.finish_many("coder")
             ctx.runtime.deactivate("coder")
-            return {"last_event": EVENT_IMPLEMENTATION_COMPLETED}, "reviewing"
+            return {"last_event": EVENT_IMPLEMENTATION_COMPLETED}, "validating"
         return {}, None

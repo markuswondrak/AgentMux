@@ -32,6 +32,8 @@ EVENT_ARCHITECTURE_WRITTEN: str = "architecture_written"
 EVENT_PLAN_WRITTEN: str = "plan_written"
 EVENT_DESIGN_WRITTEN: str = "design_written"
 EVENT_IMPLEMENTATION_COMPLETED: str = "implementation_completed"
+EVENT_VALIDATION_PASSED: str = "validation_passed"
+EVENT_VALIDATION_FAILED: str = "validation_failed"
 EVENT_REVIEW_FAILED: str = "review_failed"
 EVENT_REVIEW_PASSED: str = "review_passed"
 EVENT_CHANGES_REQUESTED: str = "changes_requested"
@@ -77,6 +79,16 @@ WORKFLOW_EVENT_CATALOG: dict[str, WorkflowEventDefinition] = {
         name=EVENT_IMPLEMENTATION_COMPLETED,
         display_label="code done",
         description="All implementation subplans completed.",
+    ),
+    EVENT_VALIDATION_PASSED: WorkflowEventDefinition(
+        name=EVENT_VALIDATION_PASSED,
+        display_label="validation passed",
+        description="Automated validation commands completed successfully.",
+    ),
+    EVENT_VALIDATION_FAILED: WorkflowEventDefinition(
+        name=EVENT_VALIDATION_FAILED,
+        display_label="validation failed",
+        description="An automated validation command failed.",
     ),
     EVENT_REVIEW_FAILED: WorkflowEventDefinition(
         name=EVENT_REVIEW_FAILED,

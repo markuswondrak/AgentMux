@@ -52,6 +52,12 @@ PHASE_CATALOG: tuple[PhaseEntry, ...] = (
         monitor_file_patterns=("06_implementation/done_*",),
     ),
     PhaseEntry(
+        "validating",
+        "06_implementation",
+        optional=True,
+        monitor_file_patterns=("06_implementation/done_*",),
+    ),
+    PhaseEntry(
         "reviewing",
         "07_review",
         monitor_file_patterns=("07_review/review.md", "07_review/fix_request.md"),
