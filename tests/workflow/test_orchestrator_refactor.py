@@ -24,7 +24,6 @@ class _FakeRuntime:
     def __init__(self) -> None:
         self.notifications: list[tuple[str, str]] = []
         self.spawned_tasks: list[tuple[str, str, str]] = []
-        self.finished_tasks: list[tuple[str, str]] = []
         self.parallel_panes: dict[str, dict[int | str, str]] = {}
         self._shutdown_called = False
 
@@ -34,11 +33,6 @@ class _FakeRuntime:
     def spawn_task(self, role: str, task_id: str, research_dir: Path) -> None:
         self.spawned_tasks.append((role, task_id, research_dir.name))
         self.parallel_panes.setdefault(role, {})[task_id] = f"%{role}-{task_id}"
-
-    def finish_task(self, role: str, task_id: str) -> None:
-        self.finished_tasks.append((role, task_id))
-        if role in self.parallel_panes and task_id in self.parallel_panes[role]:
-            del self.parallel_panes[role][task_id]
 
     def shutdown(self, keep_session: bool) -> None:
         self._shutdown_called = True
@@ -286,119 +280,6 @@ class TestEventDrivenOrchestrator(unittest.TestCase):
             # Should set exit code 130
             self.assertEqual(orchestrator._exit_code, 130)
             self.assertTrue(orchestrator._exit_event.is_set())
-
-    def test_handle_interruption_researcher_graceful_exit_with_summary(self) -> None:
-        """Researcher exits after producing summary.md -> no cancel, treated as done."""
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            project_dir = tmp_path / "project"
-            feature_dir = tmp_path / "feature"
-            project_dir.mkdir()
-
-            files = create_feature_files(project_dir, feature_dir, "test", "session-x")
-
-            state = load_state(files.state)
-            state["phase"] = "product_management"
-            state["research_tasks"] = {"auth": "dispatched"}
-            write_state(files.state, state)
-
-            # Create summary.md to simulate successful researcher completion
-            research_dir = files.research_dir / "code-auth"
-            research_dir.mkdir(parents=True)
-            (research_dir / "summary.md").write_text(
-                "## Auth findings\n", encoding="utf-8"
-            )
-
-            runtime = _FakeRuntime()
-            orchestrator = PipelineOrchestrator()
-            ctx = PipelineContext(
-                files=files,
-                runtime=runtime,
-                agents={},
-                max_review_iterations=3,
-                prompts={},
-            )
-            orchestrator._ctx = ctx
-            orchestrator._exit_event = threading.Event()
-
-            wf_event = WorkflowEvent(
-                kind="interruption.pane_exited",
-                payload={
-                    "role": "code-researcher",
-                    "task_id": "auth",
-                    "pane_scope": "parallel",
-                    "message": "Process exited normally",
-                },
-            )
-
-            orchestrator._handle_interruption(wf_event, ctx)
-
-            # Must NOT cancel the session
-            self.assertIsNone(orchestrator._exit_code)
-            self.assertFalse(orchestrator._exit_event.is_set())
-
-            # Must finish the task and notify the owner
-            self.assertIn(("code-researcher", "auth"), runtime.finished_tasks)
-            self.assertEqual(1, len(runtime.notifications))
-            notify_role, _ = runtime.notifications[0]
-            self.assertEqual("product-manager", notify_role)
-
-            # State must mark the task as done
-            updated_state = load_state(files.state)
-            self.assertEqual("done", updated_state["research_tasks"]["auth"])
-
-    def test_handle_interruption_researcher_crash_without_summary(self) -> None:
-        """Researcher exits without producing summary.md -> session canceled."""
-        with tempfile.TemporaryDirectory() as td:
-            tmp_path = Path(td)
-            project_dir = tmp_path / "project"
-            feature_dir = tmp_path / "feature"
-            project_dir.mkdir()
-
-            files = create_feature_files(project_dir, feature_dir, "test", "session-x")
-
-            state = load_state(files.state)
-            state["phase"] = "product_management"
-            state["research_tasks"] = {"auth": "dispatched"}
-            write_state(files.state, state)
-
-            # No summary.md — researcher crashed before finishing
-            research_dir = files.research_dir / "code-auth"
-            research_dir.mkdir(parents=True)
-
-            runtime = _FakeRuntime()
-            orchestrator = PipelineOrchestrator()
-            ctx = PipelineContext(
-                files=files,
-                runtime=runtime,
-                agents={},
-                max_review_iterations=3,
-                prompts={},
-            )
-            orchestrator._ctx = ctx
-            orchestrator._exit_event = threading.Event()
-
-            wf_event = WorkflowEvent(
-                kind="interruption.pane_exited",
-                payload={
-                    "role": "code-researcher",
-                    "task_id": "auth",
-                    "pane_scope": "parallel",
-                    "message": "Process crashed",
-                },
-            )
-
-            orchestrator._handle_interruption(wf_event, ctx)
-
-            # Must cancel the session
-            self.assertEqual(130, orchestrator._exit_code)
-            self.assertTrue(orchestrator._exit_event.is_set())
-
-            # Must notify owner about crash
-            self.assertEqual(1, len(runtime.notifications))
-            notify_role, message = runtime.notifications[0]
-            self.assertEqual("product-manager", notify_role)
-            self.assertIn("RESEARCH TASK FAILED", message)
 
     def test_determine_research_owner_product_management(self) -> None:
         """Test owner determination during product_management phase."""

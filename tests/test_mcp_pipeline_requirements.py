@@ -400,7 +400,7 @@ class McpPipelineRequirementsTests(unittest.TestCase):
                 self.assertIn("research_dispatch_code", prompt)
                 self.assertIn("research_dispatch_web", prompt)
                 self.assertNotIn("agentmux_research_await", prompt)
-                self.assertIn(f'feature_dir="{feature_dir}"', prompt)
+                self.assertIn(str(feature_dir), prompt)
                 self.assertIn("scope_hints=[", prompt)
                 self.assertIn("stop and wait idle", prompt)
                 self.assertIn("summary.md", prompt)

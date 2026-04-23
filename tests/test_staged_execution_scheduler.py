@@ -131,7 +131,7 @@ def _write_execution_plan(ctx: PipelineContext, groups: list[dict]) -> None:
     (planning_dir / "execution_plan.yaml").write_text(
         yaml.dump(payload, default_flow_style=False), encoding="utf-8"
     )
-    # Write plan.yaml (version 2) so resume check passes
+    # Write plan.yaml (version 2); planning resume treats execution_plan.yaml as done
     all_indices = []
     subplans = []
     for group in groups:

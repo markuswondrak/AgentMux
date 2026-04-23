@@ -66,6 +66,7 @@ class AgentConfig:
     provider: str | None = None
     batch_command: BatchCommand | None = None
     single_coder: bool = False
+    trust_key: str = "Enter"
 
 
 @dataclass(frozen=True)

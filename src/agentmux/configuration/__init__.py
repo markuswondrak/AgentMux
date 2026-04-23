@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 from ..shared.models import (
     PROMPT_AGENT_ROLES,
@@ -15,6 +16,8 @@ from ..shared.models import (
     ValidationConfig,
     WorkflowSettings,
 )
+from ._resolve import resolve_args, resolve_model, resolve_model_extra_args
+from .schema import RawConfigModel
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 BUILTIN_CONFIG_PATH = Path(__file__).resolve().parent / "defaults" / "config.yaml"
@@ -43,43 +46,45 @@ def load_builtin_catalog() -> dict[str, Any]:
 
 
 def load_explicit_config(config_path: Path) -> LoadedConfig:
-    raw = _normalize_config(load_builtin_catalog())
+    merged = load_builtin_catalog()
     explicit_path = config_path.resolve()
-    merged = _deep_merge(raw, _normalize_config(_load_structured_file(explicit_path)))
-    return _resolve_loaded_config(merged, (BUILTIN_CONFIG_PATH, explicit_path))
+    merged = _deep_merge(merged, _load_structured_file(explicit_path))
+    config = _parse_and_validate(merged)
+    return _resolve_loaded_config(config, merged, (BUILTIN_CONFIG_PATH, explicit_path))
 
 
 def load_layered_config(
     project_dir: Path,
     explicit_config_path: Path | None = None,
 ) -> LoadedConfig:
-    merged = _normalize_config(load_builtin_catalog())
+    """Load config by merging layers in order: default < user < project < explicit.
+
+    Merge semantics for _deep_merge:
+    - Dicts: merged recursively (higher-priority layer wins per key)
+    - Lists: higher-priority layer replaces base list entirely
+    - Scalars: higher-priority layer wins
+    - Missing keys in override: base value is preserved
+    """
+    merged = load_builtin_catalog()
     sources: list[Path] = [BUILTIN_CONFIG_PATH]
 
     user_path = USER_CONFIG_PATH
     if user_path.exists():
-        merged = _deep_merge(
-            merged,
-            _normalize_config(_load_structured_file(user_path.resolve())),
-        )
+        merged = _deep_merge(merged, _load_structured_file(user_path.resolve()))
         sources.append(user_path.resolve())
 
     project_config_path = _discover_project_config(project_dir)
     if project_config_path is not None:
-        project_data = _normalize_config(_load_structured_file(project_config_path))
-        _validate_project_config(project_data, project_config_path)
-        merged = _deep_merge(merged, project_data)
+        merged = _deep_merge(merged, _load_structured_file(project_config_path))
         sources.append(project_config_path)
 
     if explicit_config_path is not None:
         explicit_path = explicit_config_path.resolve()
-        merged = _deep_merge(
-            merged,
-            _normalize_config(_load_structured_file(explicit_path)),
-        )
+        merged = _deep_merge(merged, _load_structured_file(explicit_path))
         sources.append(explicit_path)
 
-    return _resolve_loaded_config(merged, tuple(sources))
+    config = _parse_and_validate(merged)
+    return _resolve_loaded_config(config, merged, tuple(sources))
 
 
 def infer_project_dir(feature_dir: Path) -> Path:
@@ -121,293 +126,33 @@ def _load_structured_file(path: Path) -> dict[str, Any]:
     return data
 
 
-def _normalize_config(raw: dict[str, Any]) -> dict[str, Any]:
-    # Check for profile key usage (not supported)
-    if "profile" in raw.get("defaults", {}):
-        raise ValueError(
-            "Profiles are not supported. Use 'model: <model-name>' directly."
+def _parse_and_validate(raw: dict[str, Any]) -> RawConfigModel:
+    """Validate the fully-merged config dict against the schema."""
+    try:
+        return RawConfigModel.model_validate(raw)
+    except ValidationError as exc:
+        messages = "; ".join(
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
+            for e in exc.errors()
         )
-    for role in PROMPT_AGENT_ROLES:
-        if role in raw.get("roles", {}) and "profile" in raw["roles"][role]:
-            raise ValueError(
-                "Profiles are not supported. Use 'model: <model-name>' "
-                f"directly in roles.{role}."
-            )
-
-    normalized: dict[str, Any] = {
-        "defaults": _normalize_defaults(raw.get("defaults", {})),
-        "github": _normalize_github(raw.get("github", {})),
-        "validation": _normalize_validation(raw.get("validation")),
-        "providers": {},
-        "roles": {},
-    }
-
-    providers = (
-        dict(raw.get("providers", {})) if isinstance(raw.get("providers"), dict) else {}
-    )
-
-    normalized["providers"] = {
-        str(name): _normalize_provider(str(name), provider_raw)
-        for name, provider_raw in providers.items()
-    }
-
-    nested_roles = (
-        dict(raw.get("roles", {})) if isinstance(raw.get("roles"), dict) else {}
-    )
-    normalized["roles"] = {
-        str(role): _normalize_role_config(str(role), role_raw)
-        for role, role_raw in nested_roles.items()
-    }
-    return normalized
-
-
-def _normalize_defaults(raw: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(raw, dict):
-        raise ValueError("defaults must be a mapping.")
-    unsupported_keys = [
-        key
-        for key in ("skip_final_approval", "require_final_approval", "tier", "profile")
-        if key in raw
-    ]
-    if unsupported_keys:
-        keys_csv = ", ".join(sorted(unsupported_keys))
-        raise ValueError(
-            "Legacy defaults keys are no longer supported. "
-            "Use `defaults.model` and `defaults.completion.skip_final_approval` "
-            f"instead: {keys_csv}."
-        )
-    defaults: dict[str, Any] = {}
-    if "session_name" in raw:
-        defaults["session_name"] = str(raw["session_name"])
-    if "provider" in raw:
-        defaults["provider"] = str(raw["provider"])
-    if "model" in raw:
-        defaults["model"] = str(raw["model"])
-    if "max_review_iterations" in raw:
-        defaults["max_review_iterations"] = int(raw["max_review_iterations"])
-    completion = _normalize_completion_defaults(
-        raw.get("completion"), "defaults.completion"
-    )
-    if completion:
-        defaults["completion"] = completion
-    if "compression" in raw:
-        compression = _normalize_compression_defaults(
-            raw["compression"], "defaults.compression"
-        )
-        if compression:
-            defaults["compression"] = compression
-    return defaults
-
-
-def _normalize_completion_defaults(raw: Any, label: str) -> dict[str, bool]:
-    if raw is None:
-        return {}
-    if not isinstance(raw, dict):
-        raise ValueError(f"{label} must be a mapping.")
-    completion: dict[str, bool] = {}
-    if "skip_final_approval" in raw:
-        completion["skip_final_approval"] = _coerce_bool(
-            raw["skip_final_approval"],
-            f"{label}.skip_final_approval",
-        )
-    if "require_final_approval" in raw:
-        raise ValueError(f"{label}.require_final_approval is no longer supported.")
-    return completion
-
-
-def _normalize_compression_defaults(raw: Any, label: str) -> dict[str, bool]:
-    if raw is None:
-        return {}
-    if not isinstance(raw, dict):
-        raise ValueError(f"{label} must be a mapping.")
-    compression: dict[str, bool] = {}
-    if "enabled" in raw:
-        compression["enabled"] = _coerce_bool(raw["enabled"], f"{label}.enabled")
-    return compression
-
-
-def _normalize_provider(name: str, raw: Any) -> dict[str, Any]:
-    if not isinstance(raw, dict):
-        raise ValueError(f"Provider '{name}' must be a mapping.")
-    role_args = raw.get("role_args", {})
-    if role_args is None:
-        role_args = {}
-    if not isinstance(role_args, dict):
-        raise ValueError(f"Provider '{name}'.role_args must be a mapping.")
-
-    # Start with required fields
-    result: dict[str, Any] = {
-        "command": str(raw.get("command", name)),
-        "model_flag": raw.get("model_flag"),
-        "role_args": {
-            str(role): _normalize_args(f"providers.{name}.role_args.{role}", args)
-            for role, args in role_args.items()
-        },
-    }
-
-    # Only add optional fields if they have values
-    # (preserves builtin values during merge)
-    if raw.get("trust_snippet") is not None:
-        result["trust_snippet"] = str(raw["trust_snippet"])
-    if raw.get("batch_subcommand") is not None:
-        result["batch_subcommand"] = str(raw["batch_subcommand"])
-    if raw.get("batch_command") is not None:
-        result["batch_command"] = _parse_batch_command_config(raw["batch_command"])
-    if raw.get("single_coder") is not None:
-        result["single_coder"] = bool(raw["single_coder"])
-    if raw.get("default_model") is not None:
-        result["default_model"] = str(raw["default_model"])
-    if raw.get("default_role_args") is not None:
-        result["default_role_args"] = _normalize_args(
-            f"providers.{name}.default_role_args", raw["default_role_args"]
-        )
-
-    return result
-
-
-def _parse_batch_command_config(raw: Any) -> dict[str, Any]:
-    """Parse batch_command from config, supporting dict and string formats."""
-    from ..shared.models import BatchCommandMode
-
-    if isinstance(raw, dict):
-        verb = str(raw.get("verb", ""))
-        mode_str = str(raw.get("mode", "positional"))
-        try:
-            mode = BatchCommandMode(mode_str)
-        except ValueError as e:
-            valid = ", ".join(m.value for m in BatchCommandMode)
-            raise ValueError(
-                f"Invalid batch_command.mode: '{mode_str}'. Expected one of: {valid}"
-            ) from e
-        return {"verb": verb, "mode": mode}
-    # String fallback: will be converted to BatchCommand in providers.py
-    return {"verb": str(raw), "mode": None}
-
-
-def _build_batch_command_from_provider(provider: dict):
-    """Build a BatchCommand from a provider dict, handling both old and new formats."""
-    from ..shared.models import BatchCommand, BatchCommandMode
-
-    # New format
-    raw_batch = provider.get("batch_command")
-    if raw_batch is not None:
-        if isinstance(raw_batch, dict):
-            verb = str(raw_batch.get("verb", ""))
-            mode_raw = raw_batch.get("mode")
-            if isinstance(mode_raw, BatchCommandMode):
-                return BatchCommand(verb=verb, mode=mode_raw)
-            if mode_raw is not None:
-                mode = BatchCommandMode(str(mode_raw))
-            else:
-                # Infer from verb
-                if verb.startswith("-"):
-                    mode = BatchCommandMode.FLAG
-                elif verb == "exec" and provider.get("command") == "codex":
-                    mode = BatchCommandMode.STDIN
-                else:
-                    mode = BatchCommandMode.POSITIONAL
-            return BatchCommand(verb=verb, mode=mode)
-        # String
-        verb = str(raw_batch)
-        if verb.startswith("-"):
-            mode = BatchCommandMode.FLAG
-        elif verb == "exec" and provider.get("command") == "codex":
-            mode = BatchCommandMode.STDIN
-        else:
-            mode = BatchCommandMode.POSITIONAL
-        return BatchCommand(verb=verb, mode=mode)
-
-    # Legacy format
-    legacy = provider.get("batch_subcommand")
-    if legacy is not None:
-        verb = str(legacy)
-        if verb.startswith("-"):
-            mode = BatchCommandMode.FLAG
-        elif verb == "exec" and provider.get("command") == "codex":
-            mode = BatchCommandMode.STDIN
-        else:
-            mode = BatchCommandMode.POSITIONAL
-        return BatchCommand(verb=verb, mode=mode)
-
-    return None
-
-
-def _normalize_role_config(role: str, raw: Any) -> dict[str, Any]:
-    if not isinstance(raw, dict):
-        raise ValueError(f"Role '{role}' must be a mapping.")
-    if "tier" in raw:
-        raise ValueError(
-            f"roles.{role}.tier is no longer supported. Use roles.{role}.model."
-        )
-    if "profile" in raw:
-        raise ValueError(
-            f"roles.{role}.profile is no longer supported. "
-            f"Use roles.{role}.model: <model-name>."
-        )
-    data: dict[str, Any] = {}
-    if "provider" in raw:
-        data["provider"] = str(raw["provider"])
-    if "model" in raw:
-        data["model"] = str(raw["model"])
-    if "args" in raw:
-        data["args"] = _normalize_args(f"roles.{role}.args", raw["args"])
-    return data
-
-
-def _normalize_args(label: str, raw: Any) -> list[str]:
-    if not isinstance(raw, list):
-        raise ValueError(f"{label} must be a list of strings.")
-    return [str(item) for item in raw]
-
-
-def _coerce_bool(value: Any, label: str) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"1", "true", "yes", "on"}:
-            return True
-        if normalized in {"0", "false", "no", "off"}:
-            return False
-    if isinstance(value, int) and value in {0, 1}:
-        return bool(value)
-    raise ValueError(f"{label} must be a boolean.")
-
-
-def _normalize_validation(raw: Any) -> dict[str, Any]:
-    if raw is None:
-        return {}
-    if not isinstance(raw, dict):
-        raise ValueError("validation must be a mapping.")
-    data: dict[str, Any] = {}
-    if "commands" in raw:
-        cmds = raw["commands"]
-        if cmds is None:
-            data["commands"] = []
-        elif not isinstance(cmds, list):
-            raise ValueError("validation.commands must be a list of strings.")
-        else:
-            data["commands"] = [str(item) for item in cmds]
-    return data
-
-
-def _normalize_github(raw: Any) -> dict[str, Any]:
-    if raw is None:
-        return {}
-    if not isinstance(raw, dict):
-        raise ValueError("github must be a mapping.")
-    data: dict[str, Any] = {}
-    if "base_branch" in raw:
-        data["base_branch"] = str(raw["base_branch"])
-    if "draft" in raw:
-        data["draft"] = _coerce_bool(raw["draft"], "github.draft")
-    if "branch_prefix" in raw:
-        data["branch_prefix"] = str(raw["branch_prefix"])
-    return data
+        raise ValueError(f"Invalid configuration: {messages}") from exc
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    merged = dict(base)
+    """Recursively merge two config dicts, returning a fully independent copy.
+
+    Merge semantics:
+    - Dicts: merged recursively; override keys win, missing keys preserved from base
+    - Lists: override list replaces base list entirely (no element-wise merging)
+    - Scalars: override value wins
+    - Result is a deep copy — mutating it does not affect base or override
+    """
+    merged: dict[str, Any] = {}
+    for key, value in base.items():
+        if key not in override and isinstance(value, dict):
+            merged[key] = _deep_merge(value, {})
+        else:
+            merged[key] = value
     for key, value in override.items():
         if isinstance(value, dict) and isinstance(merged.get(key), dict):
             merged[key] = _deep_merge(merged[key], value)
@@ -416,31 +161,22 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return merged
 
 
-def _validate_project_config(raw: dict[str, Any], path: Path) -> None:
-    # In v2, project configs CAN define providers (removed restriction)
-    # We just validate that the structure is valid
-    pass
-
-
 def _resolve_loaded_config(
-    raw: dict[str, Any], sources: tuple[Path, ...]
+    config: RawConfigModel,
+    raw: dict[str, Any],
+    sources: tuple[Path, ...],
 ) -> LoadedConfig:
-    defaults = raw.get("defaults", {})
-    github_raw = raw.get("github", {})
-    providers = raw.get("providers", {})
-    roles = raw.get("roles", {})
+    d = config.defaults
+    g = config.github
 
-    session_name = str(defaults.get("session_name", "multi-agent-mvp"))
-    default_provider = str(defaults.get("provider", "claude"))
-    default_model = str(defaults.get("model", "sonnet"))
-    max_review_iterations = int(defaults.get("max_review_iterations", 3))
+    session_name = d.session_name
+    default_provider = d.provider
+    default_model = d.model
+    max_review_iterations = d.max_review_iterations
     github = GitHubConfig(
-        base_branch=str(github_raw.get("base_branch", "main")),
-        draft=_coerce_bool(github_raw.get("draft", True), "github.draft"),
-        branch_prefix=str(github_raw.get("branch_prefix", "feature/")),
-    )
-    completion_defaults = _normalize_completion_defaults(
-        defaults.get("completion"), "defaults.completion"
+        base_branch=g.base_branch,
+        draft=g.draft,
+        branch_prefix=g.branch_prefix,
     )
     validation_raw = raw.get("validation") or {}
     if not isinstance(validation_raw, dict):
@@ -450,54 +186,54 @@ def _resolve_loaded_config(
         raise ValueError("validation.commands must be a list of strings.")
     workflow_settings = WorkflowSettings(
         completion=CompletionSettings(
-            skip_final_approval=completion_defaults.get("skip_final_approval", False),
+            skip_final_approval=d.completion.skip_final_approval,
         ),
         validation=ValidationConfig(commands=tuple(str(c) for c in commands_raw)),
     )
-    compression_defaults = _normalize_compression_defaults(
-        defaults.get("compression"), "defaults.compression"
-    )
-    compression_enabled = bool(compression_defaults.get("enabled", False))
+    compression_enabled = d.compression.enabled
 
     agents: dict[str, AgentConfig] = {}
     for role in PROMPT_AGENT_ROLES:
-        role_config = roles.get(role) or {}
+        role_config = config.roles.get(role)
 
-        provider_name = str(role_config.get("provider", default_provider))
-        try:
-            provider = providers[provider_name]
-        except KeyError as exc:
-            available = ", ".join(sorted(providers))
+        provider_name = (
+            role_config.provider if role_config else None
+        ) or default_provider
+        provider = config.providers.get(provider_name)
+        if provider is None:
+            available = ", ".join(sorted(config.providers))
             raise ValueError(
                 f"Unknown provider '{provider_name}' for role '{role}'. "
                 f"Expected one of: {available}"
-            ) from exc
+            )
 
-        # In v2, model is specified directly in role config or defaults
-        # Use provider default_model as fallback if available
-        provider_default_model = provider.get("default_model")
-        if provider_default_model:
-            model = str(role_config.get("model", provider_default_model))
-        else:
-            model = str(role_config.get("model", default_model))
+        provider_default_model = provider.default_model
+        model = resolve_model(
+            role_config.model if role_config else None,
+            default_model,
+            provider_default_model,
+        )
 
-        args = role_config.get("args")
-        if args is None:
-            # Merge default_role_args with role-specific args
-            default_role_args = provider.get("default_role_args", [])
-            role_specific_args = provider.get("role_args", {}).get(role, [])
-            args = list(default_role_args) + list(role_specific_args)
+        provider_default_args = list(provider.default_role_args) + list(
+            provider.role_args.get(role) or []
+        )
+        args = resolve_args(
+            role_config.args if role_config else None,
+            provider_default_args,
+        )
+        args = args + resolve_model_extra_args(model, provider.model_args)
 
         agents[role] = AgentConfig(
             role=role,
-            cli=str(provider.get("command", provider_name)),
+            cli=provider.command,
             model=model,
-            model_flag=provider.get("model_flag"),
-            args=list(args),
-            trust_snippet=provider.get("trust_snippet"),
+            model_flag=provider.model_flag,
+            args=args,
+            trust_snippet=provider.trust_snippet,
             provider=provider_name,
             batch_command=_build_batch_command_from_provider(provider),
-            single_coder=bool(provider.get("single_coder", False)),
+            single_coder=provider.single_coder,
+            trust_key=provider.trust_key,
         )
 
     return LoadedConfig(
@@ -510,3 +246,27 @@ def _resolve_loaded_config(
         raw=raw,
         sources=sources,
     )
+
+
+def _build_batch_command_from_provider(provider: Any) -> Any:
+    """Build a BatchCommand from a ProviderConfig."""
+    from ..shared.models import BatchCommand, BatchCommandMode
+
+    # New format: batch_command field
+    if provider.batch_command is not None:
+        bc = provider.batch_command
+        return BatchCommand(verb=bc.verb, mode=bc.mode)
+
+    # Legacy format: batch_subcommand string
+    legacy = provider.batch_subcommand
+    if legacy is not None:
+        verb = str(legacy)
+        if verb.startswith("-"):
+            mode = BatchCommandMode.FLAG
+        elif verb == "exec" and provider.command == "codex":
+            mode = BatchCommandMode.STDIN
+        else:
+            mode = BatchCommandMode.POSITIONAL
+        return BatchCommand(verb=verb, mode=mode)
+
+    return None

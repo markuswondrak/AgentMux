@@ -167,11 +167,15 @@ roles:
 
 Supported models: `claude-sonnet-4.6`, `claude-opus-4.6`, `gpt-5.4`, `gemini-2.5-pro`. Models are selected via `--model=<model>`.
 
-`copilot` uses `--allow-all` and `--reasoning-effort high` for all roles to enable non-interactive operation with maximum reasoning capability. On first run in a directory, Copilot CLI asks "Do you trust the files in this folder?" — Agentmux auto-accepts this via the `trust_snippet: "trust the files"` configuration.
+`copilot` uses `--allow-all` for all roles to enable non-interactive operation. Additionally, `model_args` appends `--reasoning-effort high` for models that support it (`claude-sonnet-4.6`, `claude-opus-4.6`). On first run in a directory, Copilot CLI asks "Do you trust the files in this folder?" — Agentmux auto-accepts this via the `trust_snippet: "trust the files"` configuration.
 
 ## Qwen CLI provider
 
 `qwen` is a built-in provider. The bundled defaults use `qwen3-max` as the provider default model and pass `--yolo` for every role. When research-enabled roles need MCP setup, AgentMux manages the persistent registration in `~/.qwen/settings.json`.
+
+## Cursor CLI provider
+
+The built-in `cursor` provider runs the Cursor CLI binary `agent`. That CLI only allows `--trust` together with headless/`--print` usage; interactive tmux panes therefore do **not** receive `--trust` in the default configuration. Trust prompts in the pane are handled via `trust_snippet` (default `"Allow"`) and `trust_key` (default `a`), which drive automatic key acceptance in tmux. Batch research roles (`code-researcher`, `web-researcher`) pass the prompt file with `-p` and include `--trust` and `--force` in built-in `role_args` only for those roles.
 
 ### Provider default settings
 
@@ -192,7 +196,26 @@ providers:
       - --coder-specific
 ```
 
-In this example, the `coder` role receives both `[--shared-flag, shared-value, --coder-specific]`. The copilot provider uses this pattern to set `claude-sonnet-4.6` as the default model and `[--allow-all, --reasoning-effort, high]` as default args for all roles.
+In this example, the `coder` role receives both `[--shared-flag, shared-value, --coder-specific]`. The copilot provider uses `default_role_args` to set `[--allow-all]` for all roles, and `model_args` to append `[--reasoning-effort, high]` for specific models like `claude-sonnet-4.6`.
+
+### Model-specific arguments
+
+Providers can define `model_args` to append extra CLI flags when a specific model is selected:
+
+```yaml
+version: 2
+providers:
+  copilot:
+    model_args:
+      claude-sonnet-4.6:
+      - --reasoning-effort
+      - high
+      claude-opus-4.6:
+      - --reasoning-effort
+      - high
+```
+
+These args are appended after `default_role_args` and `role_args`. To override the built-in reasoning level in a project config, set your own `model_args` for the model (list replace semantics via deep merge).
 
 ### Single-coder mode
 

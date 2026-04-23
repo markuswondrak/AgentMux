@@ -304,7 +304,7 @@ class TestResumeSupport:
             "review_results": {},
         }
 
-        with patch.object(handler, "_request_summary", return_value={}):
+        with patch.object(handler, "_request_summary", return_value=({}, None)):
             handler.enter(state, ctx)
         # send_reviewers_many SHOULD be called
         ctx.runtime.send_reviewers_many.assert_called_once()
@@ -694,6 +694,158 @@ class TestFollowupPromptAfterFix:
             "active_reviews": {"reviewer_logic": "completed"},
         }
 
-        with patch.object(handler, "_request_summary", return_value={}):
+        with patch.object(handler, "_request_summary", return_value=({}, None)):
             handler.enter(state, ctx)
         ctx.runtime.send_reviewers_many.assert_not_called()
+
+
+class TestReviewMdMaterialization:
+    """Tests for auto-materialization of review.md in _request_summary()."""
+
+    def test_request_summary_materializes_review_md_when_missing(self, tmp_path):
+        """_request_summary() writes review.md from review_results when absent."""
+        ctx = FakeContext(tmp_path)
+        handler = ReviewingHandler()
+        state = {
+            "review_iteration": 0,
+            "reviewer_nominations": ["reviewer_logic"],
+            "review_results": {},
+        }
+        review_results = {
+            "reviewer_logic": {
+                "verdict": "pass",
+                "review_text": "verdict: pass\n\n## Summary\n\nAll good.\n",
+            }
+        }
+
+        with (
+            patch(
+                "agentmux.workflow.handlers.reviewing.write_prompt_file"
+            ) as mock_write,
+            patch(
+                "agentmux.workflow.handlers.reviewing.build_reviewer_summary_prompt",
+                return_value="summary prompt",
+            ),
+            patch("agentmux.workflow.handlers.reviewing.send_to_role"),
+        ):
+            mock_write.return_value = Path("/tmp/prompt.md")
+            handler._request_summary(state, ctx, review_results=review_results)
+
+        review_md = ctx.files.review_dir / "review.md"
+        assert review_md.exists(), "review.md must be created by _request_summary()"
+        content = review_md.read_text(encoding="utf-8")
+        assert "verdict: pass" in content
+        assert "All good." in content
+
+    def test_request_summary_does_not_overwrite_existing_review_md(self, tmp_path):
+        """Legacy review.md written by single reviewer is preserved."""
+        ctx = FakeContext(tmp_path)
+        handler = ReviewingHandler()
+
+        legacy_content = "verdict: pass\n\n## Summary\n\nLegacy reviewer wrote this.\n"
+        (ctx.files.review_dir / "review.md").write_text(
+            legacy_content, encoding="utf-8"
+        )
+
+        state = {
+            "review_iteration": 0,
+            "reviewer_nominations": ["reviewer_logic"],
+            "review_results": {},
+        }
+        review_results = {
+            "reviewer_logic": {
+                "verdict": "pass",
+                "review_text": "Some other content",
+            }
+        }
+
+        with (
+            patch(
+                "agentmux.workflow.handlers.reviewing.write_prompt_file"
+            ) as mock_write,
+            patch(
+                "agentmux.workflow.handlers.reviewing.build_reviewer_summary_prompt",
+                return_value="summary prompt",
+            ),
+            patch("agentmux.workflow.handlers.reviewing.send_to_role"),
+        ):
+            mock_write.return_value = Path("/tmp/prompt.md")
+            handler._request_summary(state, ctx, review_results=review_results)
+
+        review_md = ctx.files.review_dir / "review.md"
+        assert review_md.read_text(encoding="utf-8") == legacy_content, (
+            "Existing review.md must not be overwritten by _request_summary()"
+        )
+
+    def test_parallel_reviewers_pass_generates_consolidated_review_md(self, tmp_path):
+        """Both parallel reviewers passing triggers consolidated review.md."""
+        ctx = FakeContext(tmp_path)
+        ctx.write_review_yaml("reviewer_logic", "pass")
+        ctx.write_review_yaml("reviewer_quality", "pass")
+
+        handler = ReviewingHandler()
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {
+                "reviewer_logic": "pending",
+                "reviewer_quality": "pending",
+            },
+            "review_results": {},
+        }
+        event = MagicMock()
+
+        with (
+            patch(
+                "agentmux.workflow.handlers.reviewing.write_prompt_file"
+            ) as mock_write,
+            patch(
+                "agentmux.workflow.handlers.reviewing.build_reviewer_summary_prompt",
+                return_value="summary prompt",
+            ),
+            patch("agentmux.workflow.handlers.reviewing.send_to_role"),
+        ):
+            mock_write.return_value = Path("/tmp/prompt.md")
+            handler._handle_review(event, state, ctx)
+
+        review_md = ctx.files.review_dir / "review.md"
+        assert review_md.exists(), (
+            "review.md must be generated after all parallel reviewers pass"
+        )
+        content = review_md.read_text(encoding="utf-8")
+        assert "verdict: pass" in content
+
+    def test_review_results_saved_to_state_on_all_pass(self, tmp_path):
+        """When all reviewers pass, review_results are included in state updates."""
+        ctx = FakeContext(tmp_path)
+        ctx.write_review_yaml("reviewer_logic", "pass")
+        ctx.write_review_yaml("reviewer_quality", "pass")
+
+        handler = ReviewingHandler()
+        state = {
+            "review_iteration": 0,
+            "active_reviews": {
+                "reviewer_logic": "pending",
+                "reviewer_quality": "pending",
+            },
+            "review_results": {},
+        }
+        event = MagicMock()
+
+        with (
+            patch(
+                "agentmux.workflow.handlers.reviewing.write_prompt_file"
+            ) as mock_write,
+            patch(
+                "agentmux.workflow.handlers.reviewing.build_reviewer_summary_prompt",
+                return_value="summary prompt",
+            ),
+            patch("agentmux.workflow.handlers.reviewing.send_to_role"),
+        ):
+            mock_write.return_value = Path("/tmp/prompt.md")
+            state_update, _next_phase = handler._handle_review(event, state, ctx)
+
+        assert "review_results" in state_update, (
+            "review_results must be saved to state when all reviewers pass"
+        )
+        assert "reviewer_logic" in state_update["review_results"]
+        assert "reviewer_quality" in state_update["review_results"]

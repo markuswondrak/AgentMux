@@ -5,6 +5,13 @@ defaults:
   provider: copilot
   max_review_iterations: 3
 
+providers:
+  copilot:
+    model_args:
+      claude-opus-4.6:
+        - --reasoning-effort
+        - high
+
 roles:
   product-manager:
     provider: cursor
@@ -17,8 +24,7 @@ roles:
   coder:
     provider: cursor
     model: auto
-
   web-researcher:
-    provider: opencode
+    model: gpt-5.2
   code-researcher:
-    provider: opencode
+    model: gpt-5.2

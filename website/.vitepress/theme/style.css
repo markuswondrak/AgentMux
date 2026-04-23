@@ -221,7 +221,14 @@ a {
   border: none;
   cursor: pointer;
   transition: transform 120ms ease, box-shadow 200ms ease, background 200ms ease;
-  text-decoration: none;
+  text-decoration: none !important;
+}
+
+.am-btn:hover,
+.am-btn:focus,
+.am-btn:active,
+.am-btn:visited {
+  text-decoration: none !important;
 }
 
 .am-btn--primary,

@@ -10,7 +10,7 @@ export default defineConfig({
   appearance: false,
 
   head: [
-    ['link', { rel: 'icon', href: '/AgentMux/favicon.svg', type: 'image/svg+xml' }],
+    ['link', { rel: 'icon', href: '/AgentMux/favicon.svg?v=2', type: 'image/svg+xml' }],
     ['meta', { name: 'theme-color', content: '#0051ae' }],
     ['meta', { property: 'og:title', content: 'AgentMux — The deterministic agentic pipeline' }],
     ['meta', { property: 'og:description', content: 'Multi-agent software pipelines on the AI subscriptions you already have.' }],

@@ -17,7 +17,10 @@ from agentmux.workflow.event_catalog import (
 )
 from agentmux.workflow.event_router import EventSpec, WorkflowEvent
 from agentmux.workflow.handlers.base import BaseToolHandler, ToolHandlerEntry
-from agentmux.workflow.handoff_artifacts import generate_review_md
+from agentmux.workflow.handoff_artifacts import (
+    generate_consolidated_review_md,
+    generate_review_md,
+)
 from agentmux.workflow.phase_helpers import (
     select_reviewer_roles,
     send_to_role,
@@ -138,17 +141,9 @@ class ReviewingHandler(BaseToolHandler):
                         state, ctx, review_results
                     )
                 else:
-                    result = self._request_summary(state, ctx)
-                    # _request_summary returns tuple (dict, str | None) or PhaseResult
-                    if isinstance(result, PhaseResult):
-                        updates = result.updates
-                        next_phase = result.next_phase
-                    elif isinstance(result, dict):
-                        # Handle dict-only return (e.g., from mocks)
-                        updates = result
-                        next_phase = None
-                    else:
-                        updates, next_phase = result
+                    updates, next_phase = self._request_summary(
+                        state, ctx, review_results=review_results
+                    )
                 # Ensure ingested results are carried forward
                 updates["review_results"] = review_results
                 updates["active_reviews"] = active_reviews
@@ -186,14 +181,7 @@ class ReviewingHandler(BaseToolHandler):
         ctx: PipelineContext,
         state: dict,
     ) -> list[ReviewerSpec]:
-        """Build ReviewerSpec list for roles that still need reviewing.
-
-        When ``state['review_iteration'] > 0`` and the previous iteration's
-        archived review for this role exists, dispatch a compact follow-up
-        prompt (Issue #119) instead of the full initial prompt. Otherwise —
-        and as a defensive fallback when the archive is missing — use the
-        initial reviewer prompt.
-        """
+        """Build ReviewerSpec list for roles that still need reviewing."""
         review_iteration = int(state.get("review_iteration", 0))
         specs: list[ReviewerSpec] = []
         for pane_role in reviewer_roles:
@@ -375,7 +363,7 @@ class ReviewingHandler(BaseToolHandler):
             )
 
         if _all_done(active_reviews):
-            return self._request_summary(state, ctx)
+            return self._request_summary(state, ctx, review_results=review_results)
 
         return {
             "review_results": review_results,
@@ -474,12 +462,30 @@ class ReviewingHandler(BaseToolHandler):
         self,
         state: dict,
         ctx: PipelineContext,
+        review_results: dict | None = None,
     ) -> tuple[dict, str | None]:
         """Send summary prompt to reviewer and wait for summary.md.
 
         Only called when ALL active reviewers have passed.
         Sends to the first nominated role as coordinator.
+
+        Auto-materializes 07_review/review.md from reviewer YAML results when the
+        file is missing — required by the summary prompt's [[include:...]] directive.
         """
+        results = (
+            review_results
+            if review_results is not None
+            else state.get("review_results", {})
+        )
+
+        # Auto-materialize review.md for parallel reviewers (new handoff contract).
+        # The legacy single reviewer writes review.md directly; skip if it exists.
+        review_md_path = ctx.files.review_dir / "review.md"
+        if results and not review_md_path.exists():
+            review_md_path.parent.mkdir(parents=True, exist_ok=True)
+            review_md_path.write_text(
+                generate_consolidated_review_md(results), encoding="utf-8"
+            )
         nominated = state.get("reviewer_nominations") or []
         coordinator_role = (
             nominated[0]
@@ -514,7 +520,11 @@ class ReviewingHandler(BaseToolHandler):
                 ctx.files.feature_dir, coordinator_role, state=state
             ),
         )
-        return {"last_event": EVENT_REVIEW_PASSED, "awaiting_summary": True}, None
+        return {
+            "last_event": EVENT_REVIEW_PASSED,
+            "awaiting_summary": True,
+            "review_results": results,
+        }, None
 
     # -------------------------------------------------------------------------
     # _handle_summary_written — kill all reviewer panes
