@@ -2,7 +2,6 @@ version: 2
 defaults:
   session_name: multi-agent-mvp
   provider: claude
-  model: sonnet
   max_review_iterations: 3
   completion:
     skip_final_approval: false
@@ -17,6 +16,7 @@ providers:
     command: claude
     model_flag: --model
     trust_snippet: Do you trust the contents of this directory?
+    default_model: sonnet
     role_args:
       architect:
       - --permission-mode

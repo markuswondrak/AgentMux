@@ -15,6 +15,7 @@ from ..shared.models import (
     GitHubConfig,
     WorkflowSettings,
 )
+from ._resolve import resolve_args, resolve_model, resolve_model_extra_args
 from .schema import RawConfigModel
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -199,19 +200,20 @@ def _resolve_loaded_config(
             )
 
         provider_default_model = provider.default_model
-        if role_config and role_config.model:
-            model = role_config.model
-        elif provider_default_model:
-            model = provider_default_model
-        else:
-            model = default_model
+        model = resolve_model(
+            role_config.model if role_config else None,
+            default_model,
+            provider_default_model,
+        )
 
-        if role_config and role_config.args is not None:
-            args = list(role_config.args)
-        else:
-            args = list(provider.default_role_args) + list(
-                provider.role_args.get(role) or []
-            )
+        provider_default_args = list(provider.default_role_args) + list(
+            provider.role_args.get(role) or []
+        )
+        args = resolve_args(
+            role_config.args if role_config else None,
+            provider_default_args,
+        )
+        args = args + resolve_model_extra_args(model, provider.model_args)
 
         agents[role] = AgentConfig(
             role=role,

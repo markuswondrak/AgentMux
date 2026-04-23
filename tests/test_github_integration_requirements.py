@@ -392,6 +392,20 @@ class PipelineIssueTriggerTests(unittest.TestCase):
                 patch(
                     "agentmux.integrations.github.subprocess.run",
                     side_effect=[
+                        # prune_orphaned: git worktree prune (result ignored)
+                        subprocess.CompletedProcess(
+                            args=["git", "worktree", "prune"],
+                            returncode=0,
+                            stdout="",
+                            stderr="",
+                        ),
+                        # is_linked_worktree(cwd=Path.cwd()): main repo
+                        subprocess.CompletedProcess(
+                            args=["git", "rev-parse", "--git-common-dir"],
+                            returncode=0,
+                            stdout=".git\n",
+                            stderr="",
+                        ),
                         # create_branch calls: git rev-parse (on main), show-ref
                         # (branch doesn't exist), checkout -b, push
                         subprocess.CompletedProcess(

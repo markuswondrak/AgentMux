@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 import time
-import types
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,7 @@ from ..sessions import (
     SessionService,
 )
 from ..sessions.state_store import (
+    cleanup_feature_dir,
     feature_slug_from_dir,
     load_runtime_files,
     load_state,
@@ -36,6 +37,26 @@ from ..terminal_ui.screens import goodbye_canceled, goodbye_error, goodbye_succe
 from ..workflow.interruptions import InterruptionService
 from ..workflow.orchestrator import PipelineOrchestrator
 from ..workflow.phase_registry import resolve_phase_startup_role
+
+
+@dataclass
+class LauncherArgs:
+    """Typed arguments for _run_launcher and _prepare_session.
+
+    Exactly one of prompt / issue / resume / orchestrate should be set.
+    """
+
+    # Mode (exactly one set per invocation)
+    prompt: str | None = None
+    issue: str | None = None
+    resume: str | bool | None = None
+    orchestrate: str | None = None
+
+    # Shared session options
+    name: str | None = None
+    keep_session: bool = False
+    product_manager: bool = False
+    worktree: bool = False
 
 
 def _derive_session_name(feature_dir: Path) -> str:
@@ -327,8 +348,8 @@ class PipelineApplication:
 
         return True
 
-    def _run_launcher(self, args, loaded) -> int:
-        if args.resume and getattr(args, "issue", None):
+    def _run_launcher(self, args: LauncherArgs, loaded) -> int:
+        if args.resume and args.issue:
             raise SystemExit("--issue cannot be used with --resume.")
 
         mcp = self._mcp_preparer()
@@ -336,6 +357,31 @@ class PipelineApplication:
 
         if not self._check_opencode_model_conflicts(loaded, self.project_dir):
             return 1
+
+        from ..integrations.worktree_manager import WorktreeManager  # noqa: PLC0415
+
+        sessions_root = self.project_dir / ".agentmux" / ".sessions"
+        WorktreeManager.prune_orphaned(self.project_dir, sessions_root)
+
+        # Worktree pre-flight: guard against running from inside a linked worktree
+        if not args.resume:
+            _wm = WorktreeManager(self.project_dir)
+            is_linked = (
+                _wm.is_linked_worktree(cwd=Path.cwd()) or _wm.is_linked_worktree()
+            )
+            if is_linked and args.worktree:
+                print(
+                    "Error: Cannot use --worktree from inside a linked worktree. "
+                    "Run from the main repository.",
+                    file=sys.stderr,
+                )
+                return 1
+            if is_linked and not args.worktree:
+                print(
+                    "Warning: Running from a linked worktree. "
+                    "Some git operations may behave unexpectedly.",
+                    file=sys.stderr,
+                )
 
         prepared = self._prepare_session(args, loaded)
         if args.resume:
@@ -374,7 +420,7 @@ class PipelineApplication:
             args, prepared, agents, session_name=session_name
         )
 
-    def _prepare_session(self, args, loaded) -> PreparedSession:
+    def _prepare_session(self, args: LauncherArgs, loaded) -> PreparedSession:
         if args.resume:
             if args.resume is True:
                 selected = self.ui.select_session(
@@ -388,21 +434,30 @@ class PipelineApplication:
             state = load_state(prepared.files.state)
             feature_branch = state.get("feature_branch")
             if feature_branch:
-                git_manager = GitBranchManager(self.project_dir)
-                branch_state = git_manager.ensure_branch(feature_branch)
-                if not branch_state.created:
-                    self.ui.print(
-                        f"Warning: Could not create/switch to feature "
-                        f"branch {feature_branch}; "
-                        "will retry at completion."
+                if state.get("worktree_enabled"):
+                    from ..integrations.worktree_manager import (
+                        WorktreeManager,  # noqa: PLC0415
                     )
+
+                    worktree_path = Path(state["worktree_path"])
+                    wm = WorktreeManager(self.project_dir)
+                    wm.recreate_if_missing(worktree_path, feature_branch)
+                else:
+                    git_manager = GitBranchManager(self.project_dir)
+                    branch_state = git_manager.ensure_branch(feature_branch)
+                    if not branch_state.created:
+                        self.ui.print(
+                            f"Warning: Could not create/switch to feature "
+                            f"branch {feature_branch}; "
+                            "will retry at completion."
+                        )
 
             return prepared
 
         github = GitHubBootstrapper(
             self.project_dir, loaded.github, output=self.ui.print
         )
-        issue_arg = getattr(args, "issue", None)
+        issue_arg = args.issue
         if issue_arg:
             issue = github.resolve_issue(str(issue_arg))
             prompt = PromptInput(text=issue.prompt_text, slug_source=issue.slug_source)
@@ -431,24 +486,55 @@ class PipelineApplication:
             )
 
         # Create feature branch at startup for ALL sessions (not just --issue)
-        branch_name = (
-            f"{loaded.github.branch_prefix}"
-            f"{feature_slug_from_dir(prepared.feature_dir)}"
-        )
-        git_manager = GitBranchManager(self.project_dir)
-        branch_state = git_manager.ensure_branch(branch_name)
+        feature_slug = feature_slug_from_dir(prepared.feature_dir)
+        branch_name = f"{loaded.github.branch_prefix}{feature_slug}"
 
-        if not branch_state.created:
-            self.ui.print(
-                f"Warning: Could not create/switch to feature branch {branch_name}; "
-                "will retry at completion."
+        if args.worktree:
+            from ..integrations.worktree_manager import (  # noqa: PLC0415
+                WorktreeBranchConflictError,
+                WorktreeManager,
             )
-        else:
-            # Track branch info in session state
+
+            wm = WorktreeManager(self.project_dir)
+            worktree_path = wm.compute_worktree_path(feature_slug)
+            # Reserve the worktree path in state.json BEFORE creating it, so a
+            # concurrent prune_orphaned call does not treat it as an orphan.
             state = load_state(prepared.files.state)
-            state["feature_branch"] = branch_name
-            state["branch_created"] = True
+            state["worktree_path"] = str(worktree_path)
             write_state(prepared.files.state, state)
+            try:
+                result = wm.create(worktree_path, branch_name)
+            except WorktreeBranchConflictError as exc:
+                cleanup_feature_dir(prepared.feature_dir)
+                print(
+                    f"Error: Branch '{exc.branch_name}' is already checked out "
+                    f"in another worktree at '{exc.conflicting_path}'. "
+                    "Cannot create a second worktree for the same branch.",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1) from None
+
+            state = load_state(prepared.files.state)
+            state["worktree_enabled"] = True
+            state["worktree_path"] = str(result.path)
+            state["main_repo_dir"] = str(self.project_dir)
+            state["feature_branch"] = result.branch_name
+            write_state(prepared.files.state, state)
+        else:
+            git_manager = GitBranchManager(self.project_dir)
+            branch_state = git_manager.ensure_branch(branch_name)
+
+            if not branch_state.created:
+                self.ui.print(
+                    f"Warning: Could not create/switch to feature branch "
+                    f"{branch_name}; will retry at completion."
+                )
+            else:
+                # Track branch info in session state
+                state = load_state(prepared.files.state)
+                state["feature_branch"] = branch_name
+                state["branch_created"] = True
+                write_state(prepared.files.state, state)
 
         return prepared
 
@@ -669,20 +755,24 @@ class PipelineApplication:
         return 0
 
     def run_prompt(
-        self, prompt, *, name=None, keep_session=False, product_manager=False
+        self,
+        prompt,
+        *,
+        name=None,
+        keep_session=False,
+        product_manager=False,
+        worktree=False,
     ) -> int:
         self.ensure_dependencies()
         loaded = load_layered_config(
             self.project_dir, explicit_config_path=self.config_path
         )
-        args = types.SimpleNamespace(
+        args = LauncherArgs(
             prompt=prompt,
             name=name,
             keep_session=keep_session,
             product_manager=product_manager,
-            resume=None,
-            issue=None,
-            orchestrate=None,
+            worktree=worktree,
         )
         return self._run_launcher(args, loaded)
 
@@ -691,32 +781,31 @@ class PipelineApplication:
         loaded = load_layered_config(
             self.project_dir, explicit_config_path=self.config_path
         )
-        args = types.SimpleNamespace(
+        args = LauncherArgs(
             resume=session if session else True,
-            issue=None,
-            prompt=None,
-            name=None,
-            product_manager=False,
-            orchestrate=None,
             keep_session=keep_session,
         )
         return self._run_launcher(args, loaded)
 
     def run_issue(
-        self, number_or_url, *, name=None, keep_session=False, product_manager=False
+        self,
+        number_or_url,
+        *,
+        name=None,
+        keep_session=False,
+        product_manager=False,
+        worktree=False,
     ) -> int:
         self.ensure_dependencies()
         loaded = load_layered_config(
             self.project_dir, explicit_config_path=self.config_path
         )
-        args = types.SimpleNamespace(
+        args = LauncherArgs(
             issue=number_or_url,
-            resume=None,
-            prompt=None,
             name=name,
-            product_manager=product_manager,
-            orchestrate=None,
             keep_session=keep_session,
+            product_manager=product_manager,
+            worktree=worktree,
         )
         return self._run_launcher(args, loaded)
 
@@ -725,7 +814,5 @@ class PipelineApplication:
         loaded = load_layered_config(
             self.project_dir, explicit_config_path=self.config_path
         )
-        args = types.SimpleNamespace(
-            orchestrate=str(feature_dir), keep_session=keep_session
-        )
+        args = LauncherArgs(orchestrate=str(feature_dir), keep_session=keep_session)
         return self._run_background_orchestrator(args, loaded)
