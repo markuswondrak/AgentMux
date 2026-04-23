@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from ..shared.models import AgentConfig, BatchCommand, BatchCommandMode
 from . import load_builtin_catalog
+from ._resolve import resolve_args, resolve_model, resolve_model_extra_args
 
 
 @dataclass(frozen=True)
@@ -152,23 +153,17 @@ def resolve_agent(
     provider_name = role_config.get("provider")
     provider = get_provider(provider_name) if provider_name else global_provider
 
-    # model kwarg > role_config model > provider default > "sonnet"
-    effective_model = model or str(  # noqa: E501
-        role_config.get("model", provider.default_model or "sonnet")
+    effective_model = resolve_model(
+        role_config.get("model"),
+        model,
+        provider.default_model,
     )
 
-    args = role_config.get("args")
-    if args is None:
-        # Use role-specific args if defined, otherwise fall back to provider's
-        # default_role_args
-        args = provider.default_args.get(role, provider.default_role_args or [])
-
-    # Append model-specific args if defined for this model
-    model_extra = (
-        provider.model_args.get(effective_model, []) if provider.model_args else []
+    provider_default_args = provider.default_args.get(
+        role, provider.default_role_args or []
     )
-    if model_extra:
-        args = list(args) + model_extra
+    args = resolve_args(role_config.get("args"), provider_default_args)
+    args = args + resolve_model_extra_args(effective_model, provider.model_args or {})
 
     # Append extra_args if provided
     if extra_args:

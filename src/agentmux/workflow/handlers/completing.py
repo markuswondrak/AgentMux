@@ -212,7 +212,8 @@ class CompletingHandler:
         feature_name = feature_slug_from_dir(ctx.files.feature_dir)
         branch_name = f"{ctx.github_config.branch_prefix}{feature_name}"
         if result.commit_hash is not None:
-            paths = ProjectPaths.from_project(ctx.files.project_dir)
+            main_repo = Path(state.get("main_repo_dir") or str(ctx.files.project_dir))
+            paths = ProjectPaths.from_project(main_repo)
             summary_path = paths.last_completion
             summary_path.parent.mkdir(parents=True, exist_ok=True)
             summary_path.write_text(

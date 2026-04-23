@@ -3,11 +3,19 @@ version: 2
 defaults:
   session_name: agentmux
   provider: copilot
-  model: gpt-5.4
   max_review_iterations: 3
 
+providers:
+  copilot:
+    model_args:
+      claude-opus-4.6:
+        - --reasoning-effort
+        - high
+
 roles:
+  coder:
+    model: gpt-5.4
   web-researcher:
-    provider: opencode
+    model: gpt-5.2
   code-researcher:
-    provider: opencode
+    model: gpt-5.2

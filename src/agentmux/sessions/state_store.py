@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import shutil
@@ -198,7 +199,16 @@ def create_feature_files(
 
 
 def load_runtime_files(project_dir: Path, feature_dir: Path) -> RuntimeFiles:
-    return _make_runtime_files(project_dir, feature_dir)
+    state_path = feature_dir / STATE_FILE_NAME
+    effective_project_dir = project_dir
+    if state_path.exists():
+        with contextlib.suppress(Exception):
+            state = load_state(state_path)
+            if state.get("worktree_enabled") and state.get("worktree_path"):
+                wt = Path(state["worktree_path"])
+                if wt.exists():
+                    effective_project_dir = wt
+    return _make_runtime_files(effective_project_dir, feature_dir)
 
 
 def infer_resume_phase(feature_dir: Path, state: dict[str, Any]) -> str:

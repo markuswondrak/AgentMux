@@ -74,7 +74,7 @@ _LEGACY_DEFAULTS_KEYS = {
 class DefaultsConfig(BaseModel):
     session_name: str = "multi-agent-mvp"
     provider: str = "claude"
-    model: str = "sonnet"
+    model: str | None = None
     max_review_iterations: int = 3
     completion: CompletionConfig = Field(default_factory=CompletionConfig)
     compression: CompressionConfig = Field(default_factory=CompressionConfig)
