@@ -731,6 +731,18 @@ class PipelineApplication:
             output=self.ui.stdout,
         )
 
+    def _load_config_with_path_hint(self):
+        try:
+            return load_layered_config(
+                self.project_dir, explicit_config_path=self.config_path
+            )
+        except Exception as exc:
+            sys.stderr.write(str(exc) + "\n")
+            project_config = self.project_dir / ".agentmux" / "config.yaml"
+            if project_config.exists():
+                sys.stderr.write(f"Fix your config at: {project_config}\n")
+            raise SystemExit(1) from exc
+
     def run_sessions(self) -> int:
         """List all sessions with their phase, status, and updated timestamp."""
         sessions = self.sessions.list_resumable_sessions()
@@ -764,9 +776,7 @@ class PipelineApplication:
         worktree=False,
     ) -> int:
         self.ensure_dependencies()
-        loaded = load_layered_config(
-            self.project_dir, explicit_config_path=self.config_path
-        )
+        loaded = self._load_config_with_path_hint()
         args = LauncherArgs(
             prompt=prompt,
             name=name,
@@ -778,9 +788,7 @@ class PipelineApplication:
 
     def run_resume(self, session=None, *, keep_session=False) -> int:
         self.ensure_dependencies()
-        loaded = load_layered_config(
-            self.project_dir, explicit_config_path=self.config_path
-        )
+        loaded = self._load_config_with_path_hint()
         args = LauncherArgs(
             resume=session if session else True,
             keep_session=keep_session,
@@ -797,9 +805,7 @@ class PipelineApplication:
         worktree=False,
     ) -> int:
         self.ensure_dependencies()
-        loaded = load_layered_config(
-            self.project_dir, explicit_config_path=self.config_path
-        )
+        loaded = self._load_config_with_path_hint()
         args = LauncherArgs(
             issue=number_or_url,
             name=name,

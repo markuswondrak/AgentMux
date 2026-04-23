@@ -1,0 +1,288 @@
+{
+  "$defs": {
+    "BatchCommandConfig": {
+      "properties": {
+        "verb": {
+          "default": "",
+          "title": "Verb",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/BatchCommandMode",
+          "default": "positional"
+        }
+      },
+      "title": "BatchCommandConfig",
+      "type": "object"
+    },
+    "BatchCommandMode": {
+      "description": "How the prompt file is passed to a batch-mode agent.",
+      "enum": [
+        "positional",
+        "flag",
+        "stdin"
+      ],
+      "title": "BatchCommandMode",
+      "type": "string"
+    },
+    "CompletionConfig": {
+      "properties": {
+        "skip_final_approval": {
+          "default": false,
+          "title": "Skip Final Approval",
+          "type": "boolean"
+        }
+      },
+      "title": "CompletionConfig",
+      "type": "object"
+    },
+    "CompressionConfig": {
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "CompressionConfig",
+      "type": "object"
+    },
+    "DefaultsConfig": {
+      "properties": {
+        "session_name": {
+          "default": "multi-agent-mvp",
+          "title": "Session Name",
+          "type": "string"
+        },
+        "provider": {
+          "default": "claude",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "default": "sonnet",
+          "title": "Model",
+          "type": "string"
+        },
+        "max_review_iterations": {
+          "default": 3,
+          "title": "Max Review Iterations",
+          "type": "integer"
+        },
+        "completion": {
+          "$ref": "#/$defs/CompletionConfig"
+        },
+        "compression": {
+          "$ref": "#/$defs/CompressionConfig"
+        }
+      },
+      "title": "DefaultsConfig",
+      "type": "object"
+    },
+    "GitHubConfig": {
+      "properties": {
+        "base_branch": {
+          "default": "main",
+          "title": "Base Branch",
+          "type": "string"
+        },
+        "draft": {
+          "default": true,
+          "title": "Draft",
+          "type": "boolean"
+        },
+        "branch_prefix": {
+          "default": "feature/",
+          "title": "Branch Prefix",
+          "type": "string"
+        }
+      },
+      "title": "GitHubConfig",
+      "type": "object"
+    },
+    "ProviderConfig": {
+      "properties": {
+        "command": {
+          "title": "Command",
+          "type": "string"
+        },
+        "model_flag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Flag"
+        },
+        "trust_snippet": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trust Snippet"
+        },
+        "trust_key": {
+          "default": "Enter",
+          "title": "Trust Key",
+          "type": "string"
+        },
+        "role_args": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Role Args",
+          "type": "object"
+        },
+        "default_role_args": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Default Role Args",
+          "type": "array"
+        },
+        "batch_command": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BatchCommandConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "batch_subcommand": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch Subcommand"
+        },
+        "single_coder": {
+          "default": false,
+          "title": "Single Coder",
+          "type": "boolean"
+        },
+        "default_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default Model"
+        },
+        "model_args": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Model Args",
+          "type": "object"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "title": "ProviderConfig",
+      "type": "object"
+    },
+    "RoleConfig": {
+      "properties": {
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "args": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Args"
+        }
+      },
+      "title": "RoleConfig",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "version": {
+      "default": 2,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "defaults": {
+      "$ref": "#/$defs/DefaultsConfig"
+    },
+    "github": {
+      "$ref": "#/$defs/GitHubConfig"
+    },
+    "providers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ProviderConfig"
+      },
+      "title": "Providers",
+      "type": "object"
+    },
+    "roles": {
+      "additionalProperties": {
+        "$ref": "#/$defs/RoleConfig"
+      },
+      "title": "Roles",
+      "type": "object"
+    }
+  },
+  "title": "RawConfigModel",
+  "type": "object"
+}

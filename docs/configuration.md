@@ -61,6 +61,22 @@ roles:
     model: gpt-5.3-codex
 ```
 
+## IDE autocompletion
+
+`agentmux init` automatically adds a `yaml-language-server` directive at the top of `.agentmux/config.yaml`. This enables schema validation and autocompletion in editors that support yaml-language-server (VS Code, Cursor, etc.):
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/markuswondrak/AgentMux/main/src/agentmux/configuration/defaults/config.schema.json
+version: 2
+...
+```
+
+If you manage the file by hand, add that line yourself. For local development, use the local path variant instead:
+
+```yaml
+# yaml-language-server: $schema=./src/agentmux/configuration/defaults/config.schema.json
+```
+
 ## Config structure
 
 - `version` — **Required**. Must be `2` for new configs. Configs without `version` or with `version: 1` will fail with a helpful migration message.
