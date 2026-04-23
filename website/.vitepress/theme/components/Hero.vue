@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { withBase } from 'vitepress'
+import { providerDotList, providerDisplayList, providerCount } from '../providers'
 </script>
 
 <template>
@@ -13,8 +14,8 @@ import { withBase } from 'vitepress'
         </h1>
         <p class="hero__tagline">
           AgentMux orchestrates a deterministic multi-agent workflow for end-to-end software
-          development. It drives the AI CLIs you already use — Claude, Codex, Copilot, Gemini,
-          OpenCode, Qwen — through tmux, reusing your existing subscriptions instead of paying
+          development. It drives the AI CLIs you already use — {{ providerDisplayList }} —
+          through tmux, reusing your existing subscriptions instead of paying
           per token.
         </p>
         <div class="hero__cta-row">
@@ -46,8 +47,8 @@ import { withBase } from 'vitepress'
 
         <div class="hero__metric">
           <div class="hero__metric-label">▸ CLI providers</div>
-          <div class="hero__metric-value">6<span class="hero__metric-unit">&nbsp;bridges</span></div>
-          <div class="hero__metric-sub">claude · codex · copilot · gemini · opencode · qwen</div>
+          <div class="hero__metric-value">{{ providerCount }}<span class="hero__metric-unit">&nbsp;bridges</span></div>
+          <div class="hero__metric-sub">{{ providerDotList }}</div>
         </div>
       </div>
     </div>

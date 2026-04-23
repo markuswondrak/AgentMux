@@ -49,3 +49,4 @@ The orchestrator materializes `execution_plan.yaml` from `plan.yaml` execution g
 - `execution_plan.yaml` must exist before implementation starts; the orchestrator materializes it from `plan.yaml` automatically.
 - The `needs_design` flag in `plan.yaml` controls whether `designing` is inserted between planning and implementing.
 - Research context from `03_research/` (if any) is injected into the planner prompt via `research_handoff`.
+- **Session resume:** after a failed run, resumption into `planning` vs later phases is inferred from artifacts. **`04_planning/execution_plan.yaml`** is the completion signal that the orchestrator finished planning (not `plan.yaml` alone), matching when `plan_written` is emitted and downstream phases become valid.

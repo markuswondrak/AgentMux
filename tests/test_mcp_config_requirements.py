@@ -461,7 +461,9 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 # install() should not be called when config is unchanged
                 mock_install.assert_not_called()
 
-    def test_runtime_mcp_config_injects_feature_dir_when_provided(self) -> None:
+    def test_runtime_mcp_config_includes_project_env_without_feature_dir(self) -> None:
+        """Runtime MCP JSON carries stable project env;
+        session paths are not embedded."""
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -469,14 +471,11 @@ class McpConfigRequirementsTests(unittest.TestCase):
             feature_dir.mkdir()
             project_dir.mkdir()
 
-            config_path = _create_runtime_mcp_config(
-                [self._server()], project_dir, feature_dir=feature_dir
-            )
+            config_path = _create_runtime_mcp_config([self._server()], project_dir)
 
             config = json.loads(config_path.read_text(encoding="utf-8"))
             server_env = config["mcpServers"]["agentmux"]["env"]
-            self.assertIn("FEATURE_DIR", server_env)
-            self.assertEqual(str(feature_dir), server_env["FEATURE_DIR"])
+            self.assertNotIn("FEATURE_DIR", server_env)
             self.assertIn("PROJECT_DIR", server_env)
             self.assertEqual(str(project_dir), server_env["PROJECT_DIR"])
 
@@ -490,7 +489,9 @@ class McpConfigRequirementsTests(unittest.TestCase):
             server_env = config["mcpServers"]["agentmux"]["env"]
             self.assertNotIn("FEATURE_DIR", server_env)
 
-    def test_setup_mcp_injects_feature_dir_and_project_dir_for_non_claude(self) -> None:
+    def test_setup_mcp_injects_session_env_and_allowed_tools_for_non_claude(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -520,8 +521,16 @@ class McpConfigRequirementsTests(unittest.TestCase):
 
             self.assertEqual(str(feature_dir), updated["architect"].env["FEATURE_DIR"])
             self.assertEqual(str(project_dir), updated["architect"].env["PROJECT_DIR"])
+            self.assertIn("PYTHONPATH", updated["architect"].env)
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
 
-    def test_setup_mcp_injects_feature_dir_for_claude_in_mcp_json(self) -> None:
+            allowed = updated["architect"].env["AGENTMUX_ALLOWED_TOOLS"]
+            self.assertEqual(
+                set(allowed.split(",")),
+                set(ROLE_TOOLS["architect"]),
+            )
+
+    def test_setup_mcp_injects_mcp_json_for_claude_with_feature_dir(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
             feature_dir = tmp_path / "feature"
@@ -545,15 +554,219 @@ class McpConfigRequirementsTests(unittest.TestCase):
                 project_dir,
             )
 
-            # Claude agent env should have FEATURE_DIR
             self.assertEqual(str(feature_dir), updated["architect"].env["FEATURE_DIR"])
-            # Generated mcp_servers_architect.json should also have FEATURE_DIR
+            self.assertEqual(str(project_dir), updated["architect"].env["PROJECT_DIR"])
             mcp_config_path_str = updated["architect"].args[
                 updated["architect"].args.index("--mcp-config") + 1
             ]
             mcp_config = json.loads(Path(mcp_config_path_str).read_text())
             server_env = mcp_config["mcpServers"]["agentmux"]["env"]
             self.assertEqual(str(feature_dir), server_env["FEATURE_DIR"])
+            self.assertEqual(str(project_dir), server_env["PROJECT_DIR"])
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
+
+            allowed = server_env["AGENTMUX_ALLOWED_TOOLS"]
+            self.assertEqual(
+                set(allowed.split(",")),
+                set(ROLE_TOOLS["architect"]),
+            )
+
+    def test_setup_mcp_injects_env_into_cursor_mcp_json_for_cursor_agent(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            # Create .cursor/mcp.json as it would be after `agentmux init`
+            cursor_mcp_dir = project_dir / ".cursor"
+            cursor_mcp_dir.mkdir()
+            cursor_mcp_json = cursor_mcp_dir / "mcp.json"
+            cursor_mcp_json.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "agentmux": {
+                                "type": "stdio",
+                                "command": sys.executable,
+                                "args": ["-m", "agentmux.integrations.mcp_server"],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=["--trust"],
+                    provider="cursor",
+                ),
+            }
+
+            updated = setup_mcp(
+                agents,
+                [self._server()],
+                ["planner"],
+                feature_dir,
+                project_dir,
+            )
+
+            # Agent process env gets session paths + PYTHONPATH + AGENTMUX_ALLOWED_TOOLS
+            self.assertEqual(str(feature_dir), updated["planner"].env["FEATURE_DIR"])
+            self.assertEqual(str(project_dir), updated["planner"].env["PROJECT_DIR"])
+            self.assertIn("PYTHONPATH", updated["planner"].env)
+
+            # .cursor/mcp.json must have stable env only — no session-specific keys
+            config = json.loads(cursor_mcp_json.read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux"]["env"]
+            self.assertIn("PYTHONPATH", server_env)
+            self.assertEqual(str(project_dir), server_env["PROJECT_DIR"])
+            self.assertNotIn(
+                "FEATURE_DIR",
+                server_env,
+                (
+                    "FEATURE_DIR must not be written into .cursor/mcp.json "
+                    "— it changes every session and triggers Cursor's MCP "
+                    "approval modal"
+                ),
+            )
+            self.assertNotIn(
+                "AGENTMUX_ALLOWED_TOOLS",
+                server_env,
+                (
+                    "AGENTMUX_ALLOWED_TOOLS must not be written into .cursor/mcp.json "
+                    "— it must go to .agentmux/.active_session instead"
+                ),
+            )
+
+            # Session-specific values must appear in .agentmux/.active_session
+            active_session_path = project_dir / ".agentmux" / ".active_session"
+            self.assertTrue(
+                active_session_path.exists(), ".active_session must be created"
+            )
+            active_data = json.loads(active_session_path.read_text(encoding="utf-8"))
+            self.assertEqual(str(feature_dir), active_data["feature_dir"])
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
+
+            tools = set(active_data["allowed_tools"].split(","))
+            self.assertEqual(tools, set(ROLE_TOOLS["planner"]))
+
+    def test_setup_mcp_skips_cursor_injection_when_no_cursor_mcp_json(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            # .cursor/mcp.json does NOT exist
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=["--trust"],
+                    provider="cursor",
+                ),
+            }
+
+            # Must not raise even when .cursor/mcp.json is absent
+            updated = setup_mcp(
+                agents,
+                [self._server()],
+                ["planner"],
+                feature_dir,
+                project_dir,
+            )
+
+            self.assertEqual(str(feature_dir), updated["planner"].env["FEATURE_DIR"])
+            active_session_path = project_dir / ".agentmux" / ".active_session"
+            self.assertTrue(active_session_path.exists())
+            active_data = json.loads(active_session_path.read_text(encoding="utf-8"))
+            self.assertEqual(str(feature_dir), active_data["feature_dir"])
+
+    def test_setup_mcp_merges_allowed_tools_for_multiple_cursor_roles(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            cursor_mcp_dir = project_dir / ".cursor"
+            cursor_mcp_dir.mkdir()
+            cursor_mcp_json = cursor_mcp_dir / "mcp.json"
+            cursor_mcp_json.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "agentmux": {
+                                "type": "stdio",
+                                "command": sys.executable,
+                                "args": ["-m", "agentmux.integrations.mcp_server"],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=["--trust"],
+                    provider="cursor",
+                ),
+                "coder": AgentConfig(
+                    role="coder",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=["--trust"],
+                    provider="cursor",
+                ),
+            }
+
+            setup_mcp(
+                agents,
+                [self._server()],
+                ["planner", "coder"],
+                feature_dir,
+                project_dir,
+            )
+
+            # Merged allowed tools must appear in .agentmux/.active_session
+            active_session_path = project_dir / ".agentmux" / ".active_session"
+            self.assertTrue(
+                active_session_path.exists(), ".active_session must be created"
+            )
+            active_data = json.loads(active_session_path.read_text(encoding="utf-8"))
+            tools = set(active_data["allowed_tools"].split(","))
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
+
+            expected = set(ROLE_TOOLS["planner"]) | set(ROLE_TOOLS["coder"])
+            self.assertEqual(tools, expected)
+
+            # .cursor/mcp.json must NOT have session-specific keys
+            config = json.loads(cursor_mcp_json.read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux"]["env"]
+            self.assertNotIn(
+                "AGENTMUX_ALLOWED_TOOLS",
+                server_env,
+                ("AGENTMUX_ALLOWED_TOOLS must not be written into .cursor/mcp.json"),
+            )
+            self.assertNotIn(
+                "FEATURE_DIR",
+                server_env,
+                ("FEATURE_DIR must not be written into .cursor/mcp.json"),
+            )
 
 
 class OpenCodeAgentConfiguratorTests(unittest.TestCase):
@@ -794,6 +1007,348 @@ class RoleToolFilteringTests(unittest.TestCase):
                 "submit_done", updated["coder"].env["AGENTMUX_ALLOWED_TOOLS"]
             )
             self.assertNotIn("--mcp-config", updated["coder"].args)
+
+
+class ActiveSessionTests(unittest.TestCase):
+    """Tests that MCP setup writes session-specific values to
+    .agentmux/.active_session for all providers."""
+
+    def _server(self) -> McpServerSpec:
+        return McpServerSpec(
+            name="agentmux",
+            module="agentmux.integrations.mcp_server",
+            env={},
+        )
+
+    def _cursor_mcp_json(self) -> dict:
+        return {
+            "mcpServers": {
+                "agentmux": {
+                    "type": "stdio",
+                    "command": sys.executable,
+                    "args": ["-m", "agentmux.integrations.mcp_server"],
+                }
+            }
+        }
+
+    def test_setup_mcp_does_not_write_feature_dir_to_cursor_mcp_json(self) -> None:
+        """FEATURE_DIR must never appear in .cursor/mcp.json (avoids approval modal)."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            cursor_mcp_dir = project_dir / ".cursor"
+            cursor_mcp_dir.mkdir()
+            cursor_mcp_json = cursor_mcp_dir / "mcp.json"
+            cursor_mcp_json.write_text(
+                json.dumps(self._cursor_mcp_json()), encoding="utf-8"
+            )
+
+            agents = {
+                "product-manager": AgentConfig(
+                    role="product-manager",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=[],
+                    provider="cursor",
+                ),
+            }
+            setup_mcp(
+                agents,
+                [self._server()],
+                ["product-manager"],
+                feature_dir,
+                project_dir,
+            )
+
+            config = json.loads(cursor_mcp_json.read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux"].get("env") or {}
+            self.assertNotIn("FEATURE_DIR", server_env)
+
+    def test_setup_mcp_does_not_write_allowed_tools_to_cursor_mcp_json(
+        self,
+    ) -> None:
+        """AGENTMUX_ALLOWED_TOOLS must not appear in .cursor/mcp.json."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            cursor_mcp_dir = project_dir / ".cursor"
+            cursor_mcp_dir.mkdir()
+            cursor_mcp_json = cursor_mcp_dir / "mcp.json"
+            cursor_mcp_json.write_text(
+                json.dumps(self._cursor_mcp_json()), encoding="utf-8"
+            )
+
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=[],
+                    provider="cursor",
+                ),
+            }
+            setup_mcp(
+                agents,
+                [self._server()],
+                ["planner"],
+                feature_dir,
+                project_dir,
+            )
+
+            config = json.loads(cursor_mcp_json.read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux"].get("env") or {}
+            self.assertNotIn("AGENTMUX_ALLOWED_TOOLS", server_env)
+
+    def test_setup_mcp_writes_feature_dir_to_active_session(self) -> None:
+        """FEATURE_DIR is written to .agentmux/.active_session for all agents."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+
+            agents = {
+                "product-manager": AgentConfig(
+                    role="product-manager",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=[],
+                    provider="cursor",
+                ),
+            }
+            setup_mcp(
+                agents,
+                [self._server()],
+                ["product-manager"],
+                feature_dir,
+                project_dir,
+            )
+
+            active_session_path = project_dir / ".agentmux" / ".active_session"
+            self.assertTrue(
+                active_session_path.exists(),
+                ".active_session should be created for all agents",
+            )
+            data = json.loads(active_session_path.read_text(encoding="utf-8"))
+            self.assertEqual(str(feature_dir), data.get("feature_dir"))
+
+    def test_setup_mcp_writes_allowed_tools_to_active_session(self) -> None:
+        """AGENTMUX_ALLOWED_TOOLS for the active role is in .active_session."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=[],
+                    provider="cursor",
+                ),
+            }
+            setup_mcp(
+                agents,
+                [self._server()],
+                ["planner"],
+                feature_dir,
+                project_dir,
+            )
+
+            active_session_path = project_dir / ".agentmux" / ".active_session"
+            data = json.loads(active_session_path.read_text(encoding="utf-8"))
+            self.assertIn("allowed_tools", data)
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
+
+            expected = set(ROLE_TOOLS["planner"])
+            actual = set(data["allowed_tools"].split(","))
+            self.assertEqual(expected, actual)
+
+    def test_setup_mcp_merges_allowed_tools_for_multiple_cursor_roles_in_active_session(
+        self,
+    ) -> None:
+        """Multiple cursor roles have their allowed tools merged in .active_session."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=[],
+                    provider="cursor",
+                ),
+                "coder": AgentConfig(
+                    role="coder",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=[],
+                    provider="cursor",
+                ),
+            }
+            setup_mcp(
+                agents,
+                [self._server()],
+                ["planner", "coder"],
+                feature_dir,
+                project_dir,
+            )
+
+            active_session_path = project_dir / ".agentmux" / ".active_session"
+            data = json.loads(active_session_path.read_text(encoding="utf-8"))
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
+
+            expected = set(ROLE_TOOLS["planner"]) | set(ROLE_TOOLS["coder"])
+            actual = set(data["allowed_tools"].split(","))
+            self.assertEqual(expected, actual)
+
+    def test_setup_mcp_writes_active_session_even_without_cursor_mcp_json(
+        self,
+    ) -> None:
+        """.active_session is still written when .cursor/mcp.json is absent."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            # .cursor/mcp.json intentionally absent
+
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=[],
+                    provider="cursor",
+                ),
+            }
+            updated = setup_mcp(
+                agents,
+                [self._server()],
+                ["planner"],
+                feature_dir,
+                project_dir,
+            )
+
+            active_session_path = project_dir / ".agentmux" / ".active_session"
+            self.assertTrue(active_session_path.exists())
+            data = json.loads(active_session_path.read_text(encoding="utf-8"))
+            self.assertEqual(str(feature_dir), data["feature_dir"])
+            self.assertEqual(str(feature_dir), updated["planner"].env["FEATURE_DIR"])
+
+    def test_setup_mcp_removes_stale_feature_dir_from_cursor_mcp_json(
+        self,
+    ) -> None:
+        """Pre-existing FEATURE_DIR/AGENTMUX_ALLOWED_TOOLS are removed from
+        .cursor/mcp.json on first run after the fix (one-time migration)."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+            cursor_mcp_dir = project_dir / ".cursor"
+            cursor_mcp_dir.mkdir()
+            cursor_mcp_json = cursor_mcp_dir / "mcp.json"
+            cursor_mcp_json.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "agentmux": {
+                                "type": "stdio",
+                                "command": sys.executable,
+                                "args": ["-m", "agentmux.integrations.mcp_server"],
+                                "env": {
+                                    "FEATURE_DIR": "/old/stale/session",
+                                    "AGENTMUX_ALLOWED_TOOLS": "submit_plan",
+                                    "PROJECT_DIR": str(project_dir),
+                                    "PYTHONPATH": str(project_dir),
+                                },
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            agents = {
+                "planner": AgentConfig(
+                    role="planner",
+                    cli="agent",
+                    model="gemini-3-flash",
+                    args=[],
+                    provider="cursor",
+                ),
+            }
+            setup_mcp(
+                agents,
+                [self._server()],
+                ["planner"],
+                feature_dir,
+                project_dir,
+            )
+
+            config = json.loads(cursor_mcp_json.read_text(encoding="utf-8"))
+            server_env = config["mcpServers"]["agentmux"].get("env") or {}
+            self.assertNotIn("FEATURE_DIR", server_env)
+            self.assertNotIn("AGENTMUX_ALLOWED_TOOLS", server_env)
+            # Stable values should still be present
+            self.assertIn("PYTHONPATH", server_env)
+            self.assertIn("PROJECT_DIR", server_env)
+
+    def test_setup_mcp_writes_active_session_for_non_cursor_agents(self) -> None:
+        """.active_session is written even when no Cursor agents are configured."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            feature_dir = tmp_path / "feature"
+            project_dir = tmp_path / "project"
+            feature_dir.mkdir()
+            project_dir.mkdir()
+
+            agents = {
+                "architect": AgentConfig(
+                    role="architect",
+                    cli="claude",
+                    model="opus",
+                    args=[],
+                ),
+            }
+            setup_mcp(
+                agents,
+                [self._server()],
+                ["architect"],
+                feature_dir,
+                project_dir,
+            )
+
+            active_session_path = project_dir / ".agentmux" / ".active_session"
+            self.assertTrue(
+                active_session_path.exists(),
+                ".active_session must be created for all providers, not just Cursor",
+            )
+            data = json.loads(active_session_path.read_text(encoding="utf-8"))
+            self.assertEqual(str(feature_dir), data["feature_dir"])
+            self.assertIn("allowed_tools", data)
+            from agentmux.integrations.mcp.models import ROLE_TOOLS
+
+            actual_tools = set(data["allowed_tools"].split(","))
+            self.assertEqual(actual_tools, set(ROLE_TOOLS["architect"]))
 
 
 if __name__ == "__main__":

@@ -6,7 +6,6 @@ import Features from './components/Features.vue'
 import Quickstart from './components/Quickstart.vue'
 import Providers from './components/Providers.vue'
 import ArchDiagram from './components/ArchDiagram.vue'
-import StateMachine from './components/StateMachine.vue'
 import DarkCTA from './components/DarkCTA.vue'
 import RoadmapHero from './components/RoadmapHero.vue'
 import Roadmap from './components/Roadmap.vue'
@@ -23,7 +22,6 @@ export default {
       Quickstart,
       Providers,
       ArchDiagram,
-      StateMachine,
       DarkCTA,
       RoadmapHero,
       Roadmap,

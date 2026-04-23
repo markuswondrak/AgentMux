@@ -6,10 +6,9 @@
     </linearGradient>
   </defs>
   <rect x="0" y="4" width="40" height="40" rx="10" fill="url(#dg)"/>
-  <g fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M9 33 L16 13 L23 33"/>
-    <path d="M11 26 L21 26"/>
-    <path d="M27 33 L27 13 L33 21 L27 21"/>
+  <g fill="none" stroke="#ffffff" stroke-width="2.85" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 40 L20 10 L34 40"/>
+    <path d="M12 26 L28 26"/>
   </g>
   <text x="52" y="32" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="700" letter-spacing="-0.02em" fill="#ffffff">AgentMux</text>
 </svg>

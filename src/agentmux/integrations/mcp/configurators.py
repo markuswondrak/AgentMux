@@ -344,10 +344,47 @@ class CopilotConfigurator(JsonMcpConfigurator):
         )
 
 
+class CursorConfigurator(JsonMcpConfigurator):
+    """Installs agentmux MCP server into Cursor project config.
+
+    Config path: <project_dir>/.cursor/mcp.json
+    Uses the Claude Desktop mcpServers JSON format.
+    """
+
+    provider = "cursor"
+
+    def config_path(self, project_dir: Path) -> Path:
+        return project_dir / ".cursor" / "mcp.json"
+
+    def has_server(self, server: McpServerSpec, project_dir: Path) -> bool:
+        data = self._load_json(project_dir)
+        servers = data.get("mcpServers", {})
+        return isinstance(servers, dict) and server.name in servers
+
+    def install(self, server: McpServerSpec, project_dir: Path) -> None:
+        data = self._load_json(project_dir)
+        servers = data.get("mcpServers")
+        if not isinstance(servers, dict):
+            servers = {}
+        servers[server.name] = _persistent_stdio_server(server)
+        data["mcpServers"] = servers
+        self._write_json(data, project_dir)
+
+    def prompt_message(
+        self, server: McpServerSpec, project_dir: Path, roles_label: str
+    ) -> str:
+        path = self.config_path(project_dir)
+        return (
+            f"Agentmux requires its MCP server for cursor ({roles_label}) "
+            f"to coordinate agents. Install at {path}?"
+        )
+
+
 CONFIGURATORS: dict[str, PersistentMcpConfigurator] = {
     "claude": ClaudeConfigurator(),
     "codex": CodexConfigurator(),
     "copilot": CopilotConfigurator(),
+    "cursor": CursorConfigurator(),
     "gemini": GeminiConfigurator(),
     "opencode": OpenCodeConfigurator(),
     "qwen": QwenConfigurator(),

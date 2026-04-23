@@ -40,6 +40,61 @@ class Command:
     arguments: list[Argument] = field(default_factory=list)
 
 
+# ── Shared argument groups ─────────────────────────────────────────────────────
+
+SESSION_ARGS: list[Argument] = [
+    Argument(
+        ("--config",),
+        help=(
+            "Optional config override. Without this flag the loader resolves "
+            f"built-in defaults, ~/.config/agentmux/config.yaml, then "
+            f"{DEFAULT_CONFIG_HINT} in the project."
+        ),
+    ),
+    Argument(
+        ("--keep-session",),
+        action="store_true",
+        help="Keep the tmux session running after completion.",
+    ),
+]
+
+NEW_SESSION_ARGS: list[Argument] = [
+    Argument(
+        ("--name",),
+        help=(
+            "Optional feature slug. Defaults to timestamp plus a slug "
+            "derived from the prompt."
+        ),
+    ),
+    Argument(
+        ("--product-manager",),
+        action="store_true",
+        help="Enable product-management phase before planning.",
+    ),
+    Argument(
+        ("--worktree",),
+        action="store_true",
+        help="Create a git worktree for this session (enables parallel sessions).",
+    ),
+]
+
+
+# ── Shared arg extraction helper ───────────────────────────────────────────────
+
+
+def _shared_session_kwargs(args: argparse.Namespace) -> dict[str, Any]:
+    """Extract shared session keyword arguments from parsed CLI args."""
+    return {
+        "name": getattr(args, "name", None),
+        "keep_session": bool(getattr(args, "keep_session", False)),
+        "product_manager": bool(getattr(args, "product_manager", False)),
+        "worktree": bool(getattr(args, "worktree", False)),
+    }
+
+
+# ── Command handlers ───────────────────────────────────────────────────────────
+
+
 def handle_init(args: argparse.Namespace, project_dir: Path) -> int:
     """Handle the init command."""
     provider = getattr(args, "provider", None)
@@ -105,12 +160,8 @@ def handle_issue(args: argparse.Namespace, project_dir: Path) -> int:
     """Handle the issue command."""
     config_path = Path(args.config).resolve() if getattr(args, "config", None) else None
     app = PipelineApplication(project_dir, config_path=config_path)
-    return app.run_issue(
-        args.number_or_url,
-        name=getattr(args, "name", None),
-        keep_session=bool(getattr(args, "keep_session", False)),
-        product_manager=bool(getattr(args, "product_manager", False)),
-    )
+    kwargs = _shared_session_kwargs(args)
+    return app.run_issue(args.number_or_url, **kwargs)
 
 
 def handle_run(args: argparse.Namespace, project_dir: Path) -> int:
@@ -122,15 +173,12 @@ def handle_run(args: argparse.Namespace, project_dir: Path) -> int:
             Path(args.orchestrate),
             keep_session=bool(getattr(args, "keep_session", False)),
         )
-    return app.run_prompt(
-        args.prompt,
-        name=getattr(args, "name", None),
-        keep_session=bool(getattr(args, "keep_session", False)),
-        product_manager=bool(getattr(args, "product_manager", False)),
-    )
+    kwargs = _shared_session_kwargs(args)
+    return app.run_prompt(args.prompt, **kwargs)
 
 
-# Command registry
+# ── Command registry ───────────────────────────────────────────────────────────
+
 COMMANDS: list[Command] = [
     Command(
         name="init",
@@ -224,15 +272,7 @@ COMMANDS: list[Command] = [
                     "If omitted, interactive selection is shown."
                 ),
             ),
-            Argument(
-                ("--config",),
-                help="Optional config override path.",
-            ),
-            Argument(
-                ("--keep-session",),
-                action="store_true",
-                help="Keep the tmux session running after completion.",
-            ),
+            *SESSION_ARGS,
         ],
     ),
     Command(
@@ -244,27 +284,22 @@ COMMANDS: list[Command] = [
                 ("number_or_url",),
                 help="GitHub issue number or URL to bootstrap requirements and slug.",
             ),
+            *SESSION_ARGS,
+            *NEW_SESSION_ARGS,
+        ],
+    ),
+    Command(
+        name="run",
+        help="Start a feature workflow with a prompt.",
+        handler=handle_run,
+        arguments=[
             Argument(
-                ("--name",),
-                help=(
-                    "Optional feature slug. Defaults to timestamp plus a slug "
-                    "derived from the issue."
-                ),
+                ("prompt",),
+                nargs="?",
+                help="Feature description as free text, or path to a .md file.",
             ),
-            Argument(
-                ("--config",),
-                help="Optional config override path.",
-            ),
-            Argument(
-                ("--keep-session",),
-                action="store_true",
-                help="Keep the tmux session running after completion.",
-            ),
-            Argument(
-                ("--product-manager",),
-                action="store_true",
-                help="Enable product-management phase before planning.",
-            ),
+            *SESSION_ARGS,
+            *NEW_SESSION_ARGS,
         ],
     ),
 ]
@@ -296,43 +331,6 @@ def build_parser() -> argparse.ArgumentParser:
         for arg in cmd.arguments:
             cmd_parser.add_argument(*arg.flags, **arg.kwargs)
 
-    # Add the default "run" subparser (for prompt-based workflow)
-    run_parser = subparsers.add_parser(
-        "run",
-        help="Start a feature workflow with a prompt.",
-    )
-    run_parser.set_defaults(handler=handle_run)
-    run_parser.add_argument(
-        "prompt",
-        nargs="?",
-        help="Feature description as free text, or path to a .md file.",
-    )
-    run_parser.add_argument(
-        "--name",
-        help=(
-            "Optional feature slug. Defaults to timestamp plus a slug "
-            "derived from the prompt."
-        ),
-    )
-    run_parser.add_argument(
-        "--config",
-        help=(
-            "Optional config override. Without this flag the loader resolves "
-            f"built-in defaults, ~/.config/agentmux/config.yaml, then "
-            f"{DEFAULT_CONFIG_HINT} in the project."
-        ),
-    )
-    run_parser.add_argument(
-        "--keep-session",
-        action="store_true",
-        help="Keep the tmux session running after completion.",
-    )
-    run_parser.add_argument(
-        "--product-manager",
-        action="store_true",
-        help="Enable product-management phase before planning.",
-    )
-
     return parser
 
 
@@ -340,7 +338,6 @@ def main() -> int:
     """Main entry point for the CLI."""
     # Get known subcommand names
     known_commands = {cmd.name for cmd in COMMANDS}
-    known_commands.add("run")
 
     # Handle default subcommand injection
     # If first arg is not a known subcommand and doesn't start with '-', inject 'run'

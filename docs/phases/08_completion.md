@@ -52,3 +52,4 @@ See [Artifact: completion-artifacts.md](../artifacts/completion-artifacts.md) fo
 - When the user requests changes, the architect receives a re-planning prompt with the description from `changes.md` and the cycle restarts.
 - GitHub branch/PR failures do not roll back the local commit.
 - Reviewer-stage preferences (via `submit_review` tool's `preferences` parameter) are written to `.agentmux/prompts/agents/<role>.md` under `## Approved Preferences`.
+- **Worktree mode** — When the session was started with `--worktree`, `last_completion.json` is written to the main repository (`main_repo_dir` from `state.json`) rather than the worktree, so it is always accessible after the worktree is removed.  The worktree is registered in the `ExitStack` *after* the feature-directory cleanup entry, so LIFO teardown removes the feature directory first and the worktree second.

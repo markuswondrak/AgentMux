@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { providerCommaList, providerDotList } from '../providers'
 
 const root = ref<HTMLElement | null>(null)
 const svgEl = ref<SVGSVGElement | null>(null)
@@ -118,7 +119,7 @@ onBeforeUnmount(() => {
       <div class="am-eyebrow">Architecture · the closed event loop</div>
       <h2 class="am-section-title">A tmux-based orchestration kernel.</h2>
       <p class="arch__intro">
-        Existing CLI agents (claude, codex, copilot, gemini, opencode, qwen) are driven by keystroke
+        Existing CLI agents ({{ providerCommaList }}) are driven by keystroke
         events injected into tmux panes. <strong>Agents never talk to each other</strong> — the
         orchestrator mediates exclusively through the file system and a shared event bus.
         <span class="arch__hot">The blue line marks the closed event loop.</span>
@@ -198,7 +199,7 @@ onBeforeUnmount(() => {
           <article class="node n-tmux">
             <div class="node__label">session</div>
             <h3>tmux session</h3>
-            <p>Monitor pane left, agent panes right. Each pane hosts a CLI: claude · codex · copilot · gemini · opencode · qwen.</p>
+            <p>Monitor pane left, agent panes right. Each pane hosts a CLI: {{ providerDotList }}.</p>
           </article>
 
           <article class="node n-fs">

@@ -1,7 +1,7 @@
 """MCP integration package.
 
 This package handles MCP (Model Context Protocol) server configuration
-for various AI provider CLIs (claude, codex, gemini, opencode).
+for various AI provider CLIs (claude, codex, copilot, cursor, gemini, opencode).
 
 Submodules:
     models: McpServerSpec data class and default constants
@@ -18,6 +18,7 @@ from .configurators import (
     ClaudeConfigurator,
     CodexConfigurator,
     CopilotConfigurator,
+    CursorConfigurator,
     GeminiConfigurator,
     JsonMcpConfigurator,
     OpenCodeConfigurator,
@@ -53,6 +54,7 @@ __all__ = [
     "CodexConfigurator",
     "CopilotConfigurator",
     "CONFIGURATORS",
+    "CursorConfigurator",
     "GeminiConfigurator",
     "JsonMcpConfigurator",
     "OpenCodeConfigurator",

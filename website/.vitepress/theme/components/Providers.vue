@@ -1,12 +1,5 @@
 <script setup lang="ts">
-const providers = [
-  { id: 'claude',   label: 'claude' },
-  { id: 'codex',    label: 'codex' },
-  { id: 'copilot',  label: 'copilot' },
-  { id: 'gemini',   label: 'gemini' },
-  { id: 'opencode', label: 'opencode' },
-  { id: 'qwen',     label: 'qwen' },
-]
+import { PROVIDERS as providers } from '../providers'
 </script>
 
 <template>

@@ -1,6 +1,6 @@
 # Session Resumption
 
-> Related source file: `src/agentmux/sessions/state_store.py`
+> Related source files: `src/agentmux/sessions/state_store.py` (`infer_resume_phase`), `src/agentmux/workflow/phase_registry.py` (per-phase resume checks)
 
 When a pipeline is interrupted (e.g., connection loss, tmux session killed, or a user manually closes an agent pane with `Ctrl-C`), it can be restarted from where it left off using `resume`.
 
@@ -16,7 +16,7 @@ agentmux resume <feature-dir-or-name>  # Resume specific session by name or path
 1. `list_resumable_sessions(project_dir)` scans `.agentmux/.sessions/` for all feature directories with `state.json` and returns them sorted by recency
 2. `select_session(sessions)` presents an interactive menu (or auto-selects if only one exists)
 3. For `resume <feature-dir-or-name>`, non-absolute names are resolved against `.agentmux/.sessions/<name>` first, then `<project>/<name>` as a fallback
-4. `infer_resume_phase(feature_dir, state)` examines workflow artifacts (`01_product_management/done`, `04_planning/plan.md`, `04_planning/execution_plan.yaml`, `06_implementation/done_*`, `07_review/review.md` / `07_review/review.yaml`, etc.) together with persisted workflow state to determine the correct phase to resume into
+4. `infer_resume_phase(feature_dir, state)` examines workflow artifacts (`01_product_management/done`, `04_planning/plan.md`, `04_planning/execution_plan.yaml`, `06_implementation/done_*`, `07_review/review.md` / `07_review/review.yaml`, etc.) together with persisted workflow state to determine the correct phase to resume into. When `state["phase"] == "failed"`, the registry walk treats **`planning` as incomplete until `04_planning/execution_plan.yaml` exists** — even if the planner already wrote `04_planning/plan.yaml`. That file is produced by the orchestrator only after it has successfully processed `plan.yaml` and the `submit_plan` signal; resuming on `plan.yaml` alone would skip the planner and jump to later phases without a materialized execution schedule.
 5. If `"product_manager": true` in state and `01_product_management/done` is missing, resume returns `product_management`; once `done` exists, resume falls through to normal `04_planning` / `06_implementation` inference
 6. `execution_plan.yaml` is used as planner-authored intent metadata during inference:
    - `needs_design: true` resumes into `designing` when `05_design/design.md` is still missing
@@ -33,3 +33,7 @@ agentmux resume <feature-dir-or-name>  # Resume specific session by name or path
 15. `implementation_single_coder` is persisted on entering the implementing phase; on resume, the handler restores this setting so the same dispatch mode (whole-plan vs per-group) is used regardless of current agent configuration
 16. After the resumed phase is entered and unapplied tool events are replayed, any still-dispatched research subtasks are restarted from their persisted `03_research/<type>-<topic>/prompt.md` directories
 17. If the prior run failed because a registered tmux agent pane disappeared, the interruption metadata in `state.json` is cleared on resume and a fresh pane is created only when the resumed phase next needs that role
+
+## Worktree Resume
+
+When `state.json` contains `"worktree_enabled": true`, the resume flow calls `WorktreeManager.recreate_if_missing(worktree_path, branch_name)` instead of `GitBranchManager.ensure_branch`.  If the worktree directory was deleted since the last session (e.g. manual cleanup, disk migration), it is transparently re-created at `worktree_path` before the orchestrator restarts.
