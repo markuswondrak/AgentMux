@@ -483,10 +483,10 @@ class ImplementingHandler(BaseToolHandler):
             ", ".join(all_plan_names) if all_plan_names else "whole plan",
         )
 
-        prompt_content = build_coder_whole_plan_prompt(ctx.files)
+        coder = ctx.agents.get("coder")
+        prompt_content = build_coder_whole_plan_prompt(ctx.files, agent=coder)
 
         # Determine if /fleet prefix command is needed for copilot single-coder mode
-        coder = ctx.agents.get("coder")
         prefix_command = None
         if coder is not None and coder.single_coder and coder.provider == "copilot":
             prefix_command = "/fleet"

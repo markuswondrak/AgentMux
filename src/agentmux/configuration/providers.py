@@ -19,6 +19,7 @@ class Provider:
     default_model: str | None = None
     default_role_args: list[str] | None = None
     model_args: dict[str, list[str]] | None = None
+    sub_agent_tool: str | None = None
     trust_key: str = "Enter"
 
 
@@ -46,6 +47,9 @@ def _build_builtin_providers() -> dict[str, Provider]:
             merged = default_role_args + [str(arg) for arg in specific_args]
             role_args[str(role)] = merged
 
+        sub_raw = provider.get("sub_agent_tool")
+        sub_agent_tool = str(sub_raw) if sub_raw is not None else None
+
         result[str(name)] = Provider(
             name=str(name),
             cli=str(provider.get("command", name)),
@@ -57,6 +61,7 @@ def _build_builtin_providers() -> dict[str, Provider]:
             default_model=default_model,
             default_role_args=default_role_args if default_role_args else None,
             model_args=model_args if model_args else None,
+            sub_agent_tool=sub_agent_tool,
             trust_key=str(provider.get("trust_key", "Enter")),
         )
     return result
@@ -178,5 +183,6 @@ def resolve_agent(
         trust_snippet=provider.trust_snippet,
         batch_command=provider.batch_command,
         single_coder=provider.single_coder,
+        sub_agent_tool=provider.sub_agent_tool,
         trust_key=provider.trust_key,
     )

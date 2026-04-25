@@ -37,6 +37,7 @@ class ProviderConfig(BaseModel):
     model_flag: str | None = None
     trust_snippet: str | None = None
     trust_key: str = "Enter"
+    sub_agent_tool: str | None = None
     role_args: dict[str, list[str]] = Field(default_factory=dict)
     default_role_args: list[str] = Field(default_factory=list)
     batch_command: BatchCommandConfig | None = None
