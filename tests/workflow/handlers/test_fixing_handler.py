@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from agentmux.workflow.event_catalog import EVENT_IMPLEMENTATION_COMPLETED
 from agentmux.workflow.event_router import WorkflowEvent
 from agentmux.workflow.handlers import FixingHandler
 
@@ -50,8 +51,9 @@ class TestFixingHandler:
         mock_ctx.files.implementation_dir.mkdir(parents=True, exist_ok=True)
         (mock_ctx.files.implementation_dir / "done_1").touch()
 
-        _, next_phase = handler.handle_event(event, empty_state, mock_ctx)
+        updates, next_phase = handler.handle_event(event, empty_state, mock_ctx)
 
         mock_ctx.runtime.finish_many.assert_called_once_with("coder")
         mock_ctx.runtime.deactivate.assert_called_once_with("coder")
-        assert next_phase == "reviewing"
+        assert updates == {"last_event": EVENT_IMPLEMENTATION_COMPLETED}
+        assert next_phase == "validating"
