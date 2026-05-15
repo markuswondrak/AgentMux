@@ -13,8 +13,12 @@ providers:
         - high
 
 roles:
+  planner:
+    provider: cursor
+    model: gemini-3-flash
   coder:
-    model: gpt-5.4
+    provider: cursor
+    model: auto
   web-researcher:
     model: gpt-5.2
   code-researcher:

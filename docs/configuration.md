@@ -83,6 +83,7 @@ Built-in and user-level configs may additionally define:
 - `providers.<name>.trust_snippet` — auto-accept text for trust prompts
 - `providers.<name>.role_args.<role>` — default CLI args for a role
 - `providers.<name>.single_coder` — when `true`, the implementing phase sends one combined prompt covering all sub-plans to a single coder pane instead of spawning parallel/serial panes. The coder is expected to use its own internal sub-agents. Default: `false`.
+- `providers.<name>.sub_agent_tool` — optional string. In **single-coder** mode, the whole-plan coder prompt’s item 14 tells the model to delegate work in parallel using the slash command `/<value>` (for example `task` → `/task`). When omitted, item 14 describes **sequential** delegation (finish one plan’s sub-agent before starting the next). Built-in `copilot` sets `sub_agent_tool: task` so the prompt matches Copilot CLI’s `/task` flow alongside the `/fleet` prefix the runtime sends before the prompt file.
 
 ## Completion settings boundary
 
@@ -201,6 +202,8 @@ These args are appended after `default_role_args` and `role_args`. To override t
 
 `copilot` has `single_coder: true` set in its built-in provider config. This means the implementing phase sends **one combined prompt** to a single copilot pane instead of spawning separate panes for each sub-plan. The prompt embeds all plan and tasks content, and instructs copilot to use its own internal sub-agents to implement each plan. Copilot writes the `done_N` completion marker files as each plan finishes (or all at once at the end).
 
+Built-in `copilot` also sets `sub_agent_tool: task`. That value flows into the resolved coder `AgentConfig` and switches item 14 of the whole-plan prompt to **parallel** instructions that reference `` `/task` `` (in addition to the completion-tool steps in item 13). Providers without `sub_agent_tool` keep the **sequential** item 14 (one plan at a time).
+
 When the coder provider is `copilot` with `single_coder: true`, the `/fleet` slash command is automatically sent as keystrokes before the prompt file reference. This tells Copilot CLI to decompose the embedded plan into sub-agent tasks and execute them in parallel, with the main copilot instance acting as orchestrator. The `/fleet` command is sent interactively (not embedded in the prompt file) because Copilot CLI only recognizes slash commands when entered as direct input. The prefix is applied transparently — no extra config flag is needed.
 
 This design avoids multiple premium-request invocations (one per sub-plan pane) in favour of a single invocation where copilot manages parallelism internally via `/fleet`.
@@ -290,6 +293,7 @@ Each role resolves to an `AgentConfig` with:
 - `args`
 - `env` (optional runtime environment variables to prepend via `env KEY=VALUE ...`)
 - `trust_snippet`
+- `sub_agent_tool` (optional; copied from the resolved provider when set)
 
 The tmux runtime launches agents from that fully resolved config. AgentMux still never talks to model APIs directly.
 
