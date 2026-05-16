@@ -41,6 +41,11 @@ except ImportError:  # pragma: no cover - optional at import time in this enviro
     Rule = None  # type: ignore[assignment]
 
 
+_SCHEMA_DIRECTIVE = (
+    "# yaml-language-server: $schema=https://raw.githubusercontent.com/"
+    "markuswondrak/AgentMux/main/src/agentmux/configuration/defaults/config.schema.json\n"
+)
+
 PROMPTED_ROLES = ("architect", "product-manager", "reviewer", "coder", "designer")
 PROMPT_STUB_ROLES = ("coder", "reviewer", "architect", "product-manager", "designer")
 
@@ -589,7 +594,7 @@ def generate_config(
     proposed = _merge_overrides(existing_raw, overrides)
     proposed["version"] = 2
 
-    rendered = yaml.safe_dump(proposed, sort_keys=False)
+    rendered = _SCHEMA_DIRECTIVE + yaml.safe_dump(proposed, sort_keys=False)
 
     # Skip write if content is identical
     if config_path.exists():

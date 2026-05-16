@@ -25,3 +25,6 @@ website/docs/
 # cursor files
 .cursor/mcp.json
 .cursor/plans/
+
+# local helper scripts
+scripts/.venv/

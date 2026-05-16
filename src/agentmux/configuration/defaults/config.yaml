@@ -227,6 +227,7 @@ providers:
     trust_snippet: trust the files
     batch_subcommand: -p
     single_coder: true
+    sub_agent_tool: task
     default_model: claude-sonnet-4.6
     default_role_args:
     - --allow-all

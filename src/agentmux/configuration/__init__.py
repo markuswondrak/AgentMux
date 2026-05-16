@@ -215,6 +215,10 @@ def _resolve_loaded_config(
         )
         args = args + resolve_model_extra_args(model, provider.model_args)
 
+        sub_agent_tool = getattr(provider, "sub_agent_tool", None)
+        if sub_agent_tool is not None:
+            sub_agent_tool = str(sub_agent_tool)
+
         agents[role] = AgentConfig(
             role=role,
             cli=provider.command,
@@ -226,6 +230,7 @@ def _resolve_loaded_config(
             batch_command=_build_batch_command_from_provider(provider),
             single_coder=provider.single_coder,
             trust_key=provider.trust_key,
+            sub_agent_tool=sub_agent_tool,
         )
 
     return LoadedConfig(
