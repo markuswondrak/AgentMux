@@ -298,6 +298,30 @@ class ProductManagerRequirementsTests(unittest.TestCase):
                 "product_management", infer_resume_phase(feature_dir, state)
             )
 
+    def test_infer_resume_phase_skips_pm_when_submit_pm_done_in_events(
+        self,
+    ) -> None:
+        """PM is done when tool_events.jsonl contains submit_pm_done,
+        even if architecture.md is missing (architect crashed)."""
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            (feature_dir / PRODUCT_MANAGEMENT_DIR).mkdir(parents=True, exist_ok=True)
+            events_path = feature_dir / "tool_events.jsonl"
+            events_path.write_text(
+                json.dumps(
+                    {
+                        "tool": "submit_pm_done",
+                        "timestamp": "2026-05-15T17:37:37+02:00",
+                        "payload": {},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            state = {"phase": "failed", "product_manager": True}
+            self.assertEqual("architecting", infer_resume_phase(feature_dir, state))
+
     def test_infer_resume_phase_skips_pm_when_architecture_exists(
         self,
     ) -> None:

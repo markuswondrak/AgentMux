@@ -134,6 +134,26 @@ class InferResumePhaseTests(unittest.TestCase):
             state = {"phase": "failed"}
             self.assertEqual("architecting", infer_resume_phase(feature_dir, state))
 
+    def test_failed_pm_done_in_events_resumes_architecting(self) -> None:
+        """submit_pm_done in tool_events.jsonl proves PM finished, even without
+        architecture.md (architect may have crashed before writing it)."""
+        with tempfile.TemporaryDirectory() as td:
+            feature_dir = Path(td)
+            events_path = feature_dir / "tool_events.jsonl"
+            events_path.write_text(
+                json.dumps(
+                    {
+                        "tool": "submit_pm_done",
+                        "timestamp": "2026-05-15T17:37:37+02:00",
+                        "payload": {},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            state = {"phase": "failed", "product_manager": True}
+            self.assertEqual("architecting", infer_resume_phase(feature_dir, state))
+
     def test_failed_with_architecture_but_no_plan_resumes_planning(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             feature_dir = Path(td)

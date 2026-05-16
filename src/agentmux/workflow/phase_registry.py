@@ -11,6 +11,7 @@ To add a new phase:
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,15 +46,35 @@ from .phase_helpers import select_reviewer_roles
 
 
 def _pm_done(feature_dir: Path, state: dict[str, Any]) -> bool:
-    """True if the PM phase is not enabled or a downstream artifact exists.
+    """True if the PM phase is not enabled or already completed.
 
     PM completion is signalled via the submit_pm_done MCP tool call, which
     transitions state.json to the next phase. No done-marker file is written.
-    We use architecture.md as a proxy: if it exists, the architect has started
-    and PM is unambiguously done.
+    We check tool_events.jsonl for the authoritative submit_pm_done event
+    first, falling back to architecture.md as a proxy when the events file
+    is unavailable.
     """
     if not bool(state.get("product_manager")):
         return True  # Phase not requested for this run
+
+    # Authoritative: check tool_events.jsonl for submit_pm_done
+    events_path = feature_dir / "tool_events.jsonl"
+    if events_path.exists():
+        try:
+            for line in events_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("tool") == "submit_pm_done":
+                    return True
+        except OSError:
+            pass
+
+    # Fallback proxy
     return (feature_dir / "02_architecting" / "architecture.md").exists()
 
 
