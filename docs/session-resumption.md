@@ -23,7 +23,7 @@ agentmux resume <feature-dir-or-name>  # Resume specific session by name or path
    - `needs_docs`/`doc_files` remain planning metadata and do not create a dedicated resume phase
    - a passed review resumes directly into `completing`
 7. Session identity is persisted in `state.json` as `session_name`; resume reads that value and falls back to `defaults.session_name` only for legacy states that do not yet have the field
-8. Resume hard-blocks if that recovered tmux session is still active (`tmux session <name> is still active. Detach or kill it before resuming.`)
+8. Resume hard-blocks if that recovered tmux session is still active, showing the session name plus `tmux attach` and `tmux kill-session` commands so the user can take action
 9. On resume, the phase is updated in `state.json`, `last_event` is set to `"resumed"`, and in-flight research task statuses remain in `state.json` so they can be restarted from persisted workflow state
 10. The launcher derives the initial tmux pane from the resumed phase via `PHASE_REGISTRY` metadata instead of reusing the original session entrypoint (`product-manager` vs `architect`)
 11. Orchestrator/monitor entrypoints infer the project directory from session paths under `.agentmux/.sessions/<id>`

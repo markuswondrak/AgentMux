@@ -297,6 +297,8 @@ class UniqueSessionNamesTests(unittest.TestCase):
             self.assertIn(
                 "tmux session `agentmux-demo` is still active", str(ctx.exception)
             )
+            self.assertIn("tmux attach -t agentmux-demo", str(ctx.exception))
+            self.assertIn("tmux kill-session -t agentmux-demo", str(ctx.exception))
 
     def test_run_launcher_resume_uses_loaded_session_name_for_legacy_state(
         self,
@@ -338,6 +340,8 @@ class UniqueSessionNamesTests(unittest.TestCase):
             self.assertIn(
                 "tmux session `multi-agent-mvp` is still active", str(ctx.exception)
             )
+            self.assertIn("tmux attach -t multi-agent-mvp", str(ctx.exception))
+            self.assertIn("tmux kill-session -t multi-agent-mvp", str(ctx.exception))
 
 
 if __name__ == "__main__":

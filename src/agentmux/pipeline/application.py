@@ -389,8 +389,9 @@ class PipelineApplication:
             session_name = str(state.get("session_name") or loaded.session_name)
             if tmux_session_exists(session_name):
                 raise SystemExit(
-                    f"tmux session `{session_name}` is still active. "
-                    "Detach or kill it before resuming."
+                    f"tmux session `{session_name}` is still active.\n"
+                    f"  Attach:  tmux attach -t {session_name}\n"
+                    f"  Kill:    tmux kill-session -t {session_name}"
                 )
         else:
             session_name = _derive_session_name(prepared.feature_dir)
